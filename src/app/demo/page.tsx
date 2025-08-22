@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 
+type PredictResponse = { planet_prob: number };
+
 export default function Demo() {
   const [raw, setRaw] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -8,19 +10,31 @@ export default function Demo() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  function errorMessage(e: unknown, fallback: string) {
+    return e instanceof Error ? e.message : fallback;
+  }
+
   async function predictJson() {
     setLoading(true); setErr(null); setProb(null);
     try {
-      const values = raw.split(',').map(s => Number(s.trim())).filter(n => !Number.isNaN(n));
+      const values = raw
+        .split(',')
+        .map(s => Number(s.trim()))
+        .filter(n => !Number.isNaN(n));
+
       const res = await fetch('https://app.oramax.space/predict', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ lightcurve: values })
       });
-      const data = await res.json();
-      setProb(data.planet_prob ?? null);
-    } catch (e:any) { setErr(e?.message ?? 'Request failed'); }
-    finally { setLoading(false); }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as PredictResponse;
+      setProb(typeof data.planet_prob === 'number' ? data.planet_prob : null);
+    } catch (e: unknown) {
+      setErr(errorMessage(e, 'Request failed'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function predictFile() {
@@ -30,10 +44,14 @@ export default function Demo() {
       const fd = new FormData();
       fd.append('file', file);
       const res = await fetch('https://app.oramax.space/predict-file', { method: 'POST', body: fd });
-      const data = await res.json();
-      setProb(data.planet_prob ?? null);
-    } catch (e:any) { setErr(e?.message ?? 'Upload failed'); }
-    finally { setLoading(false); }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as PredictResponse;
+      setProb(typeof data.planet_prob === 'number' ? data.planet_prob : null);
+    } catch (e: unknown) {
+      setErr(errorMessage(e, 'Upload failed'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
