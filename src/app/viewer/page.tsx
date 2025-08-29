@@ -1,15 +1,15 @@
-'use client';
-import React, { useState } from 'react';
-import { Api } from '@/components/ApiBridge';
+﻿"use client";
+import React, { useState } from "react";
+import { Api } from "@/components/ApiBridge";
 
 function parseNumbers(input: string) {
   return input.trim().split(/[\s,]+/).map(Number).filter(n => Number.isFinite(n));
 }
 
 export default function ViewerPage() {
-  const [raw, setRaw] = useState('');
+  const [raw, setRaw] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [out, setOut] = useState('');
+  const [out, setOut] = useState("");
 
   async function postJSON() {
     const nums = parseNumbers(raw);
@@ -20,7 +20,7 @@ export default function ViewerPage() {
   async function postFile() {
     if (!file) return;
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append("file", file);
     const r = await Api.predictFile(fd);
     setOut(JSON.stringify(r.body, null, 2));
   }

@@ -1,5 +1,5 @@
-/* STATIC-FALLBACK ApiBridge: talks directly to backend origin.
-   If needed, set NEXT_PUBLIC_PUBLIC_API_BASE to override the base URL.
+﻿/* STATIC-FALLBACK ApiBridge: μιλά απευθείας στο backend origin.
+   Αν θέλεις, όρισε NEXT_PUBLIC_PUBLIC_API_BASE = https://api.oramax.space/exoplanet
 */
 const PUBLIC_BASE =
   (process.env.NEXT_PUBLIC_PUBLIC_API_BASE || 'https://api.oramax.space/exoplanet')
@@ -38,7 +38,7 @@ export const Api = {
   predictFile: (fd: FormData) => post(`${PUBLIC_BASE}/predict-file`, fd, false),
 };
 
-/* --- Backward-compatible named exports (to satisfy existing imports) --- */
+/* --- Backward-compatible named exports (ώστε να ικανοποιούνται παλιοί imports) --- */
 export function apiPredictFromJson(arr: number[]) { return Api.predict(arr); }
 export function apiPredictFromFile(fd: FormData) { return Api.predictFile(fd); }
 export function apiSuggest(q: string, domain = 'TESS') { return Api.suggest(q, domain); }
