@@ -1,7 +1,7 @@
-import type { ReactElement } from "react";
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
 import Script from "next/script";
 import { Api, SuggestItem } from "@/components/ApiBridge";
 
