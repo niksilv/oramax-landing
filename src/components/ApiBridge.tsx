@@ -1,13 +1,12 @@
-﻿/* STATIC-FALLBACK ApiBridge: μιλάει απευθείας στο backend origin.
-   Αν θέλεις διαφορετικό origin/prefix, όρισε:
-   NEXT_PUBLIC_PUBLIC_API_BASE = https://api.oramax.space/exoplanet
+/* STATIC-FALLBACK ApiBridge: talks directly to backend origin.
+   If needed, set NEXT_PUBLIC_PUBLIC_API_BASE to override the base URL.
 */
 const PUBLIC_BASE =
   (process.env.NEXT_PUBLIC_PUBLIC_API_BASE || 'https://api.oramax.space/exoplanet')
     .replace(/\/$/, '');
 
-type Jsonish = any;
-type HttpResp = { ok: boolean; status: number; body: Jsonish };
+export type Jsonish = any;
+export type HttpResp = { ok: boolean; status: number; body: Jsonish };
 
 async function get(url: string): Promise<HttpResp> {
   const r = await fetch(url, { cache: 'no-store' });
@@ -38,5 +37,11 @@ export const Api = {
   predict: (arr: number[]) => post(`${PUBLIC_BASE}/predict`, { lightcurve: arr }, true),
   predictFile: (fd: FormData) => post(`${PUBLIC_BASE}/predict-file`, fd, false),
 };
+
+/* --- Backward-compatible named exports (to satisfy existing imports) --- */
+export function apiPredictFromJson(arr: number[]) { return Api.predict(arr); }
+export function apiPredictFromFile(fd: FormData) { return Api.predictFile(fd); }
+export function apiSuggest(q: string, domain = 'TESS') { return Api.suggest(q, domain); }
+export function apiFetchDetect(payload: any) { return Api.detect(payload); }
 
 export type SuggestItem = { id: string; label: string };
