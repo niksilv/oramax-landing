@@ -37,6 +37,10 @@ export default function DetectorPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Exoplanet Detector</h1>
         <div className="text-sm flex items-center gap-3">
+          <label className="flex items-center gap-1 text-xs">
+            <input type="checkbox" checked={pretty} onChange={e=>setPretty(e.target.checked)} />
+            Pretty-print
+          </label>
           <button onClick={checkApi} className="px-2 py-1 rounded-md border text-xs">Check API</button>
           <span className={apiOk ? "text-emerald-600" : apiOk===false ? "text-red-600" : "text-slate-400"}>
             {apiOk==null ? "API" : apiOk ? "API OK" : "API error"}
