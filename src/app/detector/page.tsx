@@ -174,7 +174,7 @@ export default function Detector17B() {
       {/* Plotly first */}
       <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="beforeInteractive" />
       <div dangerouslySetInnerHTML={{ __html: html17b }} />
-      {/* Full inline logic */}
+      {/* Full inline logic with robust API fallbacks */}
       <Script id="predictor-17b-inline" strategy="afterInteractive">{`
       (function(){
         const log = (...a)=>console.log('[17B]', ...a);
@@ -190,6 +190,78 @@ export default function Detector17B() {
           s.addEventListener('input', show); show();
         }
 
+        // ---- API helpers with fallbacks ----
+        async function apiGet(path) {
+          const res = await fetch(path, { method:'GET', cache:'no-store' });
+          return res;
+        }
+        async function apiPost(path, body, contentType='application/json') {
+          const init = {
+            method:'POST',
+            headers:{ 'Content-Type': contentType, accept: '*/*' },
+            body: contentType.includes('json') ? JSON.stringify(body) : body,
+            cache:'no-store'
+          };
+          const res = await fetch(path, init);
+          return res;
+        }
+        async function tryJson(res){
+          const ct = res.headers.get('content-type')||'';
+          if(ct.includes('application/json')) return await res.json();
+          const text = await res.text();
+          try{ return JSON.parse(text); }catch{ return { ok:false, raw:text }; }
+        }
+
+        async function fetchSuggest(q){
+          // primary: /api/suggest
+          let res = await apiGet('/api/suggest?q='+encodeURIComponent(q)+'&limit=10');
+          if(res.status===404){ // fallback: /api/predict/suggest
+            res = await apiGet('/api/predict/suggest?q='+encodeURIComponent(q)+'&limit=10');
+          }
+          return tryJson(res);
+        }
+
+        async function fetchDetect(body){
+          // primary: /api/fetch_detect
+          let res = await apiPost('/api/fetch_detect', body);
+          if(res.status===404 || res.status===405){
+            // fallback: /api/predict  (POST)
+            const fallbackBody = { ...body, op: 'fetch_detect' };
+            res = await apiPost('/api/predict', fallbackBody);
+          }
+          return tryJson(res);
+        }
+
+        async function detectFromUpload(text){
+          // primary: /api/detect (text/plain)
+          let res = await apiPost('/api/detect', text, 'text/plain');
+          if(res.status===404 || res.status===405){
+            // fallback: /api/predict with inline text
+            res = await apiPost('/api/predict', { from:'upload', text }, 'application/json');
+          }
+          return tryJson(res);
+        }
+
+        async function fitTransit(payload){
+          let res = await apiPost('/api/fit_transit', payload);
+          if(res.status===404 || res.status===405){
+            res = await apiPost('/api/fit', payload);
+          }
+          return tryJson(res);
+        }
+
+        async function downloadPdf(target){
+          // we stream the blob regardless of json
+          let url = '/api/report_pdf?target='+encodeURIComponent(String(target||''));
+          let r = await apiGet(url);
+          if(r.status===404){ r = await apiGet('/api/report?target='+encodeURIComponent(String(target||''))); }
+          if(!r.ok){ throw new Error(await r.text()); }
+          const blob = await r.blob();
+          const obj = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href=obj; a.download=(String(target||'report'))+'.pdf';
+          document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(obj); a.remove(); }, 0);
+        }
+
         // ---- Suggest (autocomplete) ----
         let suggestTimer=null;
         function setupSuggest(){
@@ -201,11 +273,9 @@ export default function Detector17B() {
             clearTimeout(suggestTimer);
             suggestTimer = setTimeout(async ()=>{
               try{
-                const r = await fetch('/api/suggest?q='+encodeURIComponent(q)+'&limit=10',{method:'GET'});
-                if(!r.ok){ throw new Error('suggest '+r.status); }
-                const js = await r.json();
+                const js = await fetchSuggest(q);
                 const items = js.items ?? js.suggestions ?? js ?? [];
-                list.innerHTML = items.map(it=>{
+                list.innerHTML = (items||[]).map((it)=>{
                   const v = (it.id ?? it.value ?? it.label ?? it.tic ?? it.name ?? it).toString();
                   return '<option value="'+v.replace(/"/g,'&quot;')+'">';
                 }).join('');
@@ -280,10 +350,10 @@ export default function Detector17B() {
               kpeaks: Number($('kpeaks')?.value)||3,
               detrend: $('detrendSel')?.value||'flatten',
               sigma: Number($('sigmaVal')?.value)||5,
-              quality: Boolean(($('qualityChk') as HTMLInputElement)?.checked),
-              outliers: Boolean(($('outlierChk') as HTMLInputElement)?.checked),
-              centroid: Boolean(($('centroidChk') as HTMLInputElement)?.checked),
-              gaia: Boolean(($('gaiaChk') as HTMLInputElement)?.checked),
+              quality: Boolean(($('qualityChk') )?.checked),
+              outliers: Boolean(($('outlierChk') )?.checked),
+              centroid: Boolean(($('centroidChk') )?.checked),
+              gaia: Boolean(($('gaiaChk') )?.checked),
               centroid_sigma_thr: Number($('sigmaThr')?.value)||3,
               centroid_rho_thr: Number($('rhoThr')?.value)||0.15,
               neighbors_radius: Number($('neiRadius')?.value)||60,
@@ -295,12 +365,11 @@ export default function Detector17B() {
 
           setText('status','Working...');
           try{
-            const r = await fetch('/api/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-            const js = await r.json();
-            if(!r.ok) throw new Error(js?.error || r.statusText);
+            const js = await fetchDetect(body);
+            if(js && (js.error || js.detail)){ throw new Error(js.error || js.detail); }
             handleDetectResult(js);
             setText('status','Done');
-          }catch(e){ setText('status','Error'); alert('fetch_detect: '+(e as Error).message); }
+          }catch(e){ setText('status','Error'); alert('fetch_detect: '+(e && e.message ? e.message : e)); }
         }
 
         function handleDetectResult(js){
@@ -312,13 +381,13 @@ export default function Detector17B() {
           const folded = js.pf || js.folded || null;
           if(folded?.phase && folded?.flux) plotPF(folded.phase, folded.flux);
 
-          const cands = js.cands || js.candidates || [];
+          const cands = js.cands || js.candidates || js.results || [];
           last = {
             target: js.target || js.id || $('ticInput')?.value,
             lc: { time, flux },
             pf: folded,
             cands,
-            neighbors: js.neighbors||null,
+            neighbors: js.neighbors||js.gaia||null,
             centroid: js.centroid||null,
           };
           renderCandidates(cands);
@@ -340,17 +409,16 @@ export default function Detector17B() {
 
         // ---- Upload detect ----
         async function runUpload(){
-          const file = (document.getElementById('file') as HTMLInputElement)?.files?.[0];
+          const file = (document.getElementById('file')).files?.[0];
           if(!file){ setText('statusUp','Choose a file'); return; }
           const txt = await file.text();
           setText('statusUp','Working...');
           try{
-            const r = await fetch('/api/detect', { method:'POST', headers:{'Content-Type':'text/plain'}, body: txt });
-            const js = await r.json();
-            if(!r.ok) throw new Error(js?.error || r.statusText);
+            const js = await detectFromUpload(txt);
+            if(js && (js.error || js.detail)){ throw new Error(js.error || js.detail); }
             handleDetectResult(js);
             setText('statusUp','Done');
-          }catch(e){ setText('statusUp','Error'); alert('detect: '+(e as Error).message); }
+          }catch(e){ setText('statusUp','Error'); alert('detect: '+(e && e.message ? e.message : e)); }
         }
 
         // ---- Export CSVs ----
@@ -367,7 +435,7 @@ export default function Detector17B() {
           download((last.target||'lightcurve')+'.csv', header+rows);
         }
         function exportVetted(){
-          const thr = Number(($('thr') as HTMLInputElement)?.value)||0.8;
+          const thr = Number(($('thr') )?.value)||0.8;
           const header = 'index,period,duration,depth,power,prob\n';
           const rows = (last.cands||[])
             .filter(c=> (c.p_planet ?? c.p ?? c.prob ?? 0) >= thr )
@@ -383,27 +451,19 @@ export default function Detector17B() {
           if(!cand){ alert('Select a candidate (click row)'); return; }
           setText('fitStatus','Fitting...');
           try{
-            const r = await fetch('/api/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ target: last.target, candidate: cand, method: ($('fitMethod') as HTMLSelectElement)?.value || 'batman', bootstrap: Number(($('fitBoot') as HTMLInputElement)?.value)||80 })
-            });
-            const js = await r.json();
-            if(!r.ok) throw new Error(js?.error || r.statusText);
+            const js = await fitTransit({ target: last.target, candidate: cand, method: ($('fitMethod') )?.value || 'batman', bootstrap: Number(($('fitBoot') )?.value)||80 });
+            if(js && (js.error || js.detail)){ throw new Error(js.error || js.detail); }
             const box = $('fitBox'); if(box){ box.style.display='block'; box.innerHTML='<b>Fit params</b><br/><pre>'+JSON.stringify(js.params ?? js, null, 2)+'</pre>'; }
             const f = js.folded || js.pf; if(f?.phase && f?.flux) plotPF(f.phase, f.flux);
             setText('fitStatus','Done');
-          }catch(e){ setText('fitStatus','Error'); alert('fit_transit: '+(e as Error).message); }
+          }catch(e){ setText('fitStatus','Error'); alert('fit_transit: '+(e && e.message ? e.message : e)); }
         }
 
         // ---- PDF report ----
         async function runPdf(){
           try{
-            const r = await fetch('/api/report_pdf?target='+encodeURIComponent(String(last.target||'')));
-            if(!r.ok) throw new Error(await r.text());
-            const blob = await r.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href=url; a.download=(String(last.target||'report'))+'.pdf';
-            document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
-          }catch(e){ alert('report_pdf: '+(e as Error).message); }
+            await downloadPdf(last.target);
+          }catch(e){ alert('report_pdf: '+(e && e.message ? e.message : e)); }
         }
 
         // ---- Wiring ----
@@ -432,9 +492,16 @@ export default function Detector17B() {
           setupSuggest();
         }
 
-        function boot(){
+        async function boot(){
           setupUI();
-          log('inline predictor (full) booted');
+          // warm-up: health check (ορατό status στο UI)
+          try{
+            const r = await fetch('/api/health', { cache:'no-store' });
+            const h = await r.json().catch(()=>({}));
+            setText('status', r.ok ? 'API ✓' : 'API ?');
+            log('health', r.status, h);
+          }catch{ setText('status','API ?'); }
+          log('inline predictor (robust) booted');
         }
         if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
       })();
