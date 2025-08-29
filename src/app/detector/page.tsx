@@ -3,12 +3,21 @@
 import Script from "next/script";
 
 const html17b = `
+<style>
+  /* --- Ensure top nav links remain clickable --- */
+  header.nav, header.nav a, header a {
+    position: relative !important;
+    z-index: 1000 !important;
+    pointer-events: auto !important;
+  }
+</style>
+
 <div id="ox17b">
   <style>
     /* Scoped 17B styles */
     #ox17b{ --card:#fff; --border:#e5e7eb; --muted:#666;
            font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-           margin:24px; background:#fafafa; color:#111; }
+           margin:24px; background:#fafafa; color:#111; position: relative; z-index: 1; }
     #ox17b h1{ font-size:22px; margin-bottom:18px; }
     #ox17b h3{ margin:0 0 10px 0; font-size:16px; }
     #ox17b .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
@@ -32,6 +41,15 @@ const html17b = `
     #ox17b .badge-beb{ background:#ffe6e6; border-color:#ffb3b3; color:#b30000; }
     #ox17b .note{ font-size:12.5px; color:#333; }
     #ox17b .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
+
+    /* --- Confine Plotly layers within plots so they don't overlay header --- */
+    #ox17b #lc, #ox17b #pf { position: relative; overflow: hidden; }
+    #ox17b .js-plotly-plot, #ox17b .plotly, #ox17b .modebar-container {
+      position: relative !important;
+      overflow: hidden !important;
+      z-index: 1 !important;
+      pointer-events: auto !important;
+    }
   </style>
 
   <h1>Orama X  Exoplanet Detector</h1>
@@ -166,8 +184,10 @@ const html17b = `
 export default function Detector17B() {
   return (
     <>
-      <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="afterInteractive" />
+      {/* Load Plotly globally before any interactivity */}
+      <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="beforeInteractive" />
       <div dangerouslySetInnerHTML={{ __html: html17b }} />
+      {/* Boot logic for 17B */}
       <Script src="/predictor-17b.js" strategy="afterInteractive" />
     </>
   );
