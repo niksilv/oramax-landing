@@ -1,7 +1,8 @@
-// src/app/detector/page.tsx
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Script from "next/script";
 import { Api } from "@/components/ApiBridge";
 
