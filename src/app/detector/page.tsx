@@ -4,17 +4,12 @@ import Script from "next/script";
 
 const html17b = `
 <style>
-  /* --- Ensure top nav links remain clickable --- */
-  header.nav, header.nav a, header a {
-    position: relative !important;
-    z-index: 1000 !important;
-    pointer-events: auto !important;
-  }
+  /* Keep nav links clickable */
+  header.nav, header.nav a, header a { position: relative !important; z-index: 1000 !important; pointer-events: auto !important; }
 </style>
 
 <div id="ox17b">
   <style>
-    /* Scoped 17B styles */
     #ox17b{ --card:#fff; --border:#e5e7eb; --muted:#666;
            font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
            margin:24px; background:#fafafa; color:#111; position: relative; z-index: 1; }
@@ -41,15 +36,8 @@ const html17b = `
     #ox17b .badge-beb{ background:#ffe6e6; border-color:#ffb3b3; color:#b30000; }
     #ox17b .note{ font-size:12.5px; color:#333; }
     #ox17b .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
-
-    /* --- Confine Plotly layers within plots so they don't overlay header --- */
     #ox17b #lc, #ox17b #pf { position: relative; overflow: hidden; }
-    #ox17b .js-plotly-plot, #ox17b .plotly, #ox17b .modebar-container {
-      position: relative !important;
-      overflow: hidden !important;
-      z-index: 1 !important;
-      pointer-events: auto !important;
-    }
+    #ox17b .js-plotly-plot, #ox17b .plotly, #ox17b .modebar-container { position: relative !important; overflow: hidden !important; z-index: 1 !important; pointer-events: auto !important; }
   </style>
 
   <h1>Orama X  Exoplanet Detector</h1>
@@ -184,11 +172,79 @@ const html17b = `
 export default function Detector17B() {
   return (
     <>
-      {/* Load Plotly globally before any interactivity */}
+      {/* Ensure Plotly is on window before our script runs */}
       <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="beforeInteractive" />
       <div dangerouslySetInnerHTML={{ __html: html17b }} />
-      {/* Boot logic for 17B */}
-      <Script src="/predictor-17b.js" strategy="afterInteractive" />
+      {/* Inline boot script (no external dependency) */}
+      <Script id="predictor-17b-inline" strategy="afterInteractive">{`
+      (function(){
+        const log = (...a)=>console.log('[17B]', ...a);
+        const err = (...a)=>console.error('[17B]', ...a);
+        const $ = (id)=>document.getElementById(id);
+        const setText=(id,txt)=>{ const el=$(id); if(el) el.textContent=txt; };
+
+        function bindSlider(sliderId, labelId, fmt){
+          const s = $(sliderId); const l = $(labelId);
+          if(!s||!l) return;
+          const show=()=>{ const v=parseFloat(s.value); l.textContent=fmt?fmt(v):String(v); };
+          s.addEventListener('input', show); show(); // init immediately
+        }
+
+        function setupBasicUI(){
+          // sliders / labels
+          bindSlider('thr','thrLabel', v=>v.toFixed(2));
+          bindSlider('sigmaThr','sigmaThrLabel', v=>v.toFixed(1));
+          bindSlider('rhoThr','rhoThrLabel', v=>v.toFixed(2));
+          bindSlider('neiRadius','neiRadiusLabel', v=>v.toFixed(0));
+
+          // source switch
+          const srcSel=$('sourceSel'), urlInput=$('urlInput'), ticInput=$('ticInput');
+          if(srcSel && urlInput && ticInput){
+            srcSel.addEventListener('change', ()=>{
+              const isUrl=srcSel.value==='url';
+              urlInput.style.display = isUrl ? 'inline-block' : 'none';
+              ticInput.style.display  = isUrl ? 'none' : 'inline-block';
+            });
+          }
+        }
+
+        // Minimal plots to confirm wiring
+        function plotTest(){
+          try{
+            if(!window.Plotly) return;
+            const x=Array.from({length:80}, (_,i)=>i/10);
+            const y=x.map(t=>Math.sin(t));
+            window.Plotly.newPlot('lc',[{x,y,mode:'lines'}],{margin:{t:10}},
+              {displayModeBar:false,responsive:true});
+          }catch(e){ err('plot test',e); }
+        }
+
+        // Wire buttons with harmless stubs so βλέπεις activity άμεσα
+        function setupButtons(){
+          $('runFetch')?.addEventListener('click', ()=>{
+            setText('status','Working...');
+            setTimeout(()=>{ setText('status','Done'); plotTest(); }, 300);
+          });
+          $('exportCsv')?.addEventListener('click', ()=> alert('Export CSV stub'));
+          $('exportVettedCsv')?.addEventListener('click', ()=> alert('Export Vetted CSV stub'));
+          $('runUpload')?.addEventListener('click', ()=> alert('Upload Detect stub'));
+          $('fitBtn')?.addEventListener('click', ()=> alert('Fit Transit stub'));
+          $('pdfBtn')?.addEventListener('click', ()=> alert('PDF report stub'));
+        }
+
+        function boot(){
+          setupBasicUI();
+          setupButtons();
+          log('inline predictor booted');
+        }
+
+        if(document.readyState==='loading'){
+          document.addEventListener('DOMContentLoaded', boot);
+        }else{
+          boot();
+        }
+      })();
+      `}</Script>
     </>
   );
 }
