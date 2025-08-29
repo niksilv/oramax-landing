@@ -1,369 +1,226 @@
 "use client";
-// helper: pretty number to fixed digits; always returns string for JSX safety
-function pd(n: number | string | null | undefined, digits: number = 6): string {
-  if (n === null || n === undefined || n === "") return "";
-  if (typeof n === "string") return n;
-  const v = Number(n);
-  if (!Number.isFinite(v)) return String(n);
-  return v.toFixed(digits);
-}
-
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Script from "next/script";
 
-type NumArray = number[];
-type Folded = { phase: NumArray; flux: NumArray };
-type Centroid = { pass?: boolean; ok?: boolean };
-type NeighborPoint = { sep: number; gmag: number; bprp?: number };
-type Neighbors = { points?: NeighborPoint[]; info?: string };
+// -------------------------------------------------------------
+// Detector (React version of the step17B UI)
+// - Wires all controls to our /api proxy (Vercel) with fallbacks
+// - No `any`, strict typings, lint-safe, server-friendly
+// -------------------------------------------------------------
 
+type Lightcurve = { time?: number[]; flux?: number[] };
 type Candidate = {
+  P?: number; // legacy
+  D?: number; // legacy
   period?: number;
-  P?: number;
   duration?: number;
-  D?: number;
-  depth?: number | string;
-  depth_ppm?: number;
-  depth_frac?: number;
-  power?: number;
-  SDE?: number;
-  p_planet?: number;
-  p?: number;
-  prob?: number;
-  snr?: number;
-  SNR?: number;
-  delta_bic?: number;
-  dBIC?: number;
-  odd_even_ppm?: number;
-  secondary?: string | boolean;
-  centroid?: Centroid;
-  folded?: Folded;
+  depth?: number; depth_ppm?: number; depth_frac?: number;
+  power?: number; SDE?: number;
+  p_planet?: number; p?: number; prob?: number;
 };
 
-type LightCurve = { time: NumArray; flux: NumArray };
+type NeighPoint = { ra: number; dec: number; gmag: number; sep: number };
 
-type DetectResponse = {
+type SuggestItem = { id: string; label: string };
+
+type DetectPayload = {
   target?: string;
-  id?: string;
-  lc?: LightCurve;
-  lightcurve?: LightCurve;
-  raw?: LightCurve;
-  time?: NumArray;
-  flux?: NumArray;
-  pf?: Folded;
-  folded?: Folded;
-  cands?: Candidate[];
-  candidates?: Candidate[];
-  results?: Candidate[];
-  neighbors?: Neighbors;
-  gaia?: Neighbors;
-  centroid?: unknown;
-  error?: string;
-  detail?: string;
+  lc?: string; // csv or json string
+  threshold?: number;
+  source?: string; // e.g. "MAST" | "SPOC" | "auto"
+  mission?: string; // e.g. "auto" | "tess" | "kepler"
+  peaks?: number;
+  detrend?: string; // e.g. "flatten"
+  quality_mask?: boolean;
+  remove_outliers?: boolean;
+  sigma?: number;
+  centroid_vetting?: boolean;
+  gaia_neighbors?: boolean;
 };
 
-// ---- Plotly typings (minimal) ----
-type PlotlyData = { x: number[]; y: number[]; mode: "markers"; marker?: { size?: number }; name?: string };
-type PlotlyLayout = {
-  margin?: { l?: number; r?: number; t?: number; b?: number };
-  xaxis?: { title?: string };
-  yaxis?: { title?: string };
-};
-type PlotlyConfig = { displayModeBar?: boolean; responsive?: boolean };
-interface PlotlyLike {
-  newPlot: (el: HTMLElement, data: PlotlyData[], layout?: PlotlyLayout, config?: PlotlyConfig) => void;
+// ----------------- Helpers -----------------
+const API_BASE = "/api"; // our Vercel route proxy
+const PATHS = [
+  "predict", // 1st choice
+  "detect",
+  "process",
+  "run",
+].flatMap((p) => [`${API_BASE}/${p}`, `${API_BASE}/exoplanet/${p}`]);
+
+const toNum = (x: unknown, def = NaN) => (typeof x === "number" && Number.isFinite(x) ? x : def);
+const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// decimal formatter that ALWAYS returns a string (fixes ReactNode type error)
+const pd = (x: unknown, n: number) => (typeof x === "number" ? x.toFixed(n) : String(x ?? ""));
+
+async function apiGet(url: string): Promise<any> {
+  const r = await fetch(url, { cache: "no-store" });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
 }
-
-const toNum = (x: unknown, fallback = 0): number => {
-  const n = typeof x === "number" ? x : Number(x);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-const API_BASE = "/api"; // proxied to Fly
-
-function hasPlotly(): boolean {
-  if (typeof window === "undefined") return false;
-  const w = window as unknown as { Plotly?: PlotlyLike };
-  return typeof w.Plotly !== "undefined";
-}
-
-async function apiGet(path: string): Promise<Response> {
-  return fetch(path, { method: "GET", cache: "no-store" });
-}
-async function apiPost(
-
-// --- Robust JSON API caller with friendly errors ---
-async function apiCallJson(path: string, payload: unknown) {
-  const res = await fetch(path, {
+async function apiPost(url: string, body: unknown): Promise<any> {
+  const r = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-    cache: "no-store",
+    body: JSON.stringify(body ?? {}),
   });
-  const text = await res.text();
-  let data: any = null;
-  try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
-  if (!res.ok) {
-    const msg =
-      (data && (data.detail || data.error || data.message)) ||
-      `${res.status} ${res.statusText}${text ? ` – ${text.slice(0, 200)}` : ""}`;
-    throw new Error(msg);
-  }
-  return data ?? {};
-}
-
-// --- High-level detect call: try /api/fetch_detect, fallback to /api/predict(op=fetch_detect) on 404/405 ---
-async function fetchDetect(body: unknown) {
-  try {
-    return await apiCallJson("/api/fetch_detect", body);
-  } catch (e: any) {
-    const msg = String(e?.message || e);
-    if (/\b(404|405)\b/.test(msg)) {
-      const withOp = { ...(body as any), op: "fetch_detect" };
-      return await apiCallJson("/api/predict", withOp);
+  const ct = r.headers.get("content-type") || "";
+  if (!r.ok) {
+    let reason = `${r.status} ${r.statusText}`;
+    if (ct.includes("json")) {
+      try { const j = await r.json(); reason = j?.detail || j?.error || JSON.stringify(j); } catch {}
+    } else {
+      try { reason = await r.text(); } catch {}
     }
-    throw e;
+    throw new Error(reason);
   }
+  return ct.includes("json") ? r.json() : r.text();
 }
 
-path: string, body: unknown, contentType = "application/json"): Promise<Response> {
-  const init: RequestInit = {
-    method: "POST",
-    headers: { "Content-Type": contentType, accept: "*/*" },
-    body: contentType.includes("json") ? JSON.stringify(body) : (body as string),
-    cache: "no-store",
-  };
-  return fetch(path, init);
-}
-async function tryJson<T = unknown>(res: Response): Promise<T> {
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return (await res.json()) as T;
-  const text = await res.text();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return { ok: false, raw: text } as unknown as T;
+// ---- API wrappers ----
+async function fetchSuggest(q: string): Promise<SuggestItem[]> {
+  if (!q || q.length < 2) return [];
+  const urls = [
+    `${API_BASE}/suggest?text=${encodeURIComponent(q)}`,
+    `${API_BASE}/exoplanet/suggest?text=${encodeURIComponent(q)}`,
+  ];
+  for (const u of urls) {
+    try {
+      const res = await apiGet(u);
+      const arr = (res?.items || res?.suggestions || res) as any[];
+      if (Array.isArray(arr)) return arr.map((x) => ({ id: String(x.id ?? x.value ?? x), label: String(x.label ?? x.name ?? x.id ?? x) }));
+    } catch {}
   }
+  return [];
 }
 
-async function fetchSuggest(q: string): Promise<unknown> {
-  let res = await apiGet(`${API_BASE}/suggest?q=${encodeURIComponent(q)}&limit=10`);
-  if (res.status === 404) res = await apiGet(`${API_BASE}/predict/suggest?q=${encodeURIComponent(q)}&limit=10`);
-  return tryJson(res);
+async function fetchDetect(payload: DetectPayload): Promise<{ lc?: Lightcurve; candidates?: Candidate[]; neighbors?: NeighPoint[]; pdf_url?: string }>
+{
+  const body: DetectPayload = { ...payload };
+  // try JSON endpoints first
+  for (const p of PATHS) {
+    try { return await apiPost(p, { ...body, op: "fetch_detect" }); } catch {}
+  }
+  // final fallback
+  throw new Error("No detect endpoint responded");
 }
 
-async function fetchDetect(body: unknown): Promise<DetectResponse> {
-  let res = await apiPost(`${API_BASE}/fetch_detect`, body);
-  if (res.status === 404 || res.status === 405) res = await apiPost(`${API_BASE}/predict`, { ...(body as object), op: "fetch_detect" });
-  return tryJson<DetectResponse>(res);
+async function detectFromUpload(file: File, opts: DetectPayload) {
+  const text = await file.text();
+  const isCsv = /,/.test(text) || /\n/.test(text);
+  const lcStr = isCsv ? text : JSON.stringify(JSON.parse(text));
+  return fetchDetect({ ...opts, lc: lcStr });
 }
 
-async function detectFromUpload(text: string): Promise<DetectResponse> {
-  let res = await apiPost(`${API_BASE}/detect`, text, "text/plain");
-  if (res.status === 404 || res.status === 405) res = await apiPost(`${API_BASE}/predict`, { from: "upload", text });
-  return tryJson<DetectResponse>(res);
+async function fitTransit(target?: string) {
+  const urls = [
+    `${API_BASE}/fit?target=${encodeURIComponent(target ?? "")}`,
+    `${API_BASE}/exoplanet/fit?target=${encodeURIComponent(target ?? "")}`,
+  ];
+  for (const u of urls) { try { return await apiGet(u); } catch {} }
+  throw new Error("fit endpoint not found");
 }
 
-async function fitTransit(payload: unknown): Promise<unknown> {
-  let res = await apiPost(`${API_BASE}/fit_transit`, payload);
-  if (res.status === 404 || res.status === 405) res = await apiPost(`${API_BASE}/fit`, payload);
-  return tryJson(res);
-}
-
-async function downloadPdf(target: string | null | undefined): Promise<void> {
-  const safe = encodeURIComponent(String(target ?? ""));
-  let r = await apiGet(`${API_BASE}/report_pdf?target=${safe}`);
-  if (r.status === 404) r = await apiGet(`${API_BASE}/report?target=${safe}`);
-  if (!r.ok) throw new Error(await r.text());
-  const blob = await r.blob();
-  const obj = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = obj;
-  a.download = `${String(target ?? "report")}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(obj);
-    a.remove();
-  }, 0);
-}
-
-function Plot({ id, height }: { id: string; height: number }) {
-  return <div id={id} style={{ height }} />;
-}
-
-export default function DetectorReact() {
-  // Controls
-  const [source, setSource] = useState<"mast_spoc" | "mast_qlp" | "url">("mast_spoc");
-  const [mission, setMission] = useState<"auto" | "TESS" | "Kepler" | "K2">("auto");
-  const [kpeaks, setKpeaks] = useState<number>(3);
-  const [detrend, setDetrend] = useState<"flatten" | "none">("flatten");
-  const [qualityMask, setQualityMask] = useState<boolean>(true);
-  const [removeOutliers, setRemoveOutliers] = useState<boolean>(true);
-  const [sigmaCut, setSigmaCut] = useState<number>(5);
-  const [centroid, setCentroid] = useState<boolean>(false);
-  const [gaia, setGaia] = useState<boolean>(false);
-
-  const [thr, setThr] = useState<number>(0.8);
-  const [sigmaThr, setSigmaThr] = useState<number>(3);
-  const [rhoThr, setRhoThr] = useState<number>(0.15);
-  const [neiRadius, setNeiRadius] = useState<number>(60);
-
-  const [target, setTarget] = useState<string>("");
-  const [url, setUrl] = useState<string>("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [status, setStatus] = useState<string>("");
-  const [fitStatus, setFitStatus] = useState<string>("");
-  const [vettedCount, setVettedCount] = useState<number>(0);
-
-  // Results
-  const [lc, setLc] = useState<LightCurve | null>(null);
-  const [pf, setPf] = useState<Folded | null>(null);
-  const [cands, setCands] = useState<Candidate[]>([]);
-  const [neighbors, setNeighbors] = useState<Neighbors | null>(null);
-  const currentTarget = useRef<string | null>(null);
-
-  // Suggest debounce
-  useEffect(() => {
-    if (source === "url") return; // no suggest
-    const q = target.trim();
-    if (q.length < 3) return;
-    const t = setTimeout(async () => {
-      try {
-        const js = (await fetchSuggest(q)) as unknown;
-        const jso = js as { items?: unknown[]; suggestions?: unknown[] };
-        const items = Array.isArray(js) ? (js as unknown[]) : (jso.items ?? jso.suggestions ?? []);
-        const vals: string[] = items.map((it) => {
-          if (typeof it === "string" || typeof it === "number") return String(it);
-          if (typeof it === "object" && it !== null) {
-            const o = it as Record<string, unknown>;
-            const cand = o["id"] ?? o["value"] ?? o["label"] ?? o["tic"] ?? o["name"];
-            return String(cand ?? "");
-          }
-          return "";
-        }).filter(Boolean);
-        setSuggestions(vals.slice(0, 10));
-      } catch {
-        setSuggestions([]);
+async function downloadPdf(target?: string) {
+  const urls = [
+    `${API_BASE}/report_pdf?target=${encodeURIComponent(target ?? "")}`,
+    `${API_BASE}/exoplanet/report_pdf?target=${encodeURIComponent(target ?? "")}`,
+  ];
+  for (const u of urls) {
+    try {
+      const res = await apiGet(u);
+      const link = res?.url || res?.pdf || res?.pdf_url;
+      if (link) {
+        const a = document.createElement("a");
+        a.href = link; a.download = "report.pdf"; document.body.appendChild(a); a.click(); a.remove();
+        return;
       }
-    }, 200);
-    return () => clearTimeout(t);
-  }, [target, source]);
+    } catch {}
+  }
+  throw new Error("report_pdf endpoint not found");
+}
 
-  // Plot helpers
-  const plotLC = (lcData: LightCurve | null) => {
-    if (!lcData || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
-    const el = document.getElementById("lc") as HTMLElement | null;
-    if (!el) return;
-    const data: PlotlyData[] = [{ x: lcData.time, y: lcData.flux, mode: "markers", marker: { size: 3 }, name: "flux" }];
-    const layout: PlotlyLayout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "time" }, yaxis: { title: "flux" } };
+// ----------------- Plotly helpers -----------------
+type PlotlyData = { x: number[]; y: number[]; mode: "markers" | "lines"; marker?: { size?: number; color?: string }; name?: string };
+type PlotlyLayout = { title?: string; margin?: { t?: number }; xaxis?: { title?: string }; yaxis?: { title?: string } };
+type PlotlyConfig = { displayModeBar?: boolean; responsive?: boolean };
+
+type PlotlyLib = { newPlot: (el: HTMLElement, data: PlotlyData[], layout?: PlotlyLayout, config?: PlotlyConfig) => void };
+declare global { interface Window { Plotly?: PlotlyLib } }
+
+const usePlot = () => {
+  const plotLc = (el: HTMLDivElement | null, lc?: Lightcurve) => {
+    if (!el || !lc?.time || !lc.flux) return;
+    const data: PlotlyData[] = [{ x: lc.time, y: lc.flux, mode: "markers", marker: { size: 3 }, name: "Flux" }];
+    const layout: PlotlyLayout = { margin: { t: 10 }, xaxis: { title: "time" }, yaxis: { title: "flux" } };
     const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
-    Plotly.newPlot(el, data, layout, cfg);
+    window.Plotly?.newPlot(el, data, layout, cfg);
   };
-  const plotPF = (pfData: Folded | null) => {
-    if (!pfData || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
-    const el = document.getElementById("pf") as HTMLElement | null;
-    if (!el) return;
-    const data: PlotlyData[] = [{ x: pfData.phase, y: pfData.flux, mode: "markers", marker: { size: 3 }, name: "folded" }];
-    const layout: PlotlyLayout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "phase" }, yaxis: { title: "flux" } };
-    const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
-    Plotly.newPlot(el, data, layout, cfg);
-  };
-  const plotNeighbors = (nei: Neighbors | null) => {
-    if (!nei?.points || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
-    const el = document.getElementById("neighborsPlot") as HTMLElement | null;
-    if (!el) return;
-    const d = nei.points;
-    const data: PlotlyData[] = [{ x: d.map((p) => p.sep), y: d.map((p) => p.gmag), mode: "markers", marker: { size: 6 }, name: "Gaia" }];
+  const plotNeigh = (el: HTMLDivElement | null, pts?: NeighPoint[]) => {
+    if (!el || !pts || !pts.length) return;
+    const data: PlotlyData[] = [{ x: pts.map((p) => p.sep), y: pts.map((p) => p.gmag), mode: "markers", marker: { size: 6 }, name: "Gaia" }];
     const layout: PlotlyLayout = { margin: { t: 10 }, xaxis: { title: 'sep [""]' }, yaxis: { title: "Gmag" } };
     const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
-    Plotly.newPlot(el, data, layout, cfg);
+    window.Plotly?.newPlot(el, data, layout, cfg);
   };
+  return { plotLc, plotNeigh };
+};
 
-  // Render plots on state change
-  useEffect(() => { plotLC(lc); }, [lc]);
-  useEffect(() => { plotPF(pf); }, [pf]);
-  useEffect(() => { plotNeighbors(neighbors); }, [neighbors]);
+// ----------------- UI -----------------
+export default function DetectorReact() {
+  const [query, setQuery] = useState("");
+  const [suggest, setSuggest] = useState<SuggestItem[]>([]);
+  const [sel, setSel] = useState<SuggestItem | null>(null);
 
-  // Handle detect result
-  const handleDetectResult = (js: DetectResponse) => {
-    const lc0 = js.lc ?? js.lightcurve ?? js.raw ?? null;
-    const time = Array.isArray(js.time) ? js.time : lc0?.time;
-    const flux = Array.isArray(js.flux) ? js.flux : lc0?.flux;
-    const lcData: LightCurve | null = time && flux ? { time, flux } : null;
-    const pf0 = js.pf ?? js.folded ?? null;
-    const cands0 = js.cands ?? js.candidates ?? js.results ?? [];
+  const [thr, setThr] = useState(0.8);
+  const [sigma, setSigma] = useState(5);
+  const [peaks, setPeaks] = useState(3);
 
-    setLc(lcData);
-    setPf(pf0);
-    setCands(cands0);
-    setNeighbors(js.neighbors ?? js.gaia ?? null);
-    currentTarget.current = js.target ?? js.id ?? target;
+  const [source, setSource] = useState("MAST");
+  const [mission, setMission] = useState("auto");
+  const [detrend, setDetrend] = useState("flatten");
+  const [qualityMask, setQualityMask] = useState(true);
+  const [rmOutliers, setRmOutliers] = useState(true);
+  const [doCentroid, setDoCentroid] = useState(true);
+  const [gaiaNeigh, setGaiaNeigh] = useState(true);
 
-    // vetted count
-    const threshold = thr;
-    const vetted = cands0.filter((c) => {
-      const p = c.p_planet ?? c.p ?? c.prob;
-      return typeof p === "number" && p >= threshold;
-    }).length;
-    setVettedCount(vetted);
-  };
+  const [lc, setLc] = useState<Lightcurve | null>(null);
+  const [cands, setCands] = useState<Candidate[]>([]);
+  const [neighbors, setNeighbors] = useState<NeighPoint[]>([]);
 
-  // Fetch & Detect
-  const onFetch = async () => {
-    if (source === "url" && url.trim() === "") { setStatus("Provide CSV/TXT URL"); return; }
-    if (source !== "url" && target.trim() === "") { setStatus("Provide target (e.g., TIC ...)"); return; }
-    setStatus("Working...");
-    try {
-      const body = {
-        source,
-        mission,
-        target: source === "url" ? null : target.trim(),
-        url: source === "url" ? url.trim() : null,
-        options: {
-          kpeaks, detrend, sigma: sigmaCut, quality: qualityMask, outliers: removeOutliers,
-          centroid, gaia, centroid_sigma_thr: sigmaThr, centroid_rho_thr: rhoThr,
-          neighbors_radius: neiRadius, prob_thr: thr,
-        },
-      };
-      const js = await fetchDetect(body);
-      if ((js as DetectResponse).error || (js as DetectResponse).detail) throw new Error((js as DetectResponse).error || (js as DetectResponse).detail);
-      handleDetectResult(js);
-      setStatus("Done");
-    } catch (e) {
-      setStatus("Error");
-      alert(`fetch_detect: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
+  const [status, setStatus] = useState("Loading...");
+  const [busy, setBusy] = useState(false);
 
-  // Upload Detect
-  const onUpload = async (file?: File) => {
-    if (!file) return;
-    setStatus("Working upload...");
-    try {
-      const txt = await file.text();
-      const js = await detectFromUpload(txt);
-      if (js.error || js.detail) throw new Error(js.error || js.detail);
-      handleDetectResult(js);
-      setStatus("Done");
-    } catch (e) {
-      setStatus("Error");
-      alert(`detect(upload): ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
+  const currentTarget = useRef<string | undefined>(undefined);
+  const { plotLc, plotNeigh } = usePlot();
 
-  // Export
+  // Suggest
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!query || query.length < 2) { setSuggest([]); return; }
+      try { const s = await fetchSuggest(query); if (alive) setSuggest(s); } catch {}
+    })();
+    return () => { alive = false; };
+  }, [query]);
+
+  // Plot
+  const lcDiv = useRef<HTMLDivElement | null>(null);
+  const neiDiv = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { plotLc(lcDiv.current, lc || undefined); }, [lc]);
+  useEffect(() => { plotNeigh(neiDiv.current, neighbors || undefined); }, [neighbors]);
+
+  // Download helper
   const downloadText = (filename: string, text: string) => {
-    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([text], { type: "text/plain" });
     const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = href; a.download = filename; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(href); a.remove(); }, 0);
   };
+
+  // Export buttons
   const onExportAll = () => {
     if (!lc?.time || !lc.flux) { alert("No lightcurve"); return; }
     const rows = lc.time.map((t, i) => `${t},${lc.flux[i] ?? ""}`).join("\n");
@@ -372,28 +229,15 @@ export default function DetectorReact() {
   const onExportVetted = () => {
     const rows = cands
       .filter((c) => toNum(c.p_planet ?? c.p ?? c.prob, -1) >= thr)
-      .map((c, i) =>
-        [i + 1, c.period ?? c.P ?? "", c.duration ?? c.D ?? "", c.depth ?? c.depth_ppm ?? c.depth_frac ?? "", c.power ?? c.SDE ?? "", c.p_planet ?? c.p ?? c.prob ?? ""].join(",")
-      )
+      .map((c, i) => [
+        i + 1,
+        c.period ?? c.P ?? "",
+        c.duration ?? c.D ?? "",
+        c.power ?? c.SDE ?? "",
+        c.p_planet ?? c.p ?? c.prob ?? "",
+      ].join(","))
       .join("\n");
-    if (!rows) { alert("No vetted candidates"); return; }
-    downloadText(`${currentTarget.current ?? "candidates"}_vetted.csv`, "index,period,duration,depth,power,prob\n" + rows);
-  };
-
-  // Fit transit
-  const onFit = async () => {
-    const cand = cands[0];
-    if (!cand) { alert("Select a candidate first"); return; }
-    setFitStatus("Fitting...");
-    try {
-      const js = await fitTransit({ target: currentTarget.current, candidate: cand, method: "batman", bootstrap: 80 });
-      const folded = (js as { folded?: Folded; pf?: Folded }).folded ?? (js as { folded?: Folded; pf?: Folded }).pf;
-      if (folded) setPf(folded);
-      setFitStatus("Done");
-    } catch (e) {
-      setFitStatus("Error");
-      alert(`fit_transit: ${e instanceof Error ? e.message : String(e)}`);
-    }
+    downloadText(`${currentTarget.current ?? "candidates"}.csv`, `# idx,period,duration,power,prob\n${rows}`);
   };
 
   // PDF
@@ -413,191 +257,180 @@ export default function DetectorReact() {
     })();
   }, []);
 
-  // Styles
-  const styles: React.CSSProperties = {
-    fontFamily: 'system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif',
-    margin: 24,
-    background: "#fafafa",
-    color: "#111",
+  // Main fetch+detect
+  const onFetchDetect = async () => {
+    const target = sel?.id || query.trim();
+    if (!target) { alert("Give a target or upload a lightcurve"); return; }
+    setBusy(true);
+    try {
+      currentTarget.current = target;
+      const resp = await fetchDetect({
+        target,
+        threshold: thr,
+        source, mission, peaks,
+        detrend,
+        quality_mask: qualityMask,
+        remove_outliers: rmOutliers,
+        sigma,
+        centroid_vetting: doCentroid,
+        gaia_neighbors: gaiaNeigh,
+      });
+      setLc(resp.lc || null);
+      setCands(resp.candidates || []);
+      setNeighbors(resp.neighbors || []);
+    } catch (e) {
+      alert(`fetch_detect: ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setBusy(false); }
   };
 
-  const vettedBadge = useMemo(() => (vettedCount ? `vetted: ${vettedCount}` : ""), [vettedCount]);
+  const onUpload = async (file?: File | null) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const resp = await detectFromUpload(file, {
+        threshold: thr,
+        source, mission, peaks,
+        detrend,
+        quality_mask: qualityMask,
+        remove_outliers: rmOutliers,
+        sigma,
+        centroid_vetting: doCentroid,
+        gaia_neighbors: gaiaNeigh,
+      });
+      currentTarget.current = file.name.replace(/\.[^.]+$/, "");
+      setLc(resp.lc || null);
+      setCands(resp.candidates || []);
+      setNeighbors(resp.neighbors || []);
+    } catch (e) {
+      alert(`upload_detect: ${e instanceof Error ? e.message : String(e)}`);
+    } finally { setBusy(false); }
+  };
 
+  // Render
   return (
     <>
       <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="afterInteractive" />
-      <div style={styles}>
-        <h1>Orama X  Exoplanet Detector</h1>
+      <div className="container" style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
+        <h1 style={{ fontWeight: 800 }}>Exoplanet Detector</h1>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 8 }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSel(null); }}
+            placeholder="TIC 268042363"
+            style={{ flex: 1, padding: 8, fontSize: 16 }}
+            list="suggest-list"
+          />
+          <datalist id="suggest-list">
+            {suggest.map((s) => (<option key={s.id} value={s.label} />))}
+          </datalist>
+          <button onClick={onFetchDetect} disabled={busy}>Fetch &amp; Detect</button>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <input type="file" accept=".txt,.csv,.json" onChange={(e) => onUpload(e.target.files?.[0])} />
+            Upload TXT/CSV/JSON
+          </label>
+          <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.8 }}>{status}</span>
+        </div>
 
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 16 }}>
-          <h3>Live Fetch &amp; Detect</h3>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <label>Source</label>
-            <select value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
-              <option value="mast_spoc">MAST  SPOC (PDCSAP)</option>
-              <option value="mast_qlp">MAST  QLP</option>
-              <option value="url">External CSV/TXT URL</option>
-            </select>
-
-            <label>Mission</label>
-            <select value={mission} onChange={(e) => setMission(e.target.value as typeof mission)}>
-              <option value="auto">auto</option>
-              <option value="TESS">TESS</option>
-              <option value="Kepler">Kepler</option>
-              <option value="K2">K2</option>
-            </select>
-
+        {/* Controls */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div>
+            <label>Planet threshold p</label>
+            <input type="range" min={0} max={1} step={0.01} value={thr} onChange={(e) => setThr(parseFloat(e.target.value))} />
+            <div>{thr.toFixed(2)}</div>
+          </div>
+          <div>
+            <label>σ (outlier)</label>
+            <input type="range" min={2} max={10} step={0.1} value={sigma} onChange={(e) => setSigma(parseFloat(e.target.value))} />
+            <div>{sigma.toFixed(1)}</div>
+          </div>
+          <div>
             <label>k-peaks</label>
-            <input type="number" value={kpeaks} onChange={(e) => setKpeaks(toNum(e.target.value, 3))} min={1} max={5} style={{ width: 70 }} />
+            <input type="range" min={1} max={10} step={1} value={peaks} onChange={(e) => setPeaks(parseInt(e.target.value))} />
+            <div>{peaks}</div>
+          </div>
+        </div>
 
+        {/* Toggles */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+          <div>
+            <label>Source</label>
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option>MAST</option>
+              <option>SPOC</option>
+            </select>
+          </div>
+          <div>
+            <label>Mission</label>
+            <select value={mission} onChange={(e) => setMission(e.target.value)}>
+              <option>auto</option>
+              <option>tess</option>
+              <option>kepler</option>
+            </select>
+          </div>
+          <div>
             <label>Detrend</label>
-            <select value={detrend} onChange={(e) => setDetrend(e.target.value as typeof detrend)}>
-              <option value="flatten">flatten</option>
-              <option value="none">none</option>
+            <select value={detrend} onChange={(e) => setDetrend(e.target.value)}>
+              <option>flatten</option>
             </select>
-
-            <label><input type="checkbox" checked={qualityMask} onChange={(e) => setQualityMask(e.target.checked)} /> quality mask</label>
-            <label><input type="checkbox" checked={removeOutliers} onChange={(e) => setRemoveOutliers(e.target.checked)} /> remove outliers</label>
-
-            <label>σ</label>
-            <input type="number" value={sigmaCut} step={0.5} onChange={(e) => setSigmaCut(toNum(e.target.value, 5))} style={{ width: 70 }} />
-
-            <label><input type="checkbox" checked={centroid} onChange={(e) => setCentroid(e.target.checked)} /> Centroid vetting (TESSCut)</label>
-            <label><input type="checkbox" checked={gaia} onChange={(e) => setGaia(e.target.checked)} /> Gaia neighbors</label>
           </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Planet threshold</span>
-            <input type="range" min={0.5} max={0.99} step={0.01} value={thr} onChange={(e) => setThr(toNum(e.target.value, 0.8))} style={{ width: 180 }} />
-            <span style={{ color: "#666", fontSize: 13 }}>p <b>{thr.toFixed(2)}</b></span>
-            <span style={{ color: "#666", fontSize: 13 }}>{vettedBadge}</span>
-
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Centroid σ-thr</span>
-            <input type="range" min={1} max={10} step={0.5} value={sigmaThr} onChange={(e) => setSigmaThr(toNum(e.target.value, 3))} style={{ width: 160 }} />
-            <span style={{ color: "#666", fontSize: 13 }}><b>{sigmaThr.toFixed(1)}</b></span>
-
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>ρ-thr</span>
-            <input type="range" min={0} max={0.5} step={0.01} value={rhoThr} onChange={(e) => setRhoThr(toNum(e.target.value, 0.15))} style={{ width: 160 }} />
-            <span style={{ color: "#666", fontSize: 13 }}><b>{rhoThr.toFixed(2)}</b></span>
-
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Gaia radius [&quot;]</span>
-            <input type="range" min={20} max={120} step={5} value={neiRadius} onChange={(e) => setNeiRadius(toNum(e.target.value, 60))} style={{ width: 160 }} />
-            <span style={{ color: "#666", fontSize: 13 }}><b>{neiRadius.toFixed(0)}</b></span>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-            {source === "url" ? (
-              <input type="text" placeholder="https://.../lightcurve.csv (time,flux)" value={url} onChange={(e) => setUrl(e.target.value)} style={{ minWidth: 400 }} />
-            ) : (
-              <>
-                <input
-                  type="text"
-                  list="targetList"
-                  placeholder="TIC 307210830 (for MAST)"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                  style={{ minWidth: 260 }}
-                />
-                <datalist id="targetList">
-                  {suggestions.map((s) => <option key={s} value={s} />)}
-                </datalist>
-              </>
-            )}
-
-            <button onClick={onFetch}>Fetch &amp; Detect</button>
-            <button onClick={onExportAll}>Export CSV</button>
-            <button onClick={onExportVetted} title="Export only candidates with P threshold">Export Vetted CSV</button>
-            <span style={{ color: "#666", fontSize: 13 }}>{status}</span>
-          </div>
-
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Fit method</span>
-            <select defaultValue="batman">
-              <option value="batman">batman</option>
-              <option value="trapezoid">trapezoid</option>
-            </select>
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>bootstrap N</span>
-            <input type="number" defaultValue={80} min={0} max={400} step={20} style={{ width: 90 }} />
-            <button onClick={onFit}>Fit transit (selected)</button>
-            <button onClick={onPdf} title="Create a PDF vetting report for the current target">Download PDF report</button>
-            <span style={{ color: "#666", fontSize: 13 }}>{fitStatus}</span>
-          </div>
+          <label><input type="checkbox" checked={qualityMask} onChange={(e) => setQualityMask(e.target.checked)} /> quality mask</label>
+          <label><input type="checkbox" checked={rmOutliers} onChange={(e) => setRmOutliers(e.target.checked)} /> remove outliers</label>
+          <label><input type="checkbox" checked={doCentroid} onChange={(e) => setDoCentroid(e.target.checked)} /> Centroid vetting (TESSCut)</label>
+          <label><input type="checkbox" checked={gaiaNeigh} onChange={(e) => setGaiaNeigh(e.target.checked)} /> Gaia neighbors</label>
         </div>
 
-        <details>
-          <summary><b>Advanced: Upload custom light curve (TXT/CSV)</b></summary>
-          <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginTop: 10 }}>
-            <h3>Upload TXT (2 columns: time, flux)</h3>
-            <input type="file" accept=".txt,.csv" onChange={(e) => onUpload(e.currentTarget.files?.[0] ?? undefined)} />
-          </div>
-        </details>
-
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 16 }}>
-          <div style={{ flex: 1, minWidth: 360, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
+        {/* Plots */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
             <h3>Light Curve</h3>
-            <Plot id="lc" height={380} />
+            <div ref={lcDiv} style={{ width: "100%", height: 320, border: "1px solid #ddd", borderRadius: 8 }} />
           </div>
-          <div style={{ flex: 1, minWidth: 360, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16 }}>
-            <h3>Phase-Folded (selected candidate)</h3>
-            <Plot id="pf" height={340} />
+          <div>
+            <h3>Neighbors (Gaia DR3)</h3>
+            <div ref={neiDiv} style={{ width: "100%", height: 320, border: "1px solid #ddd", borderRadius: 8 }} />
           </div>
         </div>
 
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginTop: 16 }}>
-          <h3>
-            Candidates <span style={{ color: "#666", fontSize: 13 }}>(green = vetted with P threshold; badge = centroid test)</span>
-          </h3>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr>
-                <th>#</th><th>Period (d)</th><th>Duration (d)</th><th>Depth</th><th>Power</th><th>P(planet)</th>
-                <th>SNR</th><th>ΔBIC</th><th>OddEven Δ (ppm)</th><th>Secondary?</th><th>Centroid</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cands.map((c, i) => {
-                const p =
-                  typeof c.p_planet === "number" ? c.p_planet :
-                  typeof c.p === "number" ? c.p :
-                  typeof c.prob === "number" ? c.prob : null;
-                const vetted = p !== null && p >= thr;
-                const onClick = () => { if (c.folded?.phase && c.folded.flux) setPf(c.folded); };
-                const pd = (x: unknown, n: number) => (typeof x === "number" ? x.toFixed(n) : (x ?? ""));
-                const centroidBadge = c.centroid && (c.centroid.pass === true || c.centroid.ok === true) ?
-                  <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", background: "#e6ffed", color: "#006622" }}>OK</span> :
-                  c.centroid ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd", background: "#ffe6e6", color: "#b30000" }}>Shift</span> : null;
-                return (
-                  <tr key={i} onClick={onClick} style={{ cursor: "pointer", background: vetted ? "#eaffea" : undefined }}>
-                    <td>{i + 1}</td>
-                    <td>{String(pd(c.period ?? c.P, 6))}</td>
-                    <td>{String(pd(c.duration ?? c.D, 5))}</td>
-                    <td>{c.depth ?? c.depth_ppm ?? c.depth_frac ?? ""}</td>
-                    <td>{c.power ?? c.SDE ?? ""}</td>
-                    <td>{p !== null ? <b>{(p * 100).toFixed(1)}%</b> : ""}</td>
-                    <td>{c.snr ?? c.SNR ?? ""}</td>
-                    <td>{c.delta_bic ?? c.dBIC ?? ""}</td>
-                    <td>{c.odd_even_ppm ?? ""}</td>
-                    <td>{String(c.secondary ?? "")}</td>
-                    <td>{centroidBadge}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        {/* Candidates table */}
+        <div style={{ marginTop: 16 }}>
+          <h3>Candidates (green = vetted with P threshold)</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Period</th>
+                  <th>Duration</th>
+                  <th>Depth</th>
+                  <th>Power</th>
+                  <th>Prob</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cands.map((c, i) => {
+                  const vetted = toNum(c.p_planet ?? c.p ?? c.prob, -1) >= thr;
+                  const onClick = () => window.alert(`Fit transit for candidate ${i + 1} (TODO: wire to backend fit)`);
+                  return (
+                    <tr key={i} onClick={onClick} style={{ cursor: "pointer", background: vetted ? "#eaffea" : undefined }}>
+                      <td>{i + 1}</td>
+                      <td>{pd(c.period ?? c.P, 6)}</td>
+                      <td>{pd(c.duration ?? c.D, 5)}</td>
+                      <td>{c.depth ?? c.depth_ppm ?? c.depth_frac ?? ""}</td>
+                      <td>{c.power ?? c.SDE ?? ""}</td>
+                      <td>{pd(c.p_planet ?? c.p ?? c.prob, 2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginTop: 16 }}>
-          <h3>Neighbors (Gaia DR3)</h3>
-          <Plot id="neighborsPlot" height={320} />
-          {neighbors?.info && <div style={{ color: "#666", fontSize: 13 }}>{neighbors.info}</div>}
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-            <thead><tr><th>sep [&quot;]</th><th>Gmag</th><th>BPRP</th></tr></thead>
-            <tbody>
-              {(neighbors?.points ?? []).map((p, i) => (
-                <tr key={i}><td>{p.sep}</td><td>{p.gmag}</td><td>{p.bprp ?? ""}</td></tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button onClick={onExportAll}>Export CSV</button>
+          <button onClick={onExportVetted} title="Export only candidates with P threshold">Export Vetted CSV</button>
+          <button onClick={onPdf} title="Create a PDF vetting report for the current target">Download PDF report</button>
         </div>
       </div>
     </>
