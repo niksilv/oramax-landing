@@ -4,7 +4,6 @@ import Script from "next/script";
 
 const html17b = `
 <style>
-  /* Keep nav links clickable */
   header.nav, header.nav a, header a { position: relative !important; z-index: 1000 !important; pointer-events: auto !important; }
 </style>
 
@@ -172,10 +171,10 @@ const html17b = `
 export default function Detector17B() {
   return (
     <>
-      {/* Ensure Plotly is on window before our script runs */}
+      {/* Plotly first */}
       <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="beforeInteractive" />
       <div dangerouslySetInnerHTML={{ __html: html17b }} />
-      {/* Inline boot script (no external dependency) */}
+      {/* Full inline logic */}
       <Script id="predictor-17b-inline" strategy="afterInteractive">{`
       (function(){
         const log = (...a)=>console.log('[17B]', ...a);
@@ -183,21 +182,237 @@ export default function Detector17B() {
         const $ = (id)=>document.getElementById(id);
         const setText=(id,txt)=>{ const el=$(id); if(el) el.textContent=txt; };
 
+        // ---- Bind sliders to labels ----
         function bindSlider(sliderId, labelId, fmt){
           const s = $(sliderId); const l = $(labelId);
           if(!s||!l) return;
           const show=()=>{ const v=parseFloat(s.value); l.textContent=fmt?fmt(v):String(v); };
-          s.addEventListener('input', show); show(); // init immediately
+          s.addEventListener('input', show); show();
         }
 
-        function setupBasicUI(){
-          // sliders / labels
+        // ---- Suggest (autocomplete) ----
+        let suggestTimer=null;
+        function setupSuggest(){
+          const inp = $('ticInput'); const list = $('targetList');
+          if(!inp || !list) return;
+          inp.addEventListener('input', ()=>{
+            const q = inp.value.trim();
+            if(q.length<3) return;
+            clearTimeout(suggestTimer);
+            suggestTimer = setTimeout(async ()=>{
+              try{
+                const r = await fetch('/api/suggest?q='+encodeURIComponent(q)+'&limit=10',{method:'GET'});
+                if(!r.ok){ throw new Error('suggest '+r.status); }
+                const js = await r.json();
+                const items = js.items ?? js.suggestions ?? js ?? [];
+                list.innerHTML = items.map(it=>{
+                  const v = (it.id ?? it.value ?? it.label ?? it.tic ?? it.name ?? it).toString();
+                  return '<option value="'+v.replace(/"/g,'&quot;')+'">';
+                }).join('');
+              }catch(e){ err('suggest', e); }
+            }, 200);
+          });
+        }
+
+        // ---- Plot helpers ----
+        function plotLC(time, flux){
+          if(!window.Plotly) return;
+          const el = $('lc'); if(!el) return;
+          const data = [{ x: time, y: flux, mode:'markers', marker:{ size:3 }, name:'flux' }];
+          const layout = { margin:{l:40,r:10,t:10,b:30}, xaxis:{title:'time'}, yaxis:{title:'flux'} };
+          window.Plotly.newPlot(el, data, layout, {displayModeBar:false, responsive:true});
+        }
+        function plotPF(phase, flux){
+          if(!window.Plotly) return;
+          const el = $('pf'); if(!el) return;
+          const data = [{ x: phase, y: flux, mode:'markers', marker:{ size:3 }, name:'folded' }];
+          const layout = { margin:{l:40,r:10,t:10,b:30}, xaxis:{title:'phase'}, yaxis:{title:'flux'} };
+          window.Plotly.newPlot(el, data, layout, {displayModeBar:false, responsive:true});
+        }
+
+        // ---- Table render ----
+        function renderCandidates(arr){
+          const tb = document.querySelector('#cands tbody'); if(!tb) return;
+          tb.innerHTML = '';
+          const thr = parseFloat(($('thr')?.value)||'0.8');
+          let vetted=0;
+          (arr||[]).forEach((c,i)=>{
+            const p = c.p_planet ?? c.p ?? c.prob ?? null;
+            const tr = document.createElement('tr');
+            tr.className = 'clickable' + (p!=null && p>=thr ? ' vetted' : '');
+            tr.onclick = ()=>{ if(c.folded?.phase && c.folded?.flux) plotPF(c.folded.phase, c.folded.flux); };
+            const centroidBadge = (c.centroid && (c.centroid.pass===true || c.centroid.ok===true))
+              ? '<span class="badge badge-ok">OK</span>'
+              : (c.centroid ? '<span class="badge badge-beb">Shift</span>' : '');
+            const pd = (x, n)=> (x&&x.toFixed) ? x.toFixed(n) : (x ?? '');
+            tr.innerHTML = [
+              i+1,
+              pd(c.period ?? c.P, 6),
+              pd(c.duration ?? c.D, 5),
+              c.depth ?? c.depth_ppm ?? c.depth_frac ?? '',
+              c.power ?? c.SDE ?? '',
+              (p!=null? '<span class="prob">'+(p*100).toFixed(1)+'%</span>' : ''),
+              c.snr ?? c.SNR ?? '',
+              c.delta_bic ?? c.dBIC ?? '',
+              c.odd_even_ppm ?? '',
+              c.secondary ?? '',
+              centroidBadge
+            ].map(x=>'<td>'+x+'</td>').join('');
+            tb.appendChild(tr);
+            if(p!=null && p>=thr) vetted++;
+          });
+          setText('vetCount', vetted? ('vetted: '+vetted): '');
+        }
+
+        // ---- State ----
+        let last = { target:null, lc:null, pf:null, cands:[], neighbors:null, centroid:null };
+
+        // ---- Fetch & Detect ----
+        async function runFetchDetect(){
+          const source = $('sourceSel')?.value || 'mast_spoc';
+          const mission = $('missionSel')?.value || 'auto';
+          const body = {
+            source,
+            mission,
+            target: $('ticInput')?.value?.trim() || null,
+            url: $('urlInput')?.value?.trim() || null,
+            options: {
+              kpeaks: Number($('kpeaks')?.value)||3,
+              detrend: $('detrendSel')?.value||'flatten',
+              sigma: Number($('sigmaVal')?.value)||5,
+              quality: Boolean(($('qualityChk') as HTMLInputElement)?.checked),
+              outliers: Boolean(($('outlierChk') as HTMLInputElement)?.checked),
+              centroid: Boolean(($('centroidChk') as HTMLInputElement)?.checked),
+              gaia: Boolean(($('gaiaChk') as HTMLInputElement)?.checked),
+              centroid_sigma_thr: Number($('sigmaThr')?.value)||3,
+              centroid_rho_thr: Number($('rhoThr')?.value)||0.15,
+              neighbors_radius: Number($('neiRadius')?.value)||60,
+              prob_thr: Number($('thr')?.value)||0.8,
+            }
+          };
+          if(source==='url' && !body.url){ setText('status','Please provide a CSV/TXT URL'); return; }
+          if(source!=='url' && !body.target){ setText('status','Please provide a target (e.g., TIC ...)'); return; }
+
+          setText('status','Working...');
+          try{
+            const r = await fetch('/api/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+            const js = await r.json();
+            if(!r.ok) throw new Error(js?.error || r.statusText);
+            handleDetectResult(js);
+            setText('status','Done');
+          }catch(e){ setText('status','Error'); alert('fetch_detect: '+(e as Error).message); }
+        }
+
+        function handleDetectResult(js){
+          const lc = js.lc || js.lightcurve || js.raw || null;
+          const time = lc?.time || lc?.t || js.time;
+          const flux = lc?.flux || lc?.y || js.flux;
+          if(Array.isArray(time) && Array.isArray(flux)) plotLC(time, flux);
+
+          const folded = js.pf || js.folded || null;
+          if(folded?.phase && folded?.flux) plotPF(folded.phase, folded.flux);
+
+          const cands = js.cands || js.candidates || [];
+          last = {
+            target: js.target || js.id || $('ticInput')?.value,
+            lc: { time, flux },
+            pf: folded,
+            cands,
+            neighbors: js.neighbors||null,
+            centroid: js.centroid||null,
+          };
+          renderCandidates(cands);
+          // neighbors (optional)
+          try{
+            const np = $('neighborsPlot'); const nt = $('neighborsTbl')?.querySelector('tbody'); const ni = $('neighborsInfo');
+            if(last.neighbors?.points && window.Plotly && np){
+              const d = last.neighbors.points;
+              window.Plotly.newPlot(np, [{
+                x: d.map(p=>p.sep), y: d.map(p=>p.gmag), mode:'markers', marker:{size:6}, name:'Gaia'
+              }], { margin:{t:10}, xaxis:{title:'sep [" ]'}, yaxis:{title:'Gmag'} }, {displayModeBar:false,responsive:true});
+            }
+            if(nt && Array.isArray(last.neighbors?.points)){
+              nt.innerHTML = last.neighbors.points.map(p=>'<tr><td>'+p.sep+'</td><td>'+p.gmag+'</td><td>'+(p.bprp??'')+'</td></tr>').join('');
+            }
+            if(ni && last.neighbors?.info){ ni.textContent = String(last.neighbors.info); }
+          }catch(e){ /* ignore neighbors errors */ }
+        }
+
+        // ---- Upload detect ----
+        async function runUpload(){
+          const file = (document.getElementById('file') as HTMLInputElement)?.files?.[0];
+          if(!file){ setText('statusUp','Choose a file'); return; }
+          const txt = await file.text();
+          setText('statusUp','Working...');
+          try{
+            const r = await fetch('/api/detect', { method:'POST', headers:{'Content-Type':'text/plain'}, body: txt });
+            const js = await r.json();
+            if(!r.ok) throw new Error(js?.error || r.statusText);
+            handleDetectResult(js);
+            setText('statusUp','Done');
+          }catch(e){ setText('statusUp','Error'); alert('detect: '+(e as Error).message); }
+        }
+
+        // ---- Export CSVs ----
+        function download(filename, text){
+          const blob = new Blob([text], {type:'text/csv;charset=utf-8'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href=url; a.download=filename;
+          document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+        }
+        function exportAll(){
+          if(!last?.lc?.time || !last?.lc?.flux){ alert('No lightcurve'); return; }
+          const header = 'time,flux\n';
+          const rows = last.lc.time.map((t,i)=>[t,last.lc.flux[i]].join(',')).join('\n');
+          download((last.target||'lightcurve')+'.csv', header+rows);
+        }
+        function exportVetted(){
+          const thr = Number(($('thr') as HTMLInputElement)?.value)||0.8;
+          const header = 'index,period,duration,depth,power,prob\n';
+          const rows = (last.cands||[])
+            .filter(c=> (c.p_planet ?? c.p ?? c.prob ?? 0) >= thr )
+            .map((c,i)=>[i+1, c.period ?? c.P ?? '', c.duration ?? c.D ?? '', c.depth ?? '', c.power ?? '', c.p_planet ?? c.p ?? c.prob ?? ''].join(','))
+            .join('\n');
+          if(!rows){ alert('No vetted candidates'); return; }
+          download((last.target||'candidates')+'_vetted.csv', header+rows);
+        }
+
+        // ---- Fit transit ----
+        async function runFit(){
+          const cand = (last.cands||[])[0]; // first or selected
+          if(!cand){ alert('Select a candidate (click row)'); return; }
+          setText('fitStatus','Fitting...');
+          try{
+            const r = await fetch('/api/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ target: last.target, candidate: cand, method: ($('fitMethod') as HTMLSelectElement)?.value || 'batman', bootstrap: Number(($('fitBoot') as HTMLInputElement)?.value)||80 })
+            });
+            const js = await r.json();
+            if(!r.ok) throw new Error(js?.error || r.statusText);
+            const box = $('fitBox'); if(box){ box.style.display='block'; box.innerHTML='<b>Fit params</b><br/><pre>'+JSON.stringify(js.params ?? js, null, 2)+'</pre>'; }
+            const f = js.folded || js.pf; if(f?.phase && f?.flux) plotPF(f.phase, f.flux);
+            setText('fitStatus','Done');
+          }catch(e){ setText('fitStatus','Error'); alert('fit_transit: '+(e as Error).message); }
+        }
+
+        // ---- PDF report ----
+        async function runPdf(){
+          try{
+            const r = await fetch('/api/report_pdf?target='+encodeURIComponent(String(last.target||'')));
+            if(!r.ok) throw new Error(await r.text());
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href=url; a.download=(String(last.target||'report'))+'.pdf';
+            document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 0);
+          }catch(e){ alert('report_pdf: '+(e as Error).message); }
+        }
+
+        // ---- Wiring ----
+        function setupUI(){
           bindSlider('thr','thrLabel', v=>v.toFixed(2));
           bindSlider('sigmaThr','sigmaThrLabel', v=>v.toFixed(1));
           bindSlider('rhoThr','rhoThrLabel', v=>v.toFixed(2));
           bindSlider('neiRadius','neiRadiusLabel', v=>v.toFixed(0));
 
-          // source switch
           const srcSel=$('sourceSel'), urlInput=$('urlInput'), ticInput=$('ticInput');
           if(srcSel && urlInput && ticInput){
             srcSel.addEventListener('change', ()=>{
@@ -206,43 +421,22 @@ export default function Detector17B() {
               ticInput.style.display  = isUrl ? 'none' : 'inline-block';
             });
           }
-        }
 
-        // Minimal plots to confirm wiring
-        function plotTest(){
-          try{
-            if(!window.Plotly) return;
-            const x=Array.from({length:80}, (_,i)=>i/10);
-            const y=x.map(t=>Math.sin(t));
-            window.Plotly.newPlot('lc',[{x,y,mode:'lines'}],{margin:{t:10}},
-              {displayModeBar:false,responsive:true});
-          }catch(e){ err('plot test',e); }
-        }
+          $('runFetch')?.addEventListener('click', runFetchDetect);
+          $('exportCsv')?.addEventListener('click', exportAll);
+          $('exportVettedCsv')?.addEventListener('click', exportVetted);
+          $('runUpload')?.addEventListener('click', runUpload);
+          $('fitBtn')?.addEventListener('click', runFit);
+          $('pdfBtn')?.addEventListener('click', runPdf);
 
-        // Wire buttons with harmless stubs so βλέπεις activity άμεσα
-        function setupButtons(){
-          $('runFetch')?.addEventListener('click', ()=>{
-            setText('status','Working...');
-            setTimeout(()=>{ setText('status','Done'); plotTest(); }, 300);
-          });
-          $('exportCsv')?.addEventListener('click', ()=> alert('Export CSV stub'));
-          $('exportVettedCsv')?.addEventListener('click', ()=> alert('Export Vetted CSV stub'));
-          $('runUpload')?.addEventListener('click', ()=> alert('Upload Detect stub'));
-          $('fitBtn')?.addEventListener('click', ()=> alert('Fit Transit stub'));
-          $('pdfBtn')?.addEventListener('click', ()=> alert('PDF report stub'));
+          setupSuggest();
         }
 
         function boot(){
-          setupBasicUI();
-          setupButtons();
-          log('inline predictor booted');
+          setupUI();
+          log('inline predictor (full) booted');
         }
-
-        if(document.readyState==='loading'){
-          document.addEventListener('DOMContentLoaded', boot);
-        }else{
-          boot();
-        }
+        if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', boot); } else { boot(); }
       })();
       `}</Script>
     </>
