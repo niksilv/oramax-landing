@@ -6,10 +6,19 @@ import Script from "next/script";
 import { Api, SuggestItem } from "@/components/ApiBridge";
 
 // ---- Plotly typings (lightweight) ----
-type PlotlyPoint = { x?: number[]; y?: number[]; mode?: "markers" | "lines" | "lines+markers"; name?: string; marker?: { size?: number } };
-type PlotlyLayout = { margin?: { t?: number; r?: number; b?: number; l?: number }; xaxis?: { title?: string }; yaxis?: { title?: string } };
+type PlotlyPoint = {
+  x?: number[];
+  y?: number[];
+  mode?: "markers" | "lines" | "lines+markers";
+  name?: string;
+  marker?: { size?: number };
+};
+type PlotlyLayout = {
+  margin?: { t?: number; r?: number; b?: number; l?: number };
+  xaxis?: { title?: string };
+  yaxis?: { title?: string };
+};
 type PlotlyConfig = { displayModeBar?: boolean; responsive?: boolean };
-
 type PlotlyModule = {
   newPlot: (el: HTMLElement, data: PlotlyPoint[], layout?: PlotlyLayout, config?: PlotlyConfig) => Promise<void>;
 };
@@ -21,11 +30,8 @@ export interface Candidate {
   depth?: number; depth_ppm?: number; depth_frac?: number;
   power?: number; SDE?: number;
 }
-
 export interface Lightcurve { t: number[]; f: number[]; }
-
 export interface Neighbors { points: Array<{ sep: number; gmag: number }>; }
-
 export interface PredictResponse {
   ok?: boolean;
   message?: string;
@@ -35,14 +41,15 @@ export interface PredictResponse {
   image_base64?: string;
 }
 
-// Robust number formatter that ALWAYS returns string so it is a valid ReactNode.
+// Μικρός type-guard για να δεχτούμε και { items: T[] } και T[]
+function hasItemsArray<T>(v: unknown): v is { items: T[] } {
+  return typeof v === "object" && v !== null && Array.isArray((v as { items?: unknown }).items);
+}
+
+// Formatter που ΕΠΙΣΤΡΕΦΕΙ ΠΑΝΤΑ string (ασφαλές για JSX)
 function pd(n: number | undefined, digits = 3): string {
   if (n === undefined || n === null || !Number.isFinite(n)) return "";
-  try {
-    return Number(n).toFixed(digits);
-  } catch {
-    return "";
-  }
+  try { return Number(n).toFixed(digits); } catch { return ""; }
 }
 
 export default function DetectorPage(): ReactElement {
@@ -62,13 +69,14 @@ export default function DetectorPage(): ReactElement {
     return p ?? null;
   }, []);
 
-  // Suggest
+  // Autocomplete
   const onSuggest = useCallback(async (q: string) => {
     setTarget(q);
     if (!q || q.length < 2) { setSuggestions([]); return; }
     try {
-      const items = await Api.suggest(q);
-      setSuggestions(items);
+      const res = (await Api.suggest(q)) as unknown;
+      const arr = hasItemsArray<SuggestItem>(res) ? res.items : (res as SuggestItem[]);
+      setSuggestions(arr);
     } catch (e) {
       console.warn("suggest error", e);
     }
@@ -79,7 +87,7 @@ export default function DetectorPage(): ReactElement {
     setSuggestions([]);
   }, []);
 
-  // Generic JSON POST with typed response
+  // Γενικό POST JSON με typed απάντηση
   async function postJson<T>(path: string, payload: unknown): Promise<T> {
     const res = await fetch(path, {
       method: "POST",
@@ -90,17 +98,17 @@ export default function DetectorPage(): ReactElement {
       const text = await res.text();
       throw new Error(`${res.status} ${res.statusText} — ${text}`);
     }
-    const data = (await res.json()) as T;
-    return data;
+    return (await res.json()) as T;
   }
 
   const fetchAndDetect = useCallback(async () => {
     if (!target.trim()) { setMsg("Please provide a target (e.g., TIC 268042363)"); return; }
     setBusy(true); setMsg("Fetching…");
     try {
-      // Try our local /api proxy first
+      // 1) Τοπικό proxy
       let data = await postJson<PredictResponse>("/api/predict", { target });
-      // Fallbacks if needed
+
+      // 2) Εναλλακτικές
       if (!data?.lightcurve && !data?.candidates) {
         try { data = await postJson<PredictResponse>("/api/detect", { target }); } catch {}
       }
@@ -108,7 +116,6 @@ export default function DetectorPage(): ReactElement {
         try { data = await postJson<PredictResponse>("/api/exoplanet/predict", { target }); } catch {}
       }
       if (!data?.lightcurve && !data?.candidates) {
-        // ultimate fallback to Fly.io domain (server-side will still proxy)
         data = await postJson<PredictResponse>("https://api.oramax.space/exoplanet/predict", { target });
       }
 
@@ -117,14 +124,13 @@ export default function DetectorPage(): ReactElement {
       setNeigh(data.neighbors ?? null);
       setMsg(data.message ?? "Done.");
     } catch (err) {
-      const e = err as Error;
-      setMsg(`Error: ${e.message}`);
+      setMsg(`Error: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
   }, [target]);
 
-  // Plot lightcurve
+  // Plots
   const plotLc = useCallback(() => {
     if (!plotly || !lc || !lcRef.current) return;
     const el = lcRef.current;
@@ -134,7 +140,6 @@ export default function DetectorPage(): ReactElement {
     plotly.newPlot(el, [trace], layout, cfg).catch(() => {});
   }, [plotly, lc]);
 
-  // Plot neighbors
   const plotNeigh = useCallback(() => {
     if (!plotly || !neigh || !neighRef.current) return;
     const el = neighRef.current;
@@ -233,4 +238,3 @@ export default function DetectorPage(): ReactElement {
     </>
   );
 }
-
