@@ -234,7 +234,7 @@ export default function DetectorReact() {
     if (!el) return;
     const d = nei.points;
     const data: PlotlyData[] = [{ x: d.map((p) => p.sep), y: d.map((p) => p.gmag), mode: "markers", marker: { size: 6 }, name: "Gaia" }];
-    const layout: PlotlyLayout = { margin: { t: 10 }, xaxis: { title: 'sep ["]' }, yaxis: { title: "Gmag" } };
+    const layout: PlotlyLayout = { margin: { t: 10 }, xaxis: { title: 'sep [""]' }, yaxis: { title: "Gmag" } };
     const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
     Plotly.newPlot(el, data, layout, cfg);
   };
