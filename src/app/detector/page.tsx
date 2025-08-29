@@ -1,4 +1,13 @@
 "use client";
+// helper: pretty number to fixed digits; always returns string for JSX safety
+function pd(n: number | string | null | undefined, digits: number = 6): string {
+  if (n === null || n === undefined || n === "") return "";
+  if (typeof n === "string") return n;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return String(n);
+  return v.toFixed(digits);
+}
+
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Script from "next/script";
@@ -524,8 +533,8 @@ export default function DetectorReact() {
                 return (
                   <tr key={i} onClick={onClick} style={{ cursor: "pointer", background: vetted ? "#eaffea" : undefined }}>
                     <td>{i + 1}</td>
-                    <td>{pd(c.period ?? c.P, 6)}</td>
-                    <td>{pd(c.duration ?? c.D, 5)}</td>
+                    <td>{String(pd(c.period ?? c.P, 6))}</td>
+                    <td>{String(pd(c.duration ?? c.D, 5))}</td>
                     <td>{c.depth ?? c.depth_ppm ?? c.depth_frac ?? ""}</td>
                     <td>{c.power ?? c.SDE ?? ""}</td>
                     <td>{p !== null ? <b>{(p * 100).toFixed(1)}%</b> : ""}</td>
