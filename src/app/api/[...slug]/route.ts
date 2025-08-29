@@ -27,7 +27,10 @@ async function proxy(method: string, req: NextRequest, params: { slug?: string[]
   const dest = joinUrl(origin, prefix, slug, req.nextUrl.searchParams.toString());
 
   const init: RequestInit = { method, headers: forwardHeaders(req, method !== 'GET' && method !== 'HEAD') };
-  if (method !== 'GET' && method !== 'HEAD') init.body = await req.arrayBuffer();
+  if (method !== 'GET' && method !== 'HEAD') {
+    const buf = await req.arrayBuffer();
+    init.body = buf;
+  }
 
   const res = await fetch(dest, init);
   const body = await res.arrayBuffer();
@@ -38,10 +41,10 @@ async function proxy(method: string, req: NextRequest, params: { slug?: string[]
   return out;
 }
 
-export async function GET(req: NextRequest, ctx: any)    { return proxy('GET', req, ctx.params); }
-export async function POST(req: NextRequest, ctx: any)   { return proxy('POST', req, ctx.params); }
-export async function PUT(req: NextRequest, ctx: any)    { return proxy('PUT', req, ctx.params); }
-export async function PATCH(req: NextRequest, ctx: any)  { return proxy('PATCH', req, ctx.params); }
-export async function DELETE(req: NextRequest, ctx: any) { return proxy('DELETE', req, ctx.params); }
-export async function OPTIONS(req: NextRequest, ctx: any){ return proxy('OPTIONS', req, ctx.params); }
-export async function HEAD(req: NextRequest, ctx: any)   { return proxy('HEAD', req, ctx.params); }
+export async function GET(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('GET', req, params); }
+export async function POST(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('POST', req, params); }
+export async function PUT(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('PUT', req, params); }
+export async function PATCH(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('PATCH', req, params); }
+export async function DELETE(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('DELETE', req, params); }
+export async function OPTIONS(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('OPTIONS', req, params); }
+export async function HEAD(req: NextRequest, { params }: { params: { slug: string[] }}) { return proxy('HEAD', req, params); }
