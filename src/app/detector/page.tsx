@@ -28,12 +28,6 @@ declare global {
         layout?: unknown,
         config?: unknown
       ) => unknown;
-      react?: (
-        el: HTMLElement,
-        data: unknown,
-        layout?: unknown,
-        config?: unknown
-      ) => unknown;
     };
   }
 }
@@ -45,47 +39,56 @@ const isNumArray = (a: unknown): a is number[] =>
   Array.isArray(a) && a.every(isNum);
 
 /** Ασφαλές unwrapping από διάφορες πιθανές μορφές API απάντησης */
-function unwrapSuggest(resp: unknown): SuggestItem[] {
+function unwrapItems(resp: unknown): SuggestItem[] {
   if (!resp || typeof resp !== "object") return [];
   const r = resp as Record<string, unknown>;
-
-  // { items: [...] }
-  const maybeItems = r["items"];
-  if (Array.isArray(maybeItems)) return maybeItems as SuggestItem[];
-
-  // { ok, data: { items: [...] } }
-  const data = r["data"];
-  if (data && typeof data === "object") {
-    const di = (data as Record<string, unknown>)["items"];
-    if (Array.isArray(di)) return di as SuggestItem[];
+  if (Array.isArray(r.items)) return r.items as SuggestItem[];
+  const data = r.data;
+  if (data && typeof data === "object" && Array.isArray((data as any).items)) {
+    // TS note: το (data as any) χρησιμοποιείται μόνο για το in-operator check,
+    // δεν διαρρέει στο υπόλοιπο API.
+    return (data as { items: SuggestItem[] }).items;
   }
   return [];
 }
 
-/** ---- Τύποι για detect response (ανθεκτικοί σε εναλλακτικά ονόματα) ---- */
 type LightCurveArrays = { t: number[]; f: number[] };
 type LightCurvePoints = { points: { t: number; f: number }[] };
-
 type NeighPoints = { points: { sep: number; gmag: number }[] };
-
 type Candidate = {
-  period?: number;
-  P?: number;
-  duration?: number;
-  D?: number;
-  depth?: number;
-  depth_ppm?: number;
-  depth_frac?: number;
-  power?: number;
-  SDE?: number;
+  period?: number; P?: number;
+  duration?: number; D?: number;
+  depth?: number; depth_ppm?: number; depth_frac?: number;
+  power?: number; SDE?: number;
   vetted?: boolean;
 };
-
 type DetectResult = {
   lc?: LightCurveArrays | LightCurvePoints;
   neighbors?: NeighPoints;
   candidates?: Candidate[];
 };
+
+function unwrapDetect(resp: unknown): DetectResult {
+  if (!resp || typeof resp !== "object") return {};
+  const r = resp as Record<string, unknown>;
+
+  // Μορφή { ok: true, data: {...} }
+  if (r.ok === true && r.data && typeof r.data === "object") {
+    const d = r.data as Record<string, unknown>;
+    return {
+      lc: (d.lc as DetectResult["lc"]) ?? undefined,
+      neighbors: (d.neighbors as NeighPoints) ?? undefined,
+      candidates: Array.isArray(d.candidates) ? (d.candidates as Candidate[]) : undefined,
+    };
+  }
+
+  // Απευθείας { lc, neighbors, candidates }
+  return {
+    lc: (r.lc as DetectResult["lc"]) ?? undefined,
+    neighbors: (r.neighbors as NeighPoints) ?? undefined,
+    candidates: Array.isArray(r.candidates) ? (r.candidates as Candidate[]) : undefined,
+  };
+}
 
 /** ---- Κύρια σελίδα ---- */
 export default function DetectorPage() {
@@ -108,16 +111,14 @@ export default function DetectorPage() {
     }
     const h = setTimeout(async () => {
       try {
-        const raw: unknown = await Api.suggest(q.trim());
+        const raw = await Api.suggest(q.trim());
         if (cancelled) return;
-        const items = unwrapSuggest(raw);
+        const items = unwrapItems(raw);
         setSuggest(items);
         setSuggestOpen(items.length > 0);
-      } catch (e) {
-        // Σιωπηλό failure για να μην σπάει το UX
+      } catch {
         setSuggest([]);
         setSuggestOpen(false);
-        console.warn("suggest error", e);
       }
     }, 250);
     return () => {
@@ -137,15 +138,13 @@ export default function DetectorPage() {
     const el = lcRef.current;
     if (!el || !window.Plotly) return;
 
-    // Υποστήριξη δύο σχημάτων: { t, f } ή { points:[{t,f}...] }
     let t: number[] = [];
     let f: number[] = [];
     const lc = r.lc;
     if (lc && "t" in lc && "f" in lc) {
       const cand = lc as LightCurveArrays;
       if (isNumArray(cand.t) && isNumArray(cand.f)) {
-        t = cand.t;
-        f = cand.f;
+        t = cand.t; f = cand.f;
       }
     } else if (lc && "points" in lc) {
       const cand = lc as LightCurvePoints;
@@ -156,11 +155,7 @@ export default function DetectorPage() {
     }
 
     const data: Trace[] = [{ x: t, y: f, mode: "lines", name: "Flux" }];
-    const layout: Layout = {
-      margin: { t: 10 },
-      xaxis: { title: "Time" },
-      yaxis: { title: "Flux" },
-    };
+    const layout: Layout = { margin: { t: 10 }, xaxis: { title: "Time" }, yaxis: { title: "Flux" } };
     const cfg: Config = { displayModeBar: false, responsive: true };
     window.Plotly.newPlot(el, data, layout, cfg);
   }, []);
@@ -174,14 +169,8 @@ export default function DetectorPage() {
     const x = pts.map((p) => p.sep).filter(isNum);
     const y = pts.map((p) => p.gmag).filter(isNum);
 
-    const data: Trace[] = [
-      { x, y, mode: "markers", marker: { size: 6 }, name: "Gaia" },
-    ];
-    const layout: Layout = {
-      margin: { t: 10 },
-      xaxis: { title: 'sep [""]' },
-      yaxis: { title: "Gmag" },
-    };
+    const data: Trace[] = [{ x, y, mode: "markers", marker: { size: 6 }, name: "Gaia" }];
+    const layout: Layout = { margin: { t: 10 }, xaxis: { title: 'sep [""]' }, yaxis: { title: "Gmag" } };
     const cfg: Config = { displayModeBar: false, responsive: true };
     window.Plotly.newPlot(el, data, layout, cfg);
   }, []);
@@ -196,43 +185,31 @@ export default function DetectorPage() {
     setBusy(true);
     setErrorMsg("");
     try {
-      // Το Api.fetchDetect δέχεται string target.
-      const raw: unknown = await Api.fetchDetect(target);
-      // Αφήνουμε το parsing ευέλικτο.
-      const r = (raw ?? {}) as DetectResult;
+      // Χρησιμοποιούμε το υπαρκτό Api.detect(...) αντί για fetchDetect
+      const raw = await Api.detect({ target }); // στέλνουμε μόνο target, τα υπόλοιπα defaults από backend
+      const r = unwrapDetect(raw);
 
-      // Plots
       plotLc(r);
       plotNeigh(r);
 
-      // Candidates
-      const list = Array.isArray(r.candidates) ? r.candidates : [];
-      setCands(list);
+      setCands(Array.isArray(r.candidates) ? r.candidates : []);
     } catch (e) {
-      setErrorMsg(
-        e instanceof Error ? e.message : "Unexpected error during detect."
-      );
+      setErrorMsg(e instanceof Error ? e.message : "Unexpected error during detect.");
       setCands([]);
     } finally {
       setBusy(false);
     }
   }, [q, plotLc, plotNeigh]);
 
-  const pd = (x: unknown, d = 6): string =>
-    isNum(x) ? x.toFixed(d) : x === 0 ? "0" : "";
+  const pd = (x: unknown, d = 6): string => (isNum(x) ? x.toFixed(d) : x === 0 ? "0" : "");
 
   return (
     <>
       {/* Plotly */}
-      <Script
-        src="https://cdn.plot.ly/plotly-2.26.0.min.js"
-        strategy="afterInteractive"
-      />
+      <Script src="https://cdn.plot.ly/plotly-2.26.0.min.js" strategy="afterInteractive" />
 
       <div className="mx-auto max-w-6xl px-4 py-6 text-slate-100">
-        <h1 className="mb-4 text-3xl font-extrabold">
-          Exoplanet Detector (17B)
-        </h1>
+        <h1 className="mb-4 text-3xl font-extrabold">Exoplanet Detector (17B)</h1>
 
         {/* Search row */}
         <div className="relative mb-6">
@@ -279,17 +256,11 @@ export default function DetectorPage() {
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
             <h2 className="mb-2 text-xl font-bold">Light Curve</h2>
-            <div
-              ref={lcRef}
-              className="h-[420px] rounded-md border border-slate-700"
-            />
+            <div ref={lcRef} className="h-[420px] rounded-md border border-slate-700" />
           </div>
           <div>
             <h2 className="mb-2 text-xl font-bold">Neighbors (Gaia DR3)</h2>
-            <div
-              ref={neiRef}
-              className="h-[420px] rounded-md border border-slate-700"
-            />
+            <div ref={neiRef} className="h-[420px] rounded-md border border-slate-700" />
           </div>
         </div>
 
@@ -318,18 +289,14 @@ export default function DetectorPage() {
                 {cands.map((c, i) => {
                   const period = c.period ?? c.P;
                   const duration = c.duration ?? c.D;
-                  const depth =
-                    c.depth ?? c.depth_ppm ?? c.depth_frac ?? undefined;
+                  const depth = c.depth ?? c.depth_ppm ?? c.depth_frac ?? undefined;
                   const power = c.power ?? c.SDE ?? undefined;
                   const vetted = c.vetted === true;
                   return (
                     <tr
                       key={i}
                       className="border-b border-slate-800"
-                      style={{
-                        cursor: "pointer",
-                        background: vetted ? "#eaffea" : undefined,
-                      }}
+                      style={{ cursor: "pointer", background: vetted ? "#eaffea" : undefined }}
                     >
                       <td className="py-2 pr-4">{i + 1}</td>
                       <td className="py-2 pr-4">{pd(period, 6)}</td>
