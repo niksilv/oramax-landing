@@ -6,7 +6,6 @@ import { Api, SuggestItem } from "@/components/ApiBridge";
 type PredictResp = { planet_prob?: number; [k: string]: unknown };
 
 function parseNumbers(input: string): number[] {
-  // δέχεται: CSV, space-separated, newlines, ή JSON array
   const trimmed = (input || "").trim();
   if (!trimmed) return [];
   if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
@@ -20,6 +19,12 @@ function parseNumbers(input: string): number[] {
     .filter(Boolean)
     .map(Number)
     .filter((n) => Number.isFinite(n));
+}
+
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  try { return JSON.stringify(e); } catch { return String(e); }
 }
 
 export default function DetectorPage() {
@@ -42,7 +47,7 @@ export default function DetectorPage() {
   const [loading, setLoading] = useState<null | "predict" | "file" | "health">(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ───────────────────── API checks
+  //  API checks
   async function checkApi() {
     setLoading("health");
     setError(null);
@@ -50,15 +55,15 @@ export default function DetectorPage() {
       const r = await Api.health();
       setApiOk(r.ok);
       setJsonOut(r.body);
-    } catch (e: any) {
+    } catch (e) {
       setApiOk(false);
-      setError(e?.message ?? "API check failed");
+      setError(errMsg(e));
     } finally {
       setLoading(null);
     }
   }
 
-  // ───────────────────── Suggestions (debounced)
+  //  Suggestions (debounced)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   async function handleTargetChange(val: string) {
     setTarget(val);
@@ -87,7 +92,7 @@ export default function DetectorPage() {
     setShowSuggest(false);
   }
 
-  // ───────────────────── Predict (JSON text)
+  //  Predict (JSON text)
   async function onPredict() {
     setLoading("predict");
     setError(null);
@@ -99,14 +104,14 @@ export default function DetectorPage() {
       setJsonOut(r.body);
       const p = (r.body as PredictResp)?.planet_prob;
       if (typeof p === "number") setProb(p);
-    } catch (e: any) {
-      setError(e?.message ?? "Prediction failed");
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setLoading(null);
     }
   }
 
-  // ───────────────────── Predict (file)
+  //  Predict (file)
   async function onPredictFile() {
     if (!file) {
       setError("Please choose a file (.csv or .txt).");
@@ -122,24 +127,20 @@ export default function DetectorPage() {
       setJsonOut(r.body);
       const p = (r.body as PredictResp)?.planet_prob;
       if (typeof p === "number") setProb(p);
-    } catch (e: any) {
-      setError(e?.message ?? "File prediction failed");
+    } catch (e) {
+      setError(errMsg(e));
     } finally {
       setLoading(null);
     }
   }
 
-  // ───────────────────── Render helpers
+  //  Render helpers
   const rendered = useMemo(() => {
     if (typeof jsonOut === "string") return jsonOut;
     return pretty ? JSON.stringify(jsonOut, null, 2) : JSON.stringify(jsonOut);
   }, [jsonOut, pretty]);
 
-  useEffect(() => {
-    // προαιρετικό: αυτόματο health-check στην είσοδο
-    checkApi();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { void checkApi(); }, []);
 
   return (
     <div className="container" style={{ padding: "24px 16px", maxWidth: 960, margin: "0 auto" }}>
@@ -153,7 +154,7 @@ export default function DetectorPage() {
           Pretty-print
         </label>
         <button onClick={checkApi} disabled={loading === "health"} className="btn">
-          {loading === "health" ? "Checking…" : "Check API"}
+          {loading === "health" ? "Checking" : "Check API"}
         </button>
         <span style={{ fontSize: 14 }}>
           {apiOk == null ? "" : apiOk ? "API OK" : "API error"}
@@ -190,7 +191,7 @@ export default function DetectorPage() {
             {suggest.map((s) => (
               <div
                 key={s.id}
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(ev) => ev.preventDefault()}
                 onClick={() => selectSuggestion(s)}
                 style={{ padding: "8px 10px", cursor: "pointer" }}
               >
@@ -211,12 +212,12 @@ export default function DetectorPage() {
           onChange={(e) => setLcText(e.target.value)}
           className="input"
           rows={6}
-          placeholder="0.999, 1.001, 0.998, 1.000, 0.997, …"
+          placeholder="0.999, 1.001, 0.998, 1.000, 0.997, "
           style={{ width: "100%", fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
         />
         <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <button onClick={onPredict} disabled={loading === "predict"} className="btn">
-            {loading === "predict" ? "Predicting…" : "Predict"}
+            {loading === "predict" ? "Predicting" : "Predict"}
           </button>
         </div>
       </div>
@@ -227,7 +228,7 @@ export default function DetectorPage() {
         <input type="file" accept=".csv,.txt" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         <div style={{ display: "inline-flex", gap: 8, marginLeft: 8 }}>
           <button onClick={onPredictFile} disabled={loading === "file"} className="btn">
-            {loading === "file" ? "Predicting…" : "Predict (File)"}
+            {loading === "file" ? "Predicting" : "Predict (File)"}
           </button>
         </div>
       </div>
