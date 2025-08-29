@@ -54,6 +54,18 @@ type DetectResponse = {
   detail?: string;
 };
 
+// ---- Plotly typings (minimal) ----
+type PlotlyData = { x: number[]; y: number[]; mode: "markers"; marker?: { size?: number }; name?: string };
+type PlotlyLayout = {
+  margin?: { l?: number; r?: number; t?: number; b?: number };
+  xaxis?: { title?: string };
+  yaxis?: { title?: string };
+};
+type PlotlyConfig = { displayModeBar?: boolean; responsive?: boolean };
+interface PlotlyLike {
+  newPlot: (el: HTMLElement, data: PlotlyData[], layout?: PlotlyLayout, config?: PlotlyConfig) => void;
+}
+
 const toNum = (x: unknown, fallback = 0): number => {
   const n = typeof x === "number" ? x : Number(x);
   return Number.isFinite(n) ? n : fallback;
@@ -62,7 +74,9 @@ const toNum = (x: unknown, fallback = 0): number => {
 const API_BASE = "/api"; // proxied to Fly
 
 function hasPlotly(): boolean {
-  return typeof window !== "undefined" && typeof (window as unknown as { Plotly?: unknown }).Plotly !== "undefined";
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as { Plotly?: PlotlyLike };
+  return typeof w.Plotly !== "undefined";
 }
 
 async function apiGet(path: string): Promise<Response> {
@@ -173,19 +187,17 @@ export default function DetectorReact() {
     const t = setTimeout(async () => {
       try {
         const js = (await fetchSuggest(q)) as unknown;
-        const items = Array.isArray(js) ? js : (js as { items?: unknown[]; suggestions?: unknown[]; [k: string]: unknown }).items ??
-          (js as { items?: unknown[]; suggestions?: unknown[]; [k: string]: unknown }).suggestions ??
-          [];
-        const vals: string[] = (items as unknown[]).map((it) => {
-          const v =
-            (typeof it === "object" && it !== null && ("id" in (it as object))) ? String((it as { id: unknown }).id) :
-            (typeof it === "object" && it !== null && ("value" in (it as object))) ? String((it as { value: unknown }).value) :
-            (typeof it === "object" && it !== null && ("label" in (it as object))) ? String((it as { label: unknown }).label) :
-            (typeof it === "object" && it !== null && ("tic" in (it as object))) ? String((it as { tic: unknown }).tic) :
-            (typeof it === "object" && it !== null && ("name" in (it as object))) ? String((it as { name: unknown }).name) :
-            String(it);
-          return v;
-        });
+        const jso = js as { items?: unknown[]; suggestions?: unknown[] };
+        const items = Array.isArray(js) ? (js as unknown[]) : (jso.items ?? jso.suggestions ?? []);
+        const vals: string[] = items.map((it) => {
+          if (typeof it === "string" || typeof it === "number") return String(it);
+          if (typeof it === "object" && it !== null) {
+            const o = it as Record<string, unknown>;
+            const cand = o["id"] ?? o["value"] ?? o["label"] ?? o["tic"] ?? o["name"];
+            return String(cand ?? "");
+          }
+          return "";
+        }).filter(Boolean);
         setSuggestions(vals.slice(0, 10));
       } catch {
         setSuggestions([]);
@@ -197,34 +209,34 @@ export default function DetectorReact() {
   // Plot helpers
   const plotLC = (lcData: LightCurve | null) => {
     if (!lcData || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: any }).Plotly;
-    const el = document.getElementById("lc");
+    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
+    const el = document.getElementById("lc") as HTMLElement | null;
     if (!el) return;
-    const data = [{ x: lcData.time, y: lcData.flux, mode: "markers", marker: { size: 3 }, name: "flux" }];
-    const layout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "time" }, yaxis: { title: "flux" } };
-    Plotly.newPlot(el, data, layout, { displayModeBar: false, responsive: true });
+    const data: PlotlyData[] = [{ x: lcData.time, y: lcData.flux, mode: "markers", marker: { size: 3 }, name: "flux" }];
+    const layout: PlotlyLayout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "time" }, yaxis: { title: "flux" } };
+    const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
+    Plotly.newPlot(el, data, layout, cfg);
   };
   const plotPF = (pfData: Folded | null) => {
     if (!pfData || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: any }).Plotly;
-    const el = document.getElementById("pf");
+    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
+    const el = document.getElementById("pf") as HTMLElement | null;
     if (!el) return;
-    const data = [{ x: pfData.phase, y: pfData.flux, mode: "markers", marker: { size: 3 }, name: "folded" }];
-    const layout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "phase" }, yaxis: { title: "flux" } };
-    Plotly.newPlot(el, data, layout, { displayModeBar: false, responsive: true });
+    const data: PlotlyData[] = [{ x: pfData.phase, y: pfData.flux, mode: "markers", marker: { size: 3 }, name: "folded" }];
+    const layout: PlotlyLayout = { margin: { l: 40, r: 10, t: 10, b: 30 }, xaxis: { title: "phase" }, yaxis: { title: "flux" } };
+    const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
+    Plotly.newPlot(el, data, layout, cfg);
   };
   const plotNeighbors = (nei: Neighbors | null) => {
     if (!nei?.points || !hasPlotly()) return;
-    const Plotly = (window as unknown as { Plotly: any }).Plotly;
-    const el = document.getElementById("neighborsPlot");
+    const Plotly = (window as unknown as { Plotly: PlotlyLike }).Plotly;
+    const el = document.getElementById("neighborsPlot") as HTMLElement | null;
     if (!el) return;
     const d = nei.points;
-    Plotly.newPlot(
-      el,
-      [{ x: d.map((p) => p.sep), y: d.map((p) => p.gmag), mode: "markers", marker: { size: 6 }, name: "Gaia" }],
-      { margin: { t: 10 }, xaxis: { title: 'sep [" ]' }, yaxis: { title: "Gmag" } },
-      { displayModeBar: false, responsive: true }
-    );
+    const data: PlotlyData[] = [{ x: d.map((p) => p.sep), y: d.map((p) => p.gmag), mode: "markers", marker: { size: 6 }, name: "Gaia" }];
+    const layout: PlotlyLayout = { margin: { t: 10 }, xaxis: { title: 'sep ["]' }, yaxis: { title: "Gmag" } };
+    const cfg: PlotlyConfig = { displayModeBar: false, responsive: true };
+    Plotly.newPlot(el, data, layout, cfg);
   };
 
   // Render plots on state change
@@ -274,7 +286,7 @@ export default function DetectorReact() {
         },
       };
       const js = await fetchDetect(body);
-      if (js.error || js.detail) throw new Error(js.error || js.detail);
+      if ((js as DetectResponse).error || (js as DetectResponse).detail) throw new Error((js as DetectResponse).error || (js as DetectResponse).detail);
       handleDetectResult(js);
       setStatus("Done");
     } catch (e) {
@@ -373,7 +385,7 @@ export default function DetectorReact() {
         <h1>Orama X  Exoplanet Detector</h1>
 
         <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 16, padding: 16, marginBottom: 16 }}>
-          <h3>Live Fetch & Detect</h3>
+          <h3>Live Fetch &amp; Detect</h3>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <label>Source</label>
             <select value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
@@ -423,7 +435,7 @@ export default function DetectorReact() {
             <input type="range" min={0} max={0.5} step={0.01} value={rhoThr} onChange={(e) => setRhoThr(toNum(e.target.value, 0.15))} style={{ width: 160 }} />
             <span style={{ color: "#666", fontSize: 13 }}><b>{rhoThr.toFixed(2)}</b></span>
 
-            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Gaia radius ["]</span>
+            <span style={{ padding: "2px 8px", borderRadius: 999, border: "1px solid #ddd" }}>Gaia radius [&quot;]</span>
             <input type="range" min={20} max={120} step={5} value={neiRadius} onChange={(e) => setNeiRadius(toNum(e.target.value, 60))} style={{ width: 160 }} />
             <span style={{ color: "#666", fontSize: 13 }}><b>{neiRadius.toFixed(0)}</b></span>
           </div>
@@ -447,7 +459,7 @@ export default function DetectorReact() {
               </>
             )}
 
-            <button onClick={onFetch}>Fetch & Detect</button>
+            <button onClick={onFetch}>Fetch &amp; Detect</button>
             <button onClick={onExportAll}>Export CSV</button>
             <button onClick={onExportVetted} title="Export only candidates with P threshold">Export Vetted CSV</button>
             <span style={{ color: "#666", fontSize: 13 }}>{status}</span>
@@ -499,7 +511,10 @@ export default function DetectorReact() {
             </thead>
             <tbody>
               {cands.map((c, i) => {
-                const p = (typeof c.p_planet === "number" ? c.p_planet : typeof c.p === "number" ? c.p : typeof c.prob === "number" ? c.prob : null);
+                const p =
+                  typeof c.p_planet === "number" ? c.p_planet :
+                  typeof c.p === "number" ? c.p :
+                  typeof c.prob === "number" ? c.prob : null;
                 const vetted = p !== null && p >= thr;
                 const onClick = () => { if (c.folded?.phase && c.folded.flux) setPf(c.folded); };
                 const pd = (x: unknown, n: number) => (typeof x === "number" ? x.toFixed(n) : (x ?? ""));
@@ -531,7 +546,7 @@ export default function DetectorReact() {
           <Plot id="neighborsPlot" height={320} />
           {neighbors?.info && <div style={{ color: "#666", fontSize: 13 }}>{neighbors.info}</div>}
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
-            <thead><tr><th>sep ["]</th><th>Gmag</th><th>BPRP</th></tr></thead>
+            <thead><tr><th>sep [&quot;]</th><th>Gmag</th><th>BPRP</th></tr></thead>
             <tbody>
               {(neighbors?.points ?? []).map((p, i) => (
                 <tr key={i}><td>{p.sep}</td><td>{p.gmag}</td><td>{p.bprp ?? ""}</td></tr>
