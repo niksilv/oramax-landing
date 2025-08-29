@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -44,7 +45,7 @@ function pd(n: number | undefined, digits = 3): string {
   }
 }
 
-export default function DetectorPage(): JSX.Element {
+export default function DetectorPage(): ReactElement {
   const [target, setTarget] = useState<string>("");
   const [suggestions, setSuggestions] = useState<SuggestItem[]>([]);
   const [busy, setBusy] = useState<boolean>(false);
@@ -232,3 +233,4 @@ export default function DetectorPage(): JSX.Element {
     </>
   );
 }
+
