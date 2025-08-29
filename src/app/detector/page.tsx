@@ -91,7 +91,43 @@ function hasPlotly(): boolean {
 async function apiGet(path: string): Promise<Response> {
   return fetch(path, { method: "GET", cache: "no-store" });
 }
-async function apiPost(path: string, body: unknown, contentType = "application/json"): Promise<Response> {
+async function apiPost(
+
+// --- Robust JSON API caller with friendly errors ---
+async function apiCallJson(path: string, payload: unknown) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+  if (!res.ok) {
+    const msg =
+      (data && (data.detail || data.error || data.message)) ||
+      `${res.status} ${res.statusText}${text ? ` – ${text.slice(0, 200)}` : ""}`;
+    throw new Error(msg);
+  }
+  return data ?? {};
+}
+
+// --- High-level detect call: try /api/fetch_detect, fallback to /api/predict(op=fetch_detect) on 404/405 ---
+async function fetchDetect(body: unknown) {
+  try {
+    return await apiCallJson("/api/fetch_detect", body);
+  } catch (e: any) {
+    const msg = String(e?.message || e);
+    if (/\b(404|405)\b/.test(msg)) {
+      const withOp = { ...(body as any), op: "fetch_detect" };
+      return await apiCallJson("/api/predict", withOp);
+    }
+    throw e;
+  }
+}
+
+path: string, body: unknown, contentType = "application/json"): Promise<Response> {
   const init: RequestInit = {
     method: "POST",
     headers: { "Content-Type": contentType, accept: "*/*" },
