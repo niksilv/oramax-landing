@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Orama X Ξ²β‚¬Ξ† Exoplanet Detector</title>
+  <title>Exoplanet Detector (OramaX)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <style>
@@ -41,7 +41,7 @@
     <a href="/exoplanet">Exoplanet Detector</a>
     <a href="/">Home</a>
     <a href="/contact">Contact</a>
-    <span class="float-right muted" id="healthDot">Ξ²β€”Β checking APIΞ²β‚¬Β¦</span>
+    <span class="float-right muted" id="healthDot">ρ²β€”Β checking APIρ²β‚¬Β¦</span>
   </nav>
 
   <div class="container">
@@ -88,7 +88,7 @@
 
         <label><input type="checkbox" id="qualityChk" checked> quality mask</label>
         <label><input type="checkbox" id="outlierChk" checked> remove outliers</label>
-        <label>ΞΖ’</label>
+        <label>ρΖ’</label>
         <input type="number" id="sigmaVal" value="5" step="0.5" style="width:70px"/>
         <label><input type="checkbox" id="centroidChk"> Centroid vetting (TESSCut)</label>
         <label><input type="checkbox" id="gaiaChk"> Gaia neighbors</label>
@@ -100,21 +100,22 @@
         <span class="muted">p <b id="thrLabel">0.80</b></span>
         <span class="muted" id="vetCount"></span>
 
-        <span class="badge">Centroid ΞΖ’-thr</span>
+        <span class="badge">Centroid ρΖ’-thr</span>
         <input type="range" id="sigmaThr" min="1" max="10" step="0.5" value="3" style="width:160px"/>
         <span class="muted"><b id="sigmaThrLabel">3.0</b></span>
 
-        <span class="badge">ΞΒ-thr</span>
+        <span class="badge">ρΒ-thr</span>
         <input type="range" id="rhoThr" min="0.00" max="0.50" step="0.01" value="0.15" style="width:160px"/>
         <span class="muted"><b id="rhoThrLabel">0.15</b></span>
 
-        <span class="badge">Gaia radius [Ξ²β‚¬Β³]</span>
+        <span class="badge">Gaia radius [ρ²β‚¬Β³]</span>
         <input type="range" id="gaiaRad" min="10" max="60" step="1" value="60" style="width:200px"/>
         <span class="muted"><b id="gaiaLabel">60</b></span>
       </div>
 
       <div class="inline">
-        <input type="text" id="tic" placeholder="TIC 123456789" />
+        <input type="text" id="tic" placeholder="TIC 123456789" / list="suggList">
+  <datalist id="suggList"></datalist>
         <button id="fetchBtn">Fetch & Detect</button>
         <button id="exportBtn">Export CSV</button>
         <button id="exportVettedBtn">Export Vetted CSV</button>
@@ -142,7 +143,7 @@
         <table id="candTable"><thead>
           <tr>
             <th>#</th><th>Period (d)</th><th>Duration (d)</th><th>Depth</th><th>Power</th>
-            <th>P(planet)</th><th>SNR</th><th>Ξβ€BIC</th><th>OddEven Ξβ€ (ppm)</th><th>Secondary?</th><th>Centroid</th>
+            <th>P(planet)</th><th>SNR</th><th>ρβ€BIC</th><th>OddEven ρβ€ (ppm)</th><th>Secondary?</th><th>Centroid</th>
           </tr>
         </thead><tbody></tbody></table>
       </div>
@@ -161,12 +162,12 @@
       try{
         const r = await fetch('/api/health');
         set($('#healthStatus'), r.ok ? 'OK' : r.status + ' ' + r.statusText);
-        $('#healthDot').textContent = r.ok ? 'Ξ²β€”Β API OK' : 'Ξ²β€”Β API issue';
+        $('#healthDot').textContent = r.ok ? 'ρ²β€”Β API OK' : 'ρ²β€”Β API issue';
         const txt = await r.text();
         $('#healthOut').textContent = $('#pretty').checked ? JSON.stringify(JSON.parse(txt), null, 2) : txt;
       }catch(e){
         $('#healthOut').textContent = String(e);
-        $('#healthDot').textContent = 'Ξ²β€”Β API issue';
+        $('#healthDot').textContent = 'ρ²β€”Β API issue';
       }
     }
     $('#checkBtn').onclick = pingHealth;
@@ -179,10 +180,10 @@
     $('#rhoThr').oninput    = e => set($('#rhoThrLabel'), (+e.target.value).toFixed(2));
     $('#gaiaRad').oninput   = e => set($('#gaiaLabel'), (+e.target.value).toFixed(0));
 
-    // NOTE: ΞΒ¤ΞΒ± Ξβ€¦Ξβ‚¬ΞΒΞΒ»ΞΞΞΞ‰Ξβ‚¬ΞΒ± endpoints Ξβ‚¬ΞΒ±ΞΒΞΒ±ΞΞΞΒ­ΞΒ½ΞΞΞβ€¦ΞΒ½ ΞΖ’Ξβ€ΞΒ± Ξβ€•ΞΞ„ΞΞ‰ΞΒ± URLs: /api/fetch_detect, /api/fit_transit, /api/report_pdf, ΞΞ.ΞΒ»Ξβ‚¬.
-    // ΞΒ§ΞΒΞΒ·ΞΖ’ΞΞ‰ΞΞΞΞΞβ‚¬ΞΞΞβ€•ΞΒ·ΞΖ’ΞΒµ ΞΒ Ξβ€ΞΒΞΒ¤Ξβ€ absolute paths Ξβ‚¬ΞΞΞβ€¦ ΞΞΞΒµΞΞΞΞ‰ΞΒ½ΞΞΞΒΞΒ½ ΞΞΞΒµ "/" ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒµΞΞ‰ ΞΖ’Ξβ€ΞΞ /exoplanet.
+    // NOTE: ρΒ¤ρΒ± ρβ€¦ρβ‚¬ρΒρΒ»ρρρρ‰ρβ‚¬ρΒ± endpoints ρβ‚¬ρΒ±ρΒρΒ±ρρρΒ­ρΒ½ρρρβ€¦ρΒ½ ρΖ’ρβ€ρΒ± ρβ€•ρρ„ρρ‰ρΒ± URLs: /api/fetch_detect, /api/fit_transit, /api/report_pdf, ρρ.ρΒ»ρβ‚¬.
+    // ρΒ§ρΒρΒ·ρΖ’ρρ‰ρρρρρβ‚¬ρρρβ€•ρΒ·ρΖ’ρΒµ ρΒ ρβ€ρΒρΒ¤ρβ€ absolute paths ρβ‚¬ρρρβ€¦ ρρρΒµρρρρ‰ρΒ½ρρρΒρΒ½ ρρρΒµ "/" ρΒ³ρρ‰ρΒ± ρΒ½ρΒ± ρρρΒ· ρΖ’ρβ‚¬ρΒ¬ρΒµρρ‰ ρΖ’ρβ€ρρ /exoplanet.
 
-    // --- Placeholder ΞΞΞΞ‰ΞΒ½ΞΞ‰ΞΞΞΒ¬ΞΒ» bindings (ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒ½ΞΒµ Ξβ€ΞΒ± ΞΞΞΞΞβ€¦ΞΞΞβ‚¬ΞΞ‰ΞΒ¬ ΞΒ±ΞΒ½ ΞΞ„ΞΒµΞΒ½ ΞΒ­Ξβ€΅ΞΒµΞΞ‰Ξβ€ Ξβ‚¬ΞΒµΞΒΞΒ¬ΞΖ’ΞΒµΞΞ‰ ΞΒΞΒ»ΞΞ Ξβ€ΞΞ JS ΞΖ’ΞΞΞβ€¦ ΞΒµΞΞ„ΞΒ) ---
+    // --- Placeholder ρρρρ‰ρΒ½ρρ‰ρρρΒ¬ρΒ» bindings (ρΒ³ρρ‰ρΒ± ρΒ½ρΒ± ρρρΒ· ρΖ’ρβ‚¬ρΒ¬ρΒ½ρΒµ ρβ€ρΒ± ρρρρρβ€¦ρρρβ‚¬ρρ‰ρΒ¬ ρΒ±ρΒ½ ρρ„ρΒµρΒ½ ρΒ­ρβ€΅ρΒµρρ‰ρβ€ ρβ‚¬ρΒµρΒρΒ¬ρΖ’ρΒµρρ‰ ρΒρΒ»ρρ ρβ€ρρ JS ρΖ’ρρρβ€¦ ρΒµρρ„ρΒ) ---
     async function _post(url, body){ const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); return r.json(); }
     $('#fetchBtn').onclick = async ()=>{
       $('#status').textContent = 'Fetching...';
@@ -195,7 +196,7 @@
                        target: tic };
         const data = await _post('/api/fetch_detect', body);
         $('#status').textContent = data && data.candidates ? 'Done' : 'No data';
-        // ΞΒµΞΞ„ΞΒ ΞΞΞΒ± ΞΒ±Ξβ€ ΞΒ±ΞΞ‰ΞΒΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΒ± placeholders ΞΞΞΒ±ΞΞ‰ ΞΞΞΒ± ΞΞΞΒ±ΞΒ»ΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΞ‰Ξβ€ ΞΞ„ΞΞ‰ΞΞΞΒ­Ξβ€ ΞΖ’ΞΞΞβ€¦ render* ΞΖ’Ξβ€¦ΞΒ½ΞΒ±ΞΒΞβ€ΞΒ®ΞΖ’ΞΒµΞΞ‰Ξβ€.
+        // ρΒµρρ„ρΒ ρρρΒ± ρΒ±ρβ€ ρΒ±ρρ‰ρΒρΒ­ρΖ’ρΒµρρ‰ρβ€ ρβ€ρΒ± placeholders ρρρΒ±ρρ‰ ρρρΒ± ρρρΒ±ρΒ»ρΒ­ρΖ’ρΒµρρ‰ρβ€ ρβ€ρρ‰ρβ€ ρρ„ρρ‰ρρρΒ­ρβ€ ρΖ’ρρρβ€¦ render* ρΖ’ρβ€¦ρΒ½ρΒ±ρΒρβ€ρΒ®ρΖ’ρΒµρρ‰ρβ€.
       }catch(e){ alert('Fetch failed: '+e); $('#status').textContent='Error'; }
     };
   </script>
