@@ -418,3 +418,52 @@
   });
 })();
 //// ----------------------------------------------------------------------
+//// AUTOCOMPLETE_PATCH_V2 ------------------------------------------------
+(() => {
+  const input = document.querySelector('input#tic, input[name="tic"], input#target, input[name="target"]');
+  if (!input) return;
+
+  // βρες ή φτιάξε datalist
+  const listId = 'suggList';
+  let datalist = document.getElementById(listId);
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = listId;
+    input.setAttribute('list', listId);
+    input.insertAdjacentElement('afterend', datalist);
+  }
+
+  function currentSource() {
+    const s = document.querySelector('#source, select[name="source"]');
+    return s && s.value ? s.value : 'MAST_SPOC';
+  }
+
+  async function fetchSuggest(q) {
+    try {
+      const url = \/api/suggest?source=\&q=\\;
+      const res = await fetch(url);
+      const j = await res.json().catch(() => ({}));
+      const items = (j.items ?? (j.data && j.data.items) ?? []) || [];
+
+      datalist.innerHTML = items.map(it => {
+        const raw   = String(it.id ?? it.value ?? it.label ?? '').trim();
+        const clean = raw.replace(/^TIC\s+/i, '');     // <-- χωρίς TIC 
+        const label = String(it.label ?? raw).replace(/^TIC\s+/i, '');
+        return \<option value="\">\</option>\;
+      }).join('');
+    } catch (e) { console.warn('suggest error', e); }
+  }
+
+  let tm;
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    clearTimeout(tm);
+    if (q.length < 2) { datalist.innerHTML = ''; return; }
+    tm = setTimeout(() => fetchSuggest(q), 150);
+  });
+
+  // αλλαγή πηγής => καθάρισμα λίστας
+  const srcSel = document.querySelector('#source, select[name="source"]');
+  if (srcSel) srcSel.addEventListener('change', () => { datalist.innerHTML=''; });
+})();
+//// ----------------------------------------------------------------------
