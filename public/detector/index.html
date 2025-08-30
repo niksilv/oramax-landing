@@ -159,7 +159,7 @@
     // Health ping (ALWAYS absolute to root!)
     async function pingHealth(){
       try{
-        const r = await fetch('/api/exoplanet/health');
+        const r = await fetch('/api/health');
         set($('#healthStatus'), r.ok ? 'OK' : r.status + ' ' + r.statusText);
         $('#healthDot').textContent = r.ok ? 'Ξ²β€”Β API OK' : 'Ξ²β€”Β API issue';
         const txt = await r.text();
@@ -179,7 +179,7 @@
     $('#rhoThr').oninput    = e => set($('#rhoThrLabel'), (+e.target.value).toFixed(2));
     $('#gaiaRad').oninput   = e => set($('#gaiaLabel'), (+e.target.value).toFixed(0));
 
-    // NOTE: ΞΒ¤ΞΒ± Ξβ€¦Ξβ‚¬ΞΒΞΒ»ΞΞΞΞ‰Ξβ‚¬ΞΒ± endpoints Ξβ‚¬ΞΒ±ΞΒΞΒ±ΞΞΞΒ­ΞΒ½ΞΞΞβ€¦ΞΒ½ ΞΖ’Ξβ€ΞΒ± Ξβ€•ΞΞ„ΞΞ‰ΞΒ± URLs: /api/exoplanet/fetch_detect, /api/exoplanet/fit_transit, /api/exoplanet/report_pdf, ΞΞ.ΞΒ»Ξβ‚¬.
+    // NOTE: ΞΒ¤ΞΒ± Ξβ€¦Ξβ‚¬ΞΒΞΒ»ΞΞΞΞ‰Ξβ‚¬ΞΒ± endpoints Ξβ‚¬ΞΒ±ΞΒΞΒ±ΞΞΞΒ­ΞΒ½ΞΞΞβ€¦ΞΒ½ ΞΖ’Ξβ€ΞΒ± Ξβ€•ΞΞ„ΞΞ‰ΞΒ± URLs: /api/fetch_detect, /api/fit_transit, /api/report_pdf, ΞΞ.ΞΒ»Ξβ‚¬.
     // ΞΒ§ΞΒΞΒ·ΞΖ’ΞΞ‰ΞΞΞΞΞβ‚¬ΞΞΞβ€•ΞΒ·ΞΖ’ΞΒµ ΞΒ Ξβ€ΞΒΞΒ¤Ξβ€ absolute paths Ξβ‚¬ΞΞΞβ€¦ ΞΞΞΒµΞΞΞΞ‰ΞΒ½ΞΞΞΒΞΒ½ ΞΞΞΒµ "/" ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒµΞΞ‰ ΞΖ’Ξβ€ΞΞ /exoplanet.
 
     // --- Placeholder ΞΞΞΞ‰ΞΒ½ΞΞ‰ΞΞΞΒ¬ΞΒ» bindings (ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒ½ΞΒµ Ξβ€ΞΒ± ΞΞΞΞΞβ€¦ΞΞΞβ‚¬ΞΞ‰ΞΒ¬ ΞΒ±ΞΒ½ ΞΞ„ΞΒµΞΒ½ ΞΒ­Ξβ€΅ΞΒµΞΞ‰Ξβ€ Ξβ‚¬ΞΒµΞΒΞΒ¬ΞΖ’ΞΒµΞΞ‰ ΞΒΞΒ»ΞΞ Ξβ€ΞΞ JS ΞΖ’ΞΞΞβ€¦ ΞΒµΞΞ„ΞΒ) ---
@@ -193,7 +193,7 @@
                        sigma: +$('#sigmaVal').value, centroid: $('#centroidChk').checked, neighbors: $('#gaiaChk').checked,
                        thr: +$('#thr').value, sigma_thr:+$('#sigmaThr').value, rho_thr:+$('#rhoThr').value, gaia_radius:+$('#gaiaRad').value,
                        target: tic };
-        const data = await _post('/api/exoplanet/fetch_detect', body);
+        const data = await _post('/api/fetch_detect', body);
         $('#status').textContent = data && data.candidates ? 'Done' : 'No data';
         // ΞΒµΞΞ„ΞΒ ΞΞΞΒ± ΞΒ±Ξβ€ ΞΒ±ΞΞ‰ΞΒΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΒ± placeholders ΞΞΞΒ±ΞΞ‰ ΞΞΞΒ± ΞΞΞΒ±ΞΒ»ΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΞ‰Ξβ€ ΞΞ„ΞΞ‰ΞΞΞΒ­Ξβ€ ΞΖ’ΞΞΞβ€¦ render* ΞΖ’Ξβ€¦ΞΒ½ΞΒ±ΞΒΞβ€ΞΒ®ΞΖ’ΞΒµΞΞ‰Ξβ€.
       }catch(e){ alert('Fetch failed: '+e); $('#status').textContent='Error'; }

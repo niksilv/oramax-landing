@@ -3,7 +3,7 @@
 */
 (() => {
   const S = {
-    base: "/api",        // will become "/api" + api_prefix from /api/exoplanet/health
+    base: "/api",        // will become "/api" + api_prefix from /api/health
     prefix: "",          // e.g. "/exoplanet"
     get root() { return this.base + (this.prefix || ""); },
     busy: false,
@@ -35,7 +35,7 @@
   // ---------- health -> discover api_prefix ----------
   async function initHealth() {
     try {
-      const r = await fetch("/api/exoplanet/health");
+      const r = await fetch("/api/health");
       const j = await r.json();
       S.prefix = j.api_prefix || "/exoplanet";
       const out = $("#healthOut");
