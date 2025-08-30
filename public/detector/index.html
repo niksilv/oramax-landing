@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Orama X • Exoplanet Detector</title>
+  <title>Orama X Ξ²β‚¬Ξ† Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <style>
@@ -41,7 +41,7 @@
     <a href="/exoplanet">Exoplanet Detector</a>
     <a href="/">Home</a>
     <a href="/contact">Contact</a>
-    <span class="float-right muted" id="healthDot">● checking API…</span>
+    <span class="float-right muted" id="healthDot">Ξ²β€”Β checking APIΞ²β‚¬Β¦</span>
   </nav>
 
   <div class="container">
@@ -88,7 +88,7 @@
 
         <label><input type="checkbox" id="qualityChk" checked> quality mask</label>
         <label><input type="checkbox" id="outlierChk" checked> remove outliers</label>
-        <label>σ</label>
+        <label>ΞΖ’</label>
         <input type="number" id="sigmaVal" value="5" step="0.5" style="width:70px"/>
         <label><input type="checkbox" id="centroidChk"> Centroid vetting (TESSCut)</label>
         <label><input type="checkbox" id="gaiaChk"> Gaia neighbors</label>
@@ -100,15 +100,15 @@
         <span class="muted">p <b id="thrLabel">0.80</b></span>
         <span class="muted" id="vetCount"></span>
 
-        <span class="badge">Centroid σ-thr</span>
+        <span class="badge">Centroid ΞΖ’-thr</span>
         <input type="range" id="sigmaThr" min="1" max="10" step="0.5" value="3" style="width:160px"/>
         <span class="muted"><b id="sigmaThrLabel">3.0</b></span>
 
-        <span class="badge">ρ-thr</span>
+        <span class="badge">ΞΒ-thr</span>
         <input type="range" id="rhoThr" min="0.00" max="0.50" step="0.01" value="0.15" style="width:160px"/>
         <span class="muted"><b id="rhoThrLabel">0.15</b></span>
 
-        <span class="badge">Gaia radius [″]</span>
+        <span class="badge">Gaia radius [Ξ²β‚¬Β³]</span>
         <input type="range" id="gaiaRad" min="10" max="60" step="1" value="60" style="width:200px"/>
         <span class="muted"><b id="gaiaLabel">60</b></span>
       </div>
@@ -142,7 +142,7 @@
         <table id="candTable"><thead>
           <tr>
             <th>#</th><th>Period (d)</th><th>Duration (d)</th><th>Depth</th><th>Power</th>
-            <th>P(planet)</th><th>SNR</th><th>ΔBIC</th><th>OddEven Δ (ppm)</th><th>Secondary?</th><th>Centroid</th>
+            <th>P(planet)</th><th>SNR</th><th>Ξβ€BIC</th><th>OddEven Ξβ€ (ppm)</th><th>Secondary?</th><th>Centroid</th>
           </tr>
         </thead><tbody></tbody></table>
       </div>
@@ -159,14 +159,14 @@
     // Health ping (ALWAYS absolute to root!)
     async function pingHealth(){
       try{
-        const r = await fetch('/api/health');
+        const r = await fetch('/api/exoplanet/health');
         set($('#healthStatus'), r.ok ? 'OK' : r.status + ' ' + r.statusText);
-        $('#healthDot').textContent = r.ok ? '● API OK' : '● API issue';
+        $('#healthDot').textContent = r.ok ? 'Ξ²β€”Β API OK' : 'Ξ²β€”Β API issue';
         const txt = await r.text();
         $('#healthOut').textContent = $('#pretty').checked ? JSON.stringify(JSON.parse(txt), null, 2) : txt;
       }catch(e){
         $('#healthOut').textContent = String(e);
-        $('#healthDot').textContent = '● API issue';
+        $('#healthDot').textContent = 'Ξ²β€”Β API issue';
       }
     }
     $('#checkBtn').onclick = pingHealth;
@@ -179,10 +179,10 @@
     $('#rhoThr').oninput    = e => set($('#rhoThrLabel'), (+e.target.value).toFixed(2));
     $('#gaiaRad').oninput   = e => set($('#gaiaLabel'), (+e.target.value).toFixed(0));
 
-    // NOTE: Τα υπόλοιπα endpoints παραμένουν στα ίδια URLs: /api/fetch_detect, /api/fit_transit, /api/report_pdf, κ.λπ.
-    // Χρησιμοποίησε ΠΑΝΤΑ absolute paths που ξεκινούν με "/" για να μη σπάει στο /exoplanet.
+    // NOTE: ΞΒ¤ΞΒ± Ξβ€¦Ξβ‚¬ΞΒΞΒ»ΞΞΞΞ‰Ξβ‚¬ΞΒ± endpoints Ξβ‚¬ΞΒ±ΞΒΞΒ±ΞΞΞΒ­ΞΒ½ΞΞΞβ€¦ΞΒ½ ΞΖ’Ξβ€ΞΒ± Ξβ€•ΞΞ„ΞΞ‰ΞΒ± URLs: /api/exoplanet/fetch_detect, /api/exoplanet/fit_transit, /api/exoplanet/report_pdf, ΞΞ.ΞΒ»Ξβ‚¬.
+    // ΞΒ§ΞΒΞΒ·ΞΖ’ΞΞ‰ΞΞΞΞΞβ‚¬ΞΞΞβ€•ΞΒ·ΞΖ’ΞΒµ ΞΒ Ξβ€ΞΒΞΒ¤Ξβ€ absolute paths Ξβ‚¬ΞΞΞβ€¦ ΞΞΞΒµΞΞΞΞ‰ΞΒ½ΞΞΞΒΞΒ½ ΞΞΞΒµ "/" ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒµΞΞ‰ ΞΖ’Ξβ€ΞΞ /exoplanet.
 
-    // --- Placeholder μινιμάλ bindings (για να μη σπάνε τα κουμπιά αν δεν έχεις περάσει όλο το JS σου εδώ) ---
+    // --- Placeholder ΞΞΞΞ‰ΞΒ½ΞΞ‰ΞΞΞΒ¬ΞΒ» bindings (ΞΒ³ΞΞ‰ΞΒ± ΞΒ½ΞΒ± ΞΞΞΒ· ΞΖ’Ξβ‚¬ΞΒ¬ΞΒ½ΞΒµ Ξβ€ΞΒ± ΞΞΞΞΞβ€¦ΞΞΞβ‚¬ΞΞ‰ΞΒ¬ ΞΒ±ΞΒ½ ΞΞ„ΞΒµΞΒ½ ΞΒ­Ξβ€΅ΞΒµΞΞ‰Ξβ€ Ξβ‚¬ΞΒµΞΒΞΒ¬ΞΖ’ΞΒµΞΞ‰ ΞΒΞΒ»ΞΞ Ξβ€ΞΞ JS ΞΖ’ΞΞΞβ€¦ ΞΒµΞΞ„ΞΒ) ---
     async function _post(url, body){ const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); return r.json(); }
     $('#fetchBtn').onclick = async ()=>{
       $('#status').textContent = 'Fetching...';
@@ -193,11 +193,12 @@
                        sigma: +$('#sigmaVal').value, centroid: $('#centroidChk').checked, neighbors: $('#gaiaChk').checked,
                        thr: +$('#thr').value, sigma_thr:+$('#sigmaThr').value, rho_thr:+$('#rhoThr').value, gaia_radius:+$('#gaiaRad').value,
                        target: tic };
-        const data = await _post('/api/fetch_detect', body);
+        const data = await _post('/api/exoplanet/fetch_detect', body);
         $('#status').textContent = data && data.candidates ? 'Done' : 'No data';
-        // εδώ θα αφαιρέσεις τα placeholders και θα καλέσεις τις δικές σου render* συναρτήσεις.
+        // ΞΒµΞΞ„ΞΒ ΞΞΞΒ± ΞΒ±Ξβ€ ΞΒ±ΞΞ‰ΞΒΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΒ± placeholders ΞΞΞΒ±ΞΞ‰ ΞΞΞΒ± ΞΞΞΒ±ΞΒ»ΞΒ­ΞΖ’ΞΒµΞΞ‰Ξβ€ Ξβ€ΞΞ‰Ξβ€ ΞΞ„ΞΞ‰ΞΞΞΒ­Ξβ€ ΞΖ’ΞΞΞβ€¦ render* ΞΖ’Ξβ€¦ΞΒ½ΞΒ±ΞΒΞβ€ΞΒ®ΞΖ’ΞΒµΞΞ‰Ξβ€.
       }catch(e){ alert('Fetch failed: '+e); $('#status').textContent='Error'; }
     };
   </script>
+  <script src="app.js"></script>
 </body>
 </html>

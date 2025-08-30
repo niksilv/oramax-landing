@@ -1,9 +1,9 @@
-﻿/* Exoplanet Detector  static UI glue (autocomplete, fetch&detect, plots, table)
+/* Exoplanet Detector  static UI glue (autocomplete, fetch&detect, plots, table)
    Works with Next/Vercel rewrites at /api/<api_prefix>/...
 */
 (() => {
   const S = {
-    base: "/api",        // will become "/api" + api_prefix from /api/health
+    base: "/api",        // will become "/api" + api_prefix from /api/exoplanet/health
     prefix: "",          // e.g. "/exoplanet"
     get root() { return this.base + (this.prefix || ""); },
     busy: false,
@@ -35,7 +35,7 @@
   // ---------- health -> discover api_prefix ----------
   async function initHealth() {
     try {
-      const r = await fetch("/api/health");
+      const r = await fetch("/api/exoplanet/health");
       const j = await r.json();
       S.prefix = j.api_prefix || "/exoplanet";
       const out = $("#healthOut");
