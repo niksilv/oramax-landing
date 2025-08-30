@@ -467,3 +467,78 @@
   if (srcSel) srcSel.addEventListener('change', () => { datalist.innerHTML=''; });
 })();
 //// ----------------------------------------------------------------------
+;/* AUTOCOMPLETE_V3 + neighbors bridge */
+(function(){
+  function qs(s){return document.querySelector(s)}
+  async function suggestApi(q){
+    const sSel = document.querySelector('#source,select[name="source"]');
+    const source = sSel ? (sSel.value||'MAST_SPOC') : 'MAST_SPOC';
+    const u = /api/suggest?source=&q=;
+    const res = await fetch(u, {cache:'no-store'});
+    const j = await res.json().catch(()=>({items:[]}));
+    const arr = Array.isArray(j.items) ? j.items : [];
+    return arr.map(it=>{
+      const id = String(it.id||it.label||'').trim();
+      const num = id.replace(/^TIC\s+/i,'').trim();
+      const lab = (it.label||id).replace(/^TIC\s+/i,'TIC ');
+      return {value:num, label:lab};
+    });
+  }
+  function ensureDatalist(input){
+    let dl = document.getElementById('suggList');
+    if(!dl){ dl=document.createElement('datalist'); dl.id='suggList'; document.body.appendChild(dl); }
+    input.setAttribute('list','suggList');
+    return dl;
+  }
+  function setupAutocomplete(){
+    const el = document.getElementById('tic') || document.querySelector('input[name="tic"], input[type="search"]');
+    if(!el) return;
+    const dl = ensureDatalist(el);
+    let last = '';
+    el.addEventListener('input', async ()=>{
+      const s = el.value.trim();
+      if(s.length<2 || s===last) return;
+      last = s;
+      try{
+        const items = await suggestApi(s);
+        dl.innerHTML = items.map(x=><option value=""></option>).join('');
+      }catch(e){ console.warn('suggest fail', e); }
+    });
+  }
+  // Στο Fetch & Detect: αν ο χρήστης έγραψε σκέτο νούμερο, βάλε "TIC " μόνο για το request
+  document.addEventListener('click', function(ev){
+    const t = ev.target;
+    if(!t) return;
+    const txt = (t.textContent||'').trim().toLowerCase();
+    if (txt === 'fetch & detect' || t.id === 'fetch-detect' || t.dataset.role === 'fetch-detect') {
+      const inp = document.getElementById('tic') || document.querySelector('input[name="tic"], input[type="search"]');
+      if(!inp) return;
+      const v = inp.value.trim();
+      if (/^\d/.test(v)) inp.value = 'TIC ' + v;
+    }
+  }, true);
+
+  // Γέμισε Neighbors (table + plot) από το αποτέλεσμα detect
+  function drawNeighbors(r){
+    const tbl = document.getElementById('neighborsTable');
+    const plotEl = document.getElementById('neighborsPlot');
+    const n = (r && (r.neighbors||r.nei||{})) || {};
+    const tableHtml = n.table_html || r.neighbors_table_html || r.neigh_table_html || r.table_html;
+    if(tbl && tableHtml) tbl.innerHTML = tableHtml;
+    const pts = n.points || r.neighbors_points || r.neigh_points || r.points || [];
+    if(plotEl && Array.isArray(pts) && pts.length && typeof Plotly!=='undefined'){
+      Plotly.newPlot(
+        plotEl,
+        [{x:pts.map(p=>p.sep), y:pts.map(p=>p.gmag), mode:'markers', marker:{size:6}}],
+        {margin:{t:10}, xaxis:{title:'sep [\""]'}, yaxis:{title:'Gmag'}},
+        {displayModeBar:false, responsive:true}
+      );
+    }
+  }
+  const old = window.applyDetectResult;
+  window.applyDetectResult = function(r){
+    try{ drawNeighbors(r||{});}catch(e){}
+    if (typeof old==='function') return old.apply(this, arguments);
+  };
+  document.addEventListener('DOMContentLoaded', setupAutocomplete);
+})();
