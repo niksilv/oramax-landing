@@ -231,3 +231,142 @@
     wireUI();
   });
 })();
+/* ===== Autocomplete (numbers only) + Source-aware + safe submit ===== */
+(function () {
+  // Βρες το input στόχο
+  const input = document.querySelector('#target, input[name="target"], input[type="search"], input[type="text"]');
+  if (!input) return;
+
+  // Φτιάξε ένα dropdown container ακριβώς κάτω από το input
+  let box = document.getElementById('suggest-box');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'suggest-box';
+    box.style.position = 'absolute';
+    box.style.zIndex = '1000';
+    box.style.background = '#111';
+    box.style.border = '1px solid #333';
+    box.style.borderRadius = '8px';
+    box.style.padding = '6px 0';
+    box.style.fontSize = getComputedStyle(input).fontSize || '14px';
+    box.style.width = (input.getBoundingClientRect().width || 480) + 'px';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    input.parentNode.insertBefore(wrapper, input);
+    wrapper.appendChild(input);
+    wrapper.appendChild(box);
+  }
+
+  const closeBox = () => (box.innerHTML = '');
+
+  // Βρες/μαντέψε το Source
+  function getSource() {
+    // 1) select με id/name "source"
+    let s = document.querySelector('#source, select[name="source"]');
+    if (!s) {
+      // 2) αλλιώς πάρε το πρώτο <select> του control bar
+      const selects = Array.from(document.querySelectorAll('select'));
+      s = selects.length ? selects[0] : null;
+    }
+    let v = (s && (s.value || s.getAttribute('data-value'))) || '';
+    v = (v || '').toLowerCase();
+    if (v.includes('mast')) return 'mast_spoc';
+    if (v.includes('spoc')) return 'mast_spoc';
+    if (v.includes('eleanor')) return 'eleanor';
+    return v || 'mast_spoc';
+  }
+
+  // Debounce helper
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  // Ρώτα το backend
+  async function doSuggest(q) {
+    if (!q || String(q).trim().length < 2) {
+      closeBox();
+      return;
+    }
+    const src = getSource();
+    const url = `/api/suggest?q=${encodeURIComponent(q)}&source=${encodeURIComponent(src)}`;
+
+    let json;
+    try {
+      const r = await fetch(url);
+      json = await r.json();
+    } catch {
+      closeBox();
+      return;
+    }
+
+    const arr = (json && (json.items || json.suggestions || json.data)) || (Array.isArray(json) ? json : []);
+    const rows = arr.slice(0, 20).map((it) => {
+      const raw = String(it.label ?? it.value ?? it.id ?? it.name ?? it);
+      const display = raw.replace(/^TIC\s*/i, '').trim(); // μόνο νούμερα
+      return { raw, display };
+    });
+    if (!rows.length) {
+      closeBox();
+      return;
+    }
+
+    box.innerHTML = rows
+      .map(
+        (r) =>
+          `<div class="sug" data-raw="${r.raw.replace(/"/g, '&quot;')}" data-num="${r.display}"
+               style="padding:6px 10px; cursor:pointer;">${r.display}</div>`
+      )
+      .join('');
+
+    box.querySelectorAll('.sug').forEach((el) =>
+      el.addEventListener('click', () => {
+        // Βάλε στο input τον "γυμνό" αριθμό για να βλέπει ο χρήστης
+        input.value = el.dataset.num || '';
+        // αλλά κράτα και το raw για το Detect
+        input.setAttribute('data-raw', el.dataset.raw || '');
+        closeBox();
+      })
+    );
+  }
+
+  input.addEventListener('input', debounce((e) => doSuggest(e.target.value), 220));
+  document.addEventListener('click', (e) => {
+    if (e.target !== input && !box.contains(e.target)) closeBox();
+  });
+
+  // Σιγουρέψου ότι στο Fetch&Detect στέλνουμε αυτό που θέλει το API (TIC )
+  function ensureApiFriendlyTarget() {
+    const raw = input.getAttribute('data-raw') || '';
+    if (/^tic\s*\d+/i.test(raw)) {
+      // Αν ο χρήστης διάλεξε από προτάσεις, χρησιμοποίησε το raw (π.χ. "TIC 268042363")
+      input.value = raw;
+      return;
+    }
+    // Αν έγραψε μόνο νούμερα, πρόσθεσε "TIC " μπροστά
+    if (/^\d+$/.test(input.value.trim())) {
+      input.value = 'TIC ' + input.value.trim();
+    }
+  }
+
+  // Βρες το κουμπί Fetch & Detect (με text fallback)
+  let detectBtn =
+    document.querySelector('#btn-detect, button[data-action="detect"]') ||
+    Array.from(document.querySelectorAll('button')).find((b) => /fetch.*detect/i.test(b.textContent || ''));
+
+  if (detectBtn) {
+    detectBtn.addEventListener(
+      'click',
+      () => {
+        try {
+          ensureApiFriendlyTarget();
+        } catch {}
+      },
+      { capture: true } // τρέξε πριν εκτελεστεί το αρχικό handler
+    );
+  }
+})();
