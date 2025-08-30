@@ -1,0 +1,203 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Orama X • Exoplanet Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  <style>
+    :root{ --bg:#0b0f14; --card:#0f1319; --muted:#9aa4af; --accent:#21c2b8; --text:#e7edf3; --border:#1b222b }
+    *{ box-sizing:border-box }
+    body{ margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif }
+    .container{ max-width:1180px; margin:0 auto; padding:28px 20px }
+    .nav{ display:flex; gap:26px; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border); position:sticky; top:0; background:rgba(11,15,20,.8); backdrop-filter:saturate(150%) blur(6px) }
+    .brand{ font-weight:800; color:var(--accent); font-size:20px }
+    .nav a{ color:var(--text); text-decoration:none; opacity:.85 }
+    .nav a:hover{ opacity:1 }
+    h1{ font-size:28px; margin:16px 0 12px }
+    .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px }
+    .inline{ display:flex; gap:10px; align-items:center; flex-wrap:wrap }
+    label{ color:var(--muted); font-size:13px }
+    input,select,button{ border-radius:10px; border:1px solid var(--border); background:#0b0f14; color:var(--text); padding:8px 10px; font-size:13px }
+    button{ background:#1e293b; border-color:#1e293b; cursor:pointer }
+    button:disabled{ opacity:.6; cursor:not-allowed }
+    .muted{ color:var(--muted); font-size:12.5px }
+    .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--border); background:#0b0f14 }
+    .badge-ok{ background:#0f2a18; border-color:#184d2b; color:#67f08a }
+    .badge-beb{ background:#2a0f10; border-color:#4d1820; color:#ff8aa1 }
+    .epi{ background:#113a72; border-color:#155a9c; color:#dcefff }
+    table{ width:100%; border-collapse:collapse }
+    th,td{ padding:8px 10px; border-bottom:1px solid var(--border); text-align:left; font-size:13px }
+    th{ color:var(--muted) }
+    .row{ display:flex; gap:16px; flex-wrap:wrap }
+    .col{ flex:1; min-width:360px }
+    .kv{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#0b0f14; border:1px solid var(--border); border-radius:10px; padding:10px }
+    .float-right{ margin-left:auto }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand">OramaX</div>
+    <a href="/exoplanet">Exoplanet Detector</a>
+    <a href="/">Home</a>
+    <a href="/contact">Contact</a>
+    <span class="float-right muted" id="healthDot">● checking API…</span>
+  </nav>
+
+  <div class="container">
+
+    <h1>Exoplanet Detector</h1>
+    <p class="muted">Live fetch & detect from MAST, with centroid vetting, Gaia neighbors, transit fits and PDF reports.</p>
+
+    <!-- Health panel -->
+    <div class="card">
+      <div class="inline">
+        <label><input type="checkbox" id="pretty"> Pretty-print</label>
+        <button id="checkBtn">Check API</button>
+        <span id="healthStatus" class="muted"></span>
+      </div>
+      <pre id="healthOut" class="kv" style="margin-top:10px; max-height:220px; overflow:auto;"></pre>
+    </div>
+
+    <!-- Buttons bar -->
+    <div class="card">
+      <div class="inline" style="margin-bottom:8px;">
+        <label>Source</label>
+        <select id="sourceSel">
+          <option value="mast_spoc">MAST SPOC (PDCSAP)</option>
+          <option value="mast_qlp">MAST QLP</option>
+          <option value="url">External CSV/TXT URL</option>
+        </select>
+
+        <label>Mission</label>
+        <select id="missionSel">
+          <option value="auto">auto</option>
+          <option value="TESS">TESS</option>
+          <option value="Kepler">Kepler</option>
+          <option value="K2">K2</option>
+        </select>
+
+        <label>k-peaks</label>
+        <input type="number" id="kpeaks" value="3" min="1" max="5" style="width:70px"/>
+
+        <label>Detrend</label>
+        <select id="detrendSel">
+          <option value="flatten" selected>flatten</option>
+          <option value="none">none</option>
+        </select>
+
+        <label><input type="checkbox" id="qualityChk" checked> quality mask</label>
+        <label><input type="checkbox" id="outlierChk" checked> remove outliers</label>
+        <label>σ</label>
+        <input type="number" id="sigmaVal" value="5" step="0.5" style="width:70px"/>
+        <label><input type="checkbox" id="centroidChk"> Centroid vetting (TESSCut)</label>
+        <label><input type="checkbox" id="gaiaChk"> Gaia neighbors</label>
+      </div>
+
+      <div class="inline" style="margin-bottom:8px;">
+        <span class="badge">Planet threshold</span>
+        <input type="range" id="thr" min="0.50" max="0.99" step="0.01" value="0.80" style="width:180px"/>
+        <span class="muted">p <b id="thrLabel">0.80</b></span>
+        <span class="muted" id="vetCount"></span>
+
+        <span class="badge">Centroid σ-thr</span>
+        <input type="range" id="sigmaThr" min="1" max="10" step="0.5" value="3" style="width:160px"/>
+        <span class="muted"><b id="sigmaThrLabel">3.0</b></span>
+
+        <span class="badge">ρ-thr</span>
+        <input type="range" id="rhoThr" min="0.00" max="0.50" step="0.01" value="0.15" style="width:160px"/>
+        <span class="muted"><b id="rhoThrLabel">0.15</b></span>
+
+        <span class="badge">Gaia radius [″]</span>
+        <input type="range" id="gaiaRad" min="10" max="60" step="1" value="60" style="width:200px"/>
+        <span class="muted"><b id="gaiaLabel">60</b></span>
+      </div>
+
+      <div class="inline">
+        <input type="text" id="tic" placeholder="TIC 123456789" />
+        <button id="fetchBtn">Fetch & Detect</button>
+        <button id="exportBtn">Export CSV</button>
+        <button id="exportVettedBtn">Export Vetted CSV</button>
+        <button id="fitBtn">Fit transit (selected)</button>
+        <button id="pdfBtn">Download PDF report</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col card">
+        <h3>Light Curve</h3>
+        <div id="lc" style="height:380px;"></div>
+      </div>
+      <div class="col card">
+        <h3>Phase-Folded (selected candidate)</h3>
+        <div id="pf" style="height:340px;"></div>
+        <div id="centroidBox" class="muted" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Candidates <span class="muted">(green = vetted with P threshold; badge = centroid/ephemeris test)</span></h3>
+      <div style="overflow:auto">
+        <table id="candTable"><thead>
+          <tr>
+            <th>#</th><th>Period (d)</th><th>Duration (d)</th><th>Depth</th><th>Power</th>
+            <th>P(planet)</th><th>SNR</th><th>ΔBIC</th><th>OddEven Δ (ppm)</th><th>Secondary?</th><th>Centroid</th>
+          </tr>
+        </thead><tbody></tbody></table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ---------- Small helpers ----------
+    const $ = s => document.querySelector(s);
+    const set = (el, v) => (el.textContent = v);
+    const fmt = x => (typeof x === "number" ? (Math.abs(x) >= 1e-3 ? x.toFixed(3) : x.toExponential(1)) : (x ?? ""));
+
+    // Health ping (ALWAYS absolute to root!)
+    async function pingHealth(){
+      try{
+        const r = await fetch('/api/health');
+        set($('#healthStatus'), r.ok ? 'OK' : r.status + ' ' + r.statusText);
+        $('#healthDot').textContent = r.ok ? '● API OK' : '● API issue';
+        const txt = await r.text();
+        $('#healthOut').textContent = $('#pretty').checked ? JSON.stringify(JSON.parse(txt), null, 2) : txt;
+      }catch(e){
+        $('#healthOut').textContent = String(e);
+        $('#healthDot').textContent = '● API issue';
+      }
+    }
+    $('#checkBtn').onclick = pingHealth;
+    $('#pretty').onchange = pingHealth;
+    pingHealth();
+
+    // Simple UI label bindings
+    $('#thr').oninput       = e => set($('#thrLabel'), (+e.target.value).toFixed(2));
+    $('#sigmaThr').oninput  = e => set($('#sigmaThrLabel'), (+e.target.value).toFixed(1));
+    $('#rhoThr').oninput    = e => set($('#rhoThrLabel'), (+e.target.value).toFixed(2));
+    $('#gaiaRad').oninput   = e => set($('#gaiaLabel'), (+e.target.value).toFixed(0));
+
+    // NOTE: Τα υπόλοιπα endpoints παραμένουν στα ίδια URLs: /api/fetch_detect, /api/fit_transit, /api/report_pdf, κ.λπ.
+    // Χρησιμοποίησε ΠΑΝΤΑ absolute paths που ξεκινούν με "/" για να μη σπάει στο /exoplanet.
+
+    // --- Placeholder μινιμάλ bindings (για να μη σπάνε τα κουμπιά αν δεν έχεις περάσει όλο το JS σου εδώ) ---
+    async function _post(url, body){ const r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}); return r.json(); }
+    $('#fetchBtn').onclick = async ()=>{
+      $('#status').textContent = 'Fetching...';
+      try{
+        const tic = $('#tic').value.trim();
+        const body = { source: $('#sourceSel').value, mission: $('#missionSel').value, kpeaks:+$('#kpeaks').value,
+                       detrend: $('#detrendSel').value, quality: $('#qualityChk').checked, remove_outliers: $('#outlierChk').checked,
+                       sigma: +$('#sigmaVal').value, centroid: $('#centroidChk').checked, neighbors: $('#gaiaChk').checked,
+                       thr: +$('#thr').value, sigma_thr:+$('#sigmaThr').value, rho_thr:+$('#rhoThr').value, gaia_radius:+$('#gaiaRad').value,
+                       target: tic };
+        const data = await _post('/api/fetch_detect', body);
+        $('#status').textContent = data && data.candidates ? 'Done' : 'No data';
+        // εδώ θα αφαιρέσεις τα placeholders και θα καλέσεις τις δικές σου render* συναρτήσεις.
+      }catch(e){ alert('Fetch failed: '+e); $('#status').textContent='Error'; }
+    };
+  </script>
+</body>
+</html>
