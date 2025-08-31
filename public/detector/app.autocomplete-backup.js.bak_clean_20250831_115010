@@ -1,4 +1,4 @@
-﻿
+﻿/* injected: API_BASE for JS */
 const API_BASE = (typeof window!=="undefined" && window.API_BASE)
   ? window.API_BASE
   : ((location && location.hostname==="api.oramax.space")
@@ -238,7 +238,7 @@ const API_BASE = (typeof window!=="undefined" && window.API_BASE)
   });
 })();
 
-
+/* injected: normalizeSuggest + renderSuggest wrapper */
 function normalizeSuggest(list){
   return (list||[]).map(function(it){
     const title = it.title || it.label || it.text || it.subtitle
