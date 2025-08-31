@@ -2,6 +2,10 @@
   "version": 2,
   "rewrites": [
     {
+      "source": "/detector/api/health",
+      "destination": "https://api.oramax.space/exoplanet/health"
+    },
+    {
       "source": "/detector/api/:path*",
       "destination": "https://api.oramax.space/exoplanet/api/:path*"
     }
