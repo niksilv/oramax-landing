@@ -1,6 +1,30 @@
 ﻿<!doctype html>
 <html>
 <head>
+<script id="ora-api-base">
+(function(){
+  const API_BASE = location.pathname.startsWith('/detector')
+    ? '/detector/api'
+    : 'https://api.oramax.space/exoplanet/api';
+  window.__ORA_API_BASE__ = API_BASE;
+
+  const origFetch = window.fetch.bind(window);
+  window.fetch = (input, init) => {
+    try {
+      if (typeof input === 'string') {
+        const u = input.trim();
+        if (u.startsWith('api/') || u.startsWith('/api/')) {
+          const path = u.replace(/^\/?api\//,'');
+          return origFetch(`${API_BASE}/${path}`, init);
+        }
+      }
+    } catch(e) { /* no-op */ }
+    return origFetch(input, init);
+  };
+
+  console.log('Oramax API base:', API_BASE);
+})();
+</script>
   <meta charset="utf-8"/>
   <title>Orama X  Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -549,6 +573,7 @@ function labelOf(it){ if(typeof it==='string') return it; return it.label||it.na
 </script>
 </body>
 </html>
+
 
 
 
