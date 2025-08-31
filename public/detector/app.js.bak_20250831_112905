@@ -1,9 +1,3 @@
-﻿/* injected: API_BASE for JS */
-const API_BASE = (typeof window!=="undefined" && window.API_BASE)
-  ? window.API_BASE
-  : ((location && location.hostname==="api.oramax.space")
-      ? "/exoplanet/api"
-      : "https://api.oramax.space/exoplanet/api");
 // ---------- Helpers ----------
 function parseTxt(text){
   const lines = text.trim().split(/\r?\n/);
@@ -368,26 +362,3 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const fit = document.getElementById('fitBtn'); if(fit) fit.addEventListener('click', runFit);
   const pdf = document.getElementById('pdfBtn'); if(pdf) pdf.addEventListener('click', runPdf);
 });
-
-/* injected: normalizeSuggest + renderSuggest wrapper */
-function normalizeSuggest(list){
-  return (list||[]).map(function(it){
-    const title = it.title || it.label || it.text || it.subtitle
-      || (it.tic ? ("TIC " + it.tic) : "") || it.value || "";
-    const subtitle = it.subtitle || it.note
-      || (it.domain && (it.id||it.tic) ? (it.domain + " " + (it.id||it.tic)) : "")
-      || "";
-    const value = it.value || subtitle || (it.tic ? ("TIC " + it.tic) : "") || title;
-    return Object.assign({}, it, { title, subtitle, value });
-  });
-}
-(function(){
-  const g = (typeof window!=="undefined") ? window : this;
-  if (g && typeof g.renderSuggest === "function"){
-    const _orig = g.renderSuggest;
-    g.renderSuggest = function(data){
-      try{ data = Array.isArray(data && data.items) ? data.items : data; }catch(e){}
-      return _orig(normalizeSuggest(data));
-    };
-  }
-})();

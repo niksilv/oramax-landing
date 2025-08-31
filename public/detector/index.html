@@ -34,12 +34,33 @@
     .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
   </style>
 <script>
-  // --- OramaX: auto-detect API base so UI works both on www & on API host ---
+  // injected: API base for detector (browser)
+  window.API_BASE = (location.hostname === "api.oramax.space")
+    ? "/exoplanet/api"
+    : "https://api.oramax.space/exoplanet/api";
+</script>
+<script>
+  // injected: normalize suggestion items and wrap renderSuggest()
+  function normalizeSuggest(list){
+    return (list||[]).map(function(it){
+      var title = it.title || it.label || it.text || it.subtitle
+        || (it.tic ? ("TIC " + it.tic) : "") || it.value || "";
+      var subtitle = it.subtitle || it.note
+        || (it.domain && (it.id||it.tic) ? (it.domain + " " + (it.id||it.tic)) : "")
+        || "";
+      var value = it.value || subtitle || (it.tic ? ("TIC " + it.tic) : "") || title;
+      return Object.assign({}, it, { title: title, subtitle: subtitle, value: value });
+    });
+  }
   (function(){
-    const isApiHost = /(^|\.)oramax-exoplanet-api\.fly\.dev$/.test(location.hostname)
-                   || location.hostname === 'api.oramax.space';
-    window.API_BASE = isApiHost ? '/exoplanet/api'
-                                : 'https://api.oramax.space/exoplanet/api';
+    var g = (typeof window!=="undefined") ? window : this;
+    if (g && typeof g.renderSuggest === "function"){
+      var _orig = g.renderSuggest;
+      g.renderSuggest = function(data){
+        try{ data = Array.isArray(data && data.items) ? data.items : data; }catch(e){}
+        return _orig(normalizeSuggest(data));
+      };
+    }
   })();
 </script>
 </head>
@@ -360,7 +381,7 @@ async function runFetch(){
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
-    const res = await fetch($/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch(API_BASE + '/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget = data.target || target || url;
@@ -380,7 +401,7 @@ async function runUpload(){
     const txt = await file.text();
     const [T,F] = parseTxt(txt);
     const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
-    const res = await fetch($/detect?kpeaks=3', {method:'POST', body: form});
+    const res = await fetch(API_BASE + '/detect?kpeaks=3', {method:'POST', body: form});
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget='(Uploaded TXT)';
@@ -448,7 +469,7 @@ async function runFit(){
     const method = document.getElementById('fitMethod').value;
     const bootstrap = Number(document.getElementById('fitBoot').value || 80);
     const body = JSON.stringify({ time: lcTime, flux: lcFlux, candidate: { period: cand.period, t0: cand.t0, duration: cand.duration }, method, bootstrap });
-    const res = await fetch($/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch(API_BASE + '/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); fitStatus.textContent=''; return; }
     lastFit = { params: data.params, model_curve: data.model_curve };
@@ -482,7 +503,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch($/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch(API_BASE + '/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -533,5 +554,4 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
-
 
