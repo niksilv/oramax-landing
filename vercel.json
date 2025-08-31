@@ -1,6 +1,10 @@
-﻿{
+{
+  "version": 2,
   "rewrites": [
-    { "source": "/detector/api/:path*", "destination": "https://api.oramax.space/api/:path*" }
+    {
+      "source": "/detector/api/:path*",
+      "destination": "https://api.oramax.space/exoplanet/api/:path*"
+    }
   ],
   "headers": [
     {
