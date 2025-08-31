@@ -1,49 +1,6 @@
 ﻿<!doctype html>
 <html>
 <head>
-<script id="ora-api-base">
-(function(){
-  // default: περιμένουμε να δουλεύουν τα Vercel rewrites
-  let API_BASE = location.pathname.startsWith('/detector')
-    ? '/detector/api'
-    : 'https://api.oramax.space/exoplanet/api';
-
-  const origFetch = window.fetch.bind(window);
-  window.fetch = (input, init) => {
-    try {
-      if (typeof input === 'string') {
-        const u = input.trim();
-        // οποιοδήποτε fetch που ξεκινά με api/ ή /api/ ξαναγράφεται στο API_BASE
-        if (u.startsWith('api/') || u.startsWith('/api/')) {
-          const path = u.replace(/^\/?api\//,'');
-          return origFetch(`${API_BASE}/${path}`, init);
-        }
-      }
-    } catch(e) { /* ignore */ }
-    return origFetch(input, init);
-  };
-
-  // Fallback: αν τα rewrites δεν δουλεύουν (π.χ. 404 στο /detector/api/health),
-  // γύρνα σε πλήρες URL (Fly API πίσω από Cloudflare)
-  const tryUrl = `${API_BASE}/health`;
-  fetch(tryUrl, { method: 'GET' })
-    .then(r => {
-      if (!r.ok) throw new Error('bad status ' + r.status);
-      return r.json().catch(()=>({}));
-    })
-    .then(j => {
-      console.log('Oramax API base OK:', API_BASE, j);
-    })
-    .catch(() => {
-      API_BASE = 'https://api.oramax.space/exoplanet/api';
-      window.__ORA_API_BASE__ = API_BASE;
-      console.warn('Oramax: rewrites not working; using absolute API:', API_BASE);
-    });
-
-  window.__ORA_API_BASE__ = API_BASE;
-  console.log('Oramax API base (initial):', API_BASE);
-})();
-</script>
   <meta charset="utf-8"/>
   <title>Orama X  Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -76,25 +33,6 @@
     .note{ font-size:12.5px; color:#333; }
     .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
   </style>
-<script>
-    const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
-  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
-// Global bridge προς την παραγωγική API
-  window.API_BASE = (location.hostname === 'api.oramax.space' || location.origin.startsWith('https://api.oramax.space'))
-    ? '/exoplanet/api'
-    : 'https://api.oramax.space/exoplanet/api';
-</script>
-<script id="oramax-api-base">
-  (function () {
-    // Παρακάμπτουμε τα Vercel rewrites και μιλάμε κατευθείαν στο Fly
-    const ORIGIN = 'https://api.oramax.space';
-    // Health είναι εκτός /api
-    window.API_HEALTH = ORIGIN + '/exoplanet/health';
-    // Όλα τα υπόλοιπα είναι κάτω από /exoplanet/api/...
-    window.API_BASE = ORIGIN + '/exoplanet/api';
-  })();
-</script>
-
 </head>
 <body>
   <h1>Orama X  Exoplanet Detector</h1>
@@ -226,8 +164,6 @@
   </div>
 
 <script>
-  const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
-  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
 // ---------- Helpers ----------
 function parseTxt(text){
   const lines = text.trim().split(/\r?\n/);
@@ -415,7 +351,7 @@ async function runFetch(){
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
-    const res = await fetch(${API_BASE}/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch('api/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget = data.target || target || url;
@@ -435,7 +371,7 @@ async function runUpload(){
     const txt = await file.text();
     const [T,F] = parseTxt(txt);
     const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
-    const res = await fetch(${API_BASE}/detect?kpeaks=3', {method:'POST', body: form});
+    const res = await fetch('api/detect?kpeaks=3', {method:'POST', body: form});
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget='(Uploaded TXT)';
@@ -469,26 +405,27 @@ function exportCsv(rows, name){
 }
 
 // ---------- Autocomplete ----------
-const r = await apiFetch(`suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
-const data = await r.json();
-dl.innerHTML = '';
-
-(data.items || []).forEach(item => {
-  let value, label;
-
-  if (typeof item === 'string') {
-    value = label = item;
-  } else {
-    // ευέλικτα κλειδιά
-    value = item.value ?? item.id ?? item.code ?? item.name ?? '';
-    label = item.label ?? item.text ?? item.title ?? item.name ?? value;
-  }
-  if (!value) return;
-  const opt = document.createElement('option');
-  opt.value = value;
-  opt.label = label || value;   // ΠΟΤΕ "undefined"
-  dl.appendChild(opt);
-});
+function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
+const updateSuggest = debounce(async ()=>{
+  const src = document.getElementById('sourceSel').value;
+  const mission = document.getElementById('missionSel').value;
+  const input = document.getElementById('ticInput');
+  const q = input.value.trim();
+  const dl = document.getElementById('targetList');
+  if (src==='url' || q.length < 3){ dl.innerHTML=''; return; }
+  const dom = (mission==='Kepler') ? 'Kepler' : (mission==='TESS' ? 'TESS' : 'all');
+  try{
+    const r = await fetch(`api/suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
+    const data = await r.json();
+    dl.innerHTML = '';
+    (data.items||[]).forEach(item=>{
+      const opt = document.createElement('option');
+      opt.value = item.value;
+      opt.label = item.label;
+      dl.appendChild(opt);
+    });
+  }catch(e){ /* silent */ }
+} , 250);
 
 // ---------- Transit Fit (client-side trigger) ----------
 async function runFit(){
@@ -502,7 +439,7 @@ async function runFit(){
     const method = document.getElementById('fitMethod').value;
     const bootstrap = Number(document.getElementById('fitBoot').value || 80);
     const body = JSON.stringify({ time: lcTime, flux: lcFlux, candidate: { period: cand.period, t0: cand.t0, duration: cand.duration }, method, bootstrap });
-    const res = await fetch(${API_BASE}/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch('api/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); fitStatus.textContent=''; return; }
     lastFit = { params: data.params, model_curve: data.model_curve };
@@ -536,7 +473,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch(${API_BASE}/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch('api/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -585,18 +522,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('pdfBtn').addEventListener('click', runPdf);
 });
 </script>
-<script>
-    const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
-  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
-function labelOf(it){ if(typeof it==='string') return it; return it.label||it.name||it.title||it.tic||it.id||it.text||String(it); }
-</script>
 </body>
 </html>
-
-
-
-
-
-
-
-
