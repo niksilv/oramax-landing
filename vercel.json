@@ -1,0 +1,13 @@
+﻿{
+  "rewrites": [
+    { "source": "/detector/api/:path*", "destination": "https://api.oramax.space/api/:path*" }
+  ],
+  "headers": [
+    {
+      "source": "/detector/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}
