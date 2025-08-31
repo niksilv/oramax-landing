@@ -34,7 +34,9 @@
     .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
   </style>
 <script>
-  // Global bridge προς την παραγωγική API
+    const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
+  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
+// Global bridge προς την παραγωγική API
   window.API_BASE = (location.hostname === 'api.oramax.space' || location.origin.startsWith('https://api.oramax.space'))
     ? '/exoplanet/api'
     : 'https://api.oramax.space/exoplanet/api';
@@ -181,6 +183,8 @@
   </div>
 
 <script>
+  const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
+  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
 // ---------- Helpers ----------
 function parseTxt(text){
   const lines = text.trim().split(/\r?\n/);
@@ -422,27 +426,26 @@ function exportCsv(rows, name){
 }
 
 // ---------- Autocomplete ----------
-function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
-const updateSuggest = debounce(async ()=>{
-  const src = document.getElementById('sourceSel').value;
-  const mission = document.getElementById('missionSel').value;
-  const input = document.getElementById('ticInput');
-  const q = input.value.trim();
-  const dl = document.getElementById('targetList');
-  if (src==='url' || q.length < 3){ dl.innerHTML=''; return; }
-  const dom = (mission==='Kepler') ? 'Kepler' : (mission==='TESS' ? 'TESS' : 'all');
-  try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
-    const data = await r.json();
-    dl.innerHTML = '';
-    (data.items||[]).forEach(item=>{
-      const opt = document.createElement('option');
-      opt.value = item.value;
-      opt.label = item.label;
-      dl.appendChild(opt);
-    });
-  }catch(e){ /* silent */ }
-} , 250);
+const r = await apiFetch(`suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
+const data = await r.json();
+dl.innerHTML = '';
+
+(data.items || []).forEach(item => {
+  let value, label;
+
+  if (typeof item === 'string') {
+    value = label = item;
+  } else {
+    // ευέλικτα κλειδιά
+    value = item.value ?? item.id ?? item.code ?? item.name ?? '';
+    label = item.label ?? item.text ?? item.title ?? item.name ?? value;
+  }
+  if (!value) return;
+  const opt = document.createElement('option');
+  opt.value = value;
+  opt.label = label || value;   // ΠΟΤΕ "undefined"
+  dl.appendChild(opt);
+});
 
 // ---------- Transit Fit (client-side trigger) ----------
 async function runFit(){
@@ -540,10 +543,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
 });
 </script>
 <script>
-  function labelOf(it){ if(typeof it==='string') return it; return it.label||it.name||it.title||it.tic||it.id||it.text||String(it); }
+    const API_BASE = location.pathname.startsWith('/detector') ? '/detector/api' : 'https://api.oramax.space/exoplanet/api';
+  const apiFetch = (path, init) => fetch(${API_BASE}\\, init);
+function labelOf(it){ if(typeof it==='string') return it; return it.label||it.name||it.title||it.tic||it.id||it.text||String(it); }
 </script>
 </body>
 </html>
+
 
 
 
