@@ -3,26 +3,45 @@
 <head>
 <script id="ora-api-base">
 (function(){
-  const API_BASE = location.pathname.startsWith('/detector')
+  // default: περιμένουμε να δουλεύουν τα Vercel rewrites
+  let API_BASE = location.pathname.startsWith('/detector')
     ? '/detector/api'
     : 'https://api.oramax.space/exoplanet/api';
-  window.__ORA_API_BASE__ = API_BASE;
 
   const origFetch = window.fetch.bind(window);
   window.fetch = (input, init) => {
     try {
       if (typeof input === 'string') {
         const u = input.trim();
+        // οποιοδήποτε fetch που ξεκινά με api/ ή /api/ ξαναγράφεται στο API_BASE
         if (u.startsWith('api/') || u.startsWith('/api/')) {
           const path = u.replace(/^\/?api\//,'');
           return origFetch(`${API_BASE}/${path}`, init);
         }
       }
-    } catch(e) { /* no-op */ }
+    } catch(e) { /* ignore */ }
     return origFetch(input, init);
   };
 
-  console.log('Oramax API base:', API_BASE);
+  // Fallback: αν τα rewrites δεν δουλεύουν (π.χ. 404 στο /detector/api/health),
+  // γύρνα σε πλήρες URL (Fly API πίσω από Cloudflare)
+  const tryUrl = `${API_BASE}/health`;
+  fetch(tryUrl, { method: 'GET' })
+    .then(r => {
+      if (!r.ok) throw new Error('bad status ' + r.status);
+      return r.json().catch(()=>({}));
+    })
+    .then(j => {
+      console.log('Oramax API base OK:', API_BASE, j);
+    })
+    .catch(() => {
+      API_BASE = 'https://api.oramax.space/exoplanet/api';
+      window.__ORA_API_BASE__ = API_BASE;
+      console.warn('Oramax: rewrites not working; using absolute API:', API_BASE);
+    });
+
+  window.__ORA_API_BASE__ = API_BASE;
+  console.log('Oramax API base (initial):', API_BASE);
 })();
 </script>
   <meta charset="utf-8"/>
@@ -573,6 +592,7 @@ function labelOf(it){ if(typeof it==='string') return it; return it.label||it.na
 </script>
 </body>
 </html>
+
 
 
 
