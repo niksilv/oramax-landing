@@ -39,6 +39,17 @@
     ? '/exoplanet/api'
     : 'https://api.oramax.space/exoplanet/api';
 </script>
+<script id="oramax-api-base">
+  (function () {
+    // Παρακάμπτουμε τα Vercel rewrites και μιλάμε κατευθείαν στο Fly
+    const ORIGIN = 'https://api.oramax.space';
+    // Health είναι εκτός /api
+    window.API_HEALTH = ORIGIN + '/exoplanet/health';
+    // Όλα τα υπόλοιπα είναι κάτω από /exoplanet/api/...
+    window.API_BASE = ORIGIN + '/exoplanet/api';
+  })();
+</script>
+
 </head>
 <body>
   <h1>Orama X  Exoplanet Detector</h1>
@@ -530,5 +541,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
+
 
 
