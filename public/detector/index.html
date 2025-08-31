@@ -32,36 +32,12 @@
     .badge-beb{ background:#ffe6e6; border-color:#ffb3b3; color:#b30000; }
     .note{ font-size:12.5px; color:#333; }
     .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
-  </style><script>
-(function(){
-  var ABS = (location.hostname === "api.oramax.space")
-    ? "/exoplanet/api"
-    : "https://api.oramax.space/exoplanet/api";
-  window.API_BASE = ABS;
-
-  function resolveApi(u){
-    try{
-      if (!u || typeof u!=="string") return u;
-      if (/^https?:\/\//i.test(u)) return u;            // ήδη absolute
-      u = u.replace(/^\.\//,"").replace(/^\/+/,"");     // βγάλε ./ και leading /
-      if (u.startsWith("api/"))                         // api/xxx -> ABS/xxx
-        return ABS.replace(/\/$/,"") + "/" + u.replace(/^api\//,"");
-      return u;
-    }catch(e){ return u; }
-  }
-
-  var _fetch = window.fetch;
-  window.fetch = function(input, init){
-    try{
-      if (typeof input === "string"){
-        input = resolveApi(input);
-      } else if (input && typeof input.url === "string"){
-        input = new Request(resolveApi(input.url), input);
-      }
-    }catch(e){}
-    return _fetch(input, init);
-  };
-})();
+  </style>
+<script>
+  // Global bridge προς την παραγωγική API
+  window.API_BASE = (location.hostname === 'api.oramax.space' || location.origin.startsWith('https://api.oramax.space'))
+    ? '/exoplanet/api'
+    : 'https://api.oramax.space/exoplanet/api';
 </script>
 </head>
 <body>
@@ -381,7 +357,7 @@ async function runFetch(){
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
-    const res = await fetch(API_BASE + '/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch(${API_BASE}/fetch_detect', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget = data.target || target || url;
@@ -401,7 +377,7 @@ async function runUpload(){
     const txt = await file.text();
     const [T,F] = parseTxt(txt);
     const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
-    const res = await fetch(API_BASE + '/detect?kpeaks=3', {method:'POST', body: form});
+    const res = await fetch(${API_BASE}/detect?kpeaks=3', {method:'POST', body: form});
     const data = await res.json();
     if(data.error){ alert(data.error); status.textContent=''; return; }
     currentTarget='(Uploaded TXT)';
@@ -445,7 +421,7 @@ const updateSuggest = debounce(async ()=>{
   if (src==='url' || q.length < 3){ dl.innerHTML=''; return; }
   const dom = (mission==='Kepler') ? 'Kepler' : (mission==='TESS' ? 'TESS' : 'all');
   try{
-    const r = await fetch(`api/suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
+    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}&domain=${dom}&limit=10`);
     const data = await r.json();
     dl.innerHTML = '';
     (data.items||[]).forEach(item=>{
@@ -469,7 +445,7 @@ async function runFit(){
     const method = document.getElementById('fitMethod').value;
     const bootstrap = Number(document.getElementById('fitBoot').value || 80);
     const body = JSON.stringify({ time: lcTime, flux: lcFlux, candidate: { period: cand.period, t0: cand.t0, duration: cand.duration }, method, bootstrap });
-    const res = await fetch(API_BASE + '/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch(${API_BASE}/fit_transit', { method:'POST', headers:{'Content-Type':'application/json'}, body });
     const data = await res.json();
     if(data.error){ alert(data.error); fitStatus.textContent=''; return; }
     lastFit = { params: data.params, model_curve: data.model_curve };
@@ -503,7 +479,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch(API_BASE + '/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch(${API_BASE}/report_pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -554,4 +530,5 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
+
 
