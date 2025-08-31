@@ -1,21 +1,5 @@
-{
-  "version": 2,
+﻿{
   "rewrites": [
-    {
-      "source": "/detector/api/health",
-      "destination": "https://api.oramax.space/exoplanet/health"
-    },
-    {
-      "source": "/detector/api/:path*",
-      "destination": "https://api.oramax.space/exoplanet/api/:path*"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/detector/:path*",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
-      ]
-    }
+    { "source": "/detector/api/:path*", "destination": "https://api.oramax.space/exoplanet/api/:path*" }
   ]
 }
