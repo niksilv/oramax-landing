@@ -539,8 +539,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('pdfBtn').addEventListener('click', runPdf);
 });
 </script>
+<script>
+  function labelOf(it){ if(typeof it==='string') return it; return it.label||it.name||it.title||it.tic||it.id||it.text||String(it); }
+</script>
 </body>
 </html>
+
 
 
 
