@@ -188,5 +188,3 @@ async function onFetchAndDetect() {
 // Expose
 window.onFetchAndDetect = onFetchAndDetect;
 window.onFitSelected = onFitSelected;
-
-

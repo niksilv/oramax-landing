@@ -4,8 +4,7 @@
   <meta charset="utf-8"/>
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js">updateMlBadge && updateMlBadge();
-</script>
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   <style>
     :root{ --card:#fff; --border:#e5e7eb; --muted:#666; }
     *{ box-sizing:border-box }
@@ -48,24 +47,10 @@
 .hidden{display:none}
 </style>
 
-      <script defer src="/oramax-ml-toggle.js">updateMlBadge && updateMlBadge();
-</script>
+      <script defer src="/ormax-ml-toggle.js"></script>
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
 </head>
 <body>
-
-<script>
-window.updateMlBadge = function(){
-  const el = document.getElementById('mlBadge') || document.querySelector('[data-ml-badge]');
-  if(!el) return;
-  const m = (localStorage.getItem('OramaxML.method') || 'BLS').toUpperCase();
-  el.textContent = (m === 'CNN') ? 'CNN mode' : 'BLS mode';
-  el.classList.toggle('is-cnn', m === 'CNN');
-  el.classList.toggle('is-bls',  m !== 'CNN');
-};
-document.addEventListener('DOMContentLoaded', window.updateMlBadge);
-</script>
-
 
 <script>
 if ('serviceWorker' in navigator) {
@@ -73,7 +58,6 @@ if ('serviceWorker' in navigator) {
     .then(() => console.log('OramaX SW proxy ready (reg)'))
     .catch(err => console.error('SW register failed', err));
 }
-updateMlBadge && updateMlBadge();
 </script>
 
 
@@ -207,7 +191,7 @@ updateMlBadge && updateMlBadge();
 
 <script>
 /* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-const API_BASE = "http://localhost:8000/exoplanet";
+const API_BASE = 'http://localhost:8000/exoplanet';
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -302,29 +286,6 @@ function busySet(percent,label){
   if(bar){ if(typeof percent==='number'){ bar.style.background='linear-gradient(90deg,#e6e6e6 '+percent+'%, #f7f7f7 '+percent+'%)'; bar.style.setProperty('--p', percent+'%'); } }
 }
 function busyDone(){ const b=document.getElementById('busy'); if(b){ b.classList.add('hidden'); b.style.display='none'; } }
-
-// Busy/progress simulation loop
-let _busyTimer=null, _busyVal=0;
-function busyAdvance(max=90, label){
-  clearInterval(_busyTimer);
-  _busyVal=0;
-  const txt=document.getElementById('busyTxt');
-  const pct=document.getElementById('busyPct');
-  const bar=document.getElementById('busyBar');
-  _busyTimer=setInterval(()=>{
-    _busyVal=Math.min(max, _busyVal+1+Math.random()*2);
-    if(txt && label) txt.textContent=label;
-    if(pct) pct.textContent=` ${_busyVal|0}%`;
-    if(bar){ bar.style.background=`linear-gradient(90deg,#e6e6e6 ${_busyVal}%, #f7f7f7 ${_busyVal}%)`; }
-    if(_busyVal>=max) clearInterval(_busyTimer);
-  },120);
-}
-function busyStop(){
-  clearInterval(_busyTimer);
-  _busyTimer=null;
-  busyDone();
-}
-
 // ML badge
 function updateMlBadge(){
   const b=document.getElementById('mlBadge');
@@ -410,17 +371,12 @@ function selectCandidate(i){
 function renderAll(T, F, candidates, neighbors){
   lcTime=T; lcFlux=F; lastCands=candidates||[]; selectedIdx=0;
   lastNeighbors = neighbors || null;
-  busySet(70,'Rendering light curve…');
   renderLC(T,F, lastCands[0]?.windows?.intervals || []);
-  busySet(82,'Rendering phase-folded…');
   renderPF(T,F, lastCands[0]);
-  busySet(88,'Computing centroid info…');
   renderCentroidInfo(lastCands[0]?.centroid, getSigmaThr(), getRhoThr());
-  busySet(92,'Populating candidates table…');
   renderTable(lastCands);
-  busySet(96,'Rendering neighbors…');
   renderNeighbors(neighbors);
-  busySet(100,'Done'); busyDone();}
+}
 
 /* ---------- NEW: normalize backend candidates to UI shape ---------- */
 function normalizeCandidates(cands){
@@ -484,7 +440,7 @@ function toggleInputs(){
 async function runFetch(){
   const status = document.getElementById('status');
   try{
-    busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
+    busyStart('Fetching light curve…'); status.textContent = 'Fetching...';
     const source = document.getElementById('sourceSel').value;
     const mission = document.getElementById('missionSel').value;
     const target = document.getElementById('ticInput').value.trim();
@@ -503,7 +459,7 @@ async function runFetch(){
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
     const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    const data = await res.json(); busySet(60,'Processing & BLS…');
     if(data.error){ alert(data.error); status.textContent='Error'; return; }
 
     currentTarget = data.target || target || url;
@@ -512,7 +468,7 @@ async function runFetch(){
     const candNorm = normalizeCandidates(data.candidates || []);
     renderAll(data.time, data.flux, candNorm, data.neighbors);
 
-    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+    busySet(95,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyDone(), 450); updateMlBadge();
   } catch(e){ status.textContent = 'Error'; console.error(e); }
 }
 
@@ -528,14 +484,14 @@ async function runUpload(){
     const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
     const res = await fetch(`${API_BASE}/predict-file?kpeaks=3`, {method:'POST', body: form});
     if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    const data = await res.json(); busySet(60,'Processing & BLS…');
     if(data.error){ alert(data.error); status.textContent='Error'; return; }
     currentTarget='(Uploaded TXT)';
     lastPreproc = {source:'upload'};
     lastNeighbors = null;
     const candNorm = normalizeCandidates(data.candidates || []);
     renderAll(T,F,candNorm, null);
-    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+    busySet(95,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyDone(), 450); updateMlBadge();
   } catch(e){ status.textContent = 'Error'; console.error(e); }
 }
 
@@ -653,7 +609,7 @@ async function runFit(){
 
     const res = await fetch(`${API_BASE}/predict`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ fitStatus.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    const data = await res.json(); busySet(60,'Processing & BLS…');
 
     // Μετατρέπουμε phase→“ψευδο-time” για να εμφανιστεί σωστά το overlay στο phase plot
     const P = data?.params?.period ?? cand.period;
@@ -740,7 +696,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('fitBtn').addEventListener('click', runFit);
   document.getElementById('pdfBtn').addEventListener('click', runPdf);
 });
-updateMlBadge && updateMlBadge();
 </script>
 
 <script id="neighbors-addon">
@@ -859,11 +814,11 @@ updateMlBadge && updateMlBadge();
       }
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+      const data = await res.json(); busySet(60,'Processing & BLS…');
       const nei = normalizeNeighbors(data.neighbors || data, radius);
       window.lastNeighbors = nei;
       renderNeighborsSafe(nei);
-      busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+      busySet(95,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyDone(), 450); updateMlBadge();
     } catch(e){
       console.error(e);
       status.textContent = 'Error';
@@ -898,7 +853,6 @@ updateMlBadge && updateMlBadge();
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors = renderNeighborsSafe;
 })();
-updateMlBadge && updateMlBadge();
 </script>
 
 <script>
@@ -1105,7 +1059,6 @@ updateMlBadge && updateMlBadge();
     }
   };
 })();
-updateMlBadge && updateMlBadge();
 </script>
 
 <script>
@@ -1128,10 +1081,8 @@ document.addEventListener('DOMContentLoaded', () => {
     else alert('PDF generator function not found.');
   });
 });
-updateMlBadge && updateMlBadge();
 </script>
 
-    <script src="/detector/engine-toggle.js">updateMlBadge && updateMlBadge();
-</script>
+    <script src="/detector/engine-toggle.js"></script>
 </body>
 </html>

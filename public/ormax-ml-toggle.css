@@ -1,0 +1,17 @@
+﻿/* ORAMAX CNN button visibility fix */
+#ormx-cnn-btn{
+  color:#111 !important;
+  background:#fff !important;
+  border:1px solid #cfcfcf !important;
+  font: 600 14px system-ui,-apple-system,Segoe UI,Roboto !important;
+  text-shadow:none !important;
+  min-width:120px !important;
+  text-align:center !important;
+  box-shadow: 0 4px 14px rgba(0,0,0,.12) !important;
+  z-index: 9999 !important;
+}
+/* Αν (για οποιονδήποτε λόγο) δεν υπάρχει text στο κουμπί, βάλε fallback label */
+#ormx-cnn-btn:empty::before { content: "CNN (beta)"; }
+
+/* Panel βασικό contrast ώστε να φαίνονται τα γράμματα σε light themes */
+#ormx-cnn-panel{ color:#111 !important; background:#fff !important; }

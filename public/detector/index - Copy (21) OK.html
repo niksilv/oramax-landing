@@ -48,24 +48,11 @@
 .hidden{display:none}
 </style>
 
-      <script defer src="/oramax-ml-toggle.js">updateMlBadge && updateMlBadge();
+      <script defer src="/ormax-ml-toggle.js">updateMlBadge && updateMlBadge();
 </script>
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
 </head>
 <body>
-
-<script>
-window.updateMlBadge = function(){
-  const el = document.getElementById('mlBadge') || document.querySelector('[data-ml-badge]');
-  if(!el) return;
-  const m = (localStorage.getItem('OramaxML.method') || 'BLS').toUpperCase();
-  el.textContent = (m === 'CNN') ? 'CNN mode' : 'BLS mode';
-  el.classList.toggle('is-cnn', m === 'CNN');
-  el.classList.toggle('is-bls',  m !== 'CNN');
-};
-document.addEventListener('DOMContentLoaded', window.updateMlBadge);
-</script>
-
 
 <script>
 if ('serviceWorker' in navigator) {
@@ -207,7 +194,7 @@ updateMlBadge && updateMlBadge();
 
 <script>
 /* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-const API_BASE = "http://localhost:8000/exoplanet";
+const API_BASE = 'http://localhost:8000/exoplanet';
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){

@@ -189,4 +189,3 @@ async function onFetchAndDetect() {
 window.onFetchAndDetect = onFetchAndDetect;
 window.onFitSelected = onFitSelected;
 
-
