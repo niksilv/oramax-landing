@@ -168,7 +168,7 @@
 
 <script>
 // ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) =====
-const API_BASE = '/detector/api';
+const API_BASE = window.API_BASE;
 
 // ---------- Helpers ----------
 function parseTxt(text){
@@ -575,5 +575,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 </body>
 </html>
+
+
 
 

@@ -1,9 +1,5 @@
 ﻿
-const API_BASE = (typeof window!=="undefined" && window.API_BASE)
-  ? window.API_BASE
-  : ((location && location.hostname==="api.oramax.space")
-      ? "/exoplanet/api"
-      : "https://api.oramax.space/exoplanet/api");
+const API_BASE = window.API_BASE;
 /* AUTOCOMPLETE_V3 + neighbors bridge (utf8) */
 (function () {
   function qs(s) { return document.querySelector(s); }
@@ -137,3 +133,4 @@ function normalizeSuggest(list){
     };
   }
 })();
+

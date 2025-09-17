@@ -179,7 +179,7 @@ if ('serviceWorker' in navigator) {
 
 <script>
 /* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-const API_BASE = 'http://localhost:8000/exoplanet';
+const API_BASE = window.API_BASE;
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -1062,3 +1062,5 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="/detector/engine-toggle.js"></script>
 </body>
 </html>
+
+

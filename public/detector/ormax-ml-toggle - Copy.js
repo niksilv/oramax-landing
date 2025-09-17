@@ -47,7 +47,7 @@
       return { time, flux };
     }
     async function callAPI(payload) {
-      const url = "http://127.0.0.1:8000/exoplanet/ml/score_lightcurve";
+      const url = "window.API_BASEml/score_lightcurve";
       const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
       if (!r.ok) throw new Error(\`HTTP \${r.status}\`); return r.json();
     }
@@ -97,3 +97,5 @@
     onReady();
   }
 })();
+
+

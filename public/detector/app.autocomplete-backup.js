@@ -1,9 +1,5 @@
 ﻿
-const API_BASE = (typeof window!=="undefined" && window.API_BASE)
-  ? window.API_BASE
-  : ((location && location.hostname==="api.oramax.space")
-      ? "/exoplanet/api"
-      : "https://api.oramax.space/exoplanet/api");
+const API_BASE = window.API_BASE;
 /* Exoplanet Detector  static UI glue (autocomplete, fetch&detect, plots, table)
    Works with Next/Vercel rewrites at /api/<api_prefix>/...
 */
@@ -260,3 +256,4 @@ function normalizeSuggest(list){
     };
   }
 })();
+

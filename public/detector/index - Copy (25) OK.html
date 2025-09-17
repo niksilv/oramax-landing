@@ -194,7 +194,7 @@ updateMlBadge && updateMlBadge();
 
 <script>
 /* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-const API_BASE = 'http://localhost:8000/exoplanet';
+const API_BASE = window.API_BASE;
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -1122,3 +1122,5 @@ updateMlBadge && updateMlBadge();
 </script>
 </body>
 </html>
+
+

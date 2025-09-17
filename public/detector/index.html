@@ -52,6 +52,7 @@
 </script>
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
   <script src="=20250917202852"></script>
+  <script src="api-base.js?v=20250917235554"></script>
 </head>
 <body>
 
@@ -208,7 +209,7 @@ updateMlBadge && updateMlBadge();
 
 <script>
 /* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-const API_BASE = "http://localhost:8000/exoplanet";
+const API_BASE = window.API_BASE;
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -1136,5 +1137,9 @@ updateMlBadge && updateMlBadge();
 </script>
 </body>
 </html>
+
+
+
+
 
 

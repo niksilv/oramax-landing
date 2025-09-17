@@ -1,7 +1,5 @@
 ﻿// ===== API base (LOCAL + PROD) =====
-const API_BASE = (typeof location !== "undefined" && location.pathname.startsWith('/detector'))
-  ? '/detector/api'                              // local vercel dev proxy → localhost:8000/exoplanet/...
-  : 'https://api.oramax.space/exoplanet';        // production host (χωρίς extra /api)
+const API_BASE = window.API_BASE;        // production host (χωρίς extra /api)
 
 // ---------- Helpers ----------
 function parseTxt(text){
@@ -556,3 +554,5 @@ function applySuggestion(s, input){ if(!s) return; input.value = s.value || s.la
 window.addEventListener('resize', ()=>{ const i=document.getElementById('tic'); if(i) placeSuggestMenu(i); });
 window.addEventListener('scroll', ()=>{ const i=document.getElementById('tic'); if(i && __SUGG_OPEN) placeSuggestMenu(i); }, true);
 document.addEventListener('click', (e)=>{ const m=document.getElementById('suggMenu'); const i=document.getElementById('tic'); if(!m||!i) return; if(e.target!==i && !m.contains(e.target)) hideSuggest(); });
+
+

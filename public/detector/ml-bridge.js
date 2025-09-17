@@ -1,4 +1,4 @@
-// Απλή γέφυρα μεταξύ score_lightcurve και report/pdf
+﻿// Απλή γέφυρα μεταξύ score_lightcurve και report/pdf
 window.ORAMAX_ML = {
   engine: localStorage.getItem('oramax_engine') || 'bls',
   lastScore: null,  // θα κρατάει {engine, meta, pfold, candidates...}
@@ -25,3 +25,5 @@ window.ORAMAX_ML = {
     return payload;
   }
 };
+
+
