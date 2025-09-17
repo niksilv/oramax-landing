@@ -50,7 +50,7 @@
     if (cb) {
       var isCheckbox = (cb.type === "checkbox");
       if (isCheckbox) cb.checked = state;
-      cb.addEventListener("click", function __fix__(){
+      cb.addEventListener("click", function(){
         setMlEnabled(isCheckbox ? cb.checked : !state);
       });
     }
@@ -63,7 +63,3 @@
     wireControls();
   }
 })();
-
-
-
-

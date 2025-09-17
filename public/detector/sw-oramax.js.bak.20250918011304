@@ -1,7 +1,7 @@
 ﻿// OramaX SW proxy v42 — PDF always client-side, Gaia robust fallbacks
 const VERSION = 'v42';
 const BACKENDS = [
-  self.API_BASE, // new-style
+  window.API_BASE, // new-style
   'http://127.0.0.1:8000'            // legacy root
 ];
 
@@ -210,8 +210,6 @@ function makePdf({ title, lines }) {
 }
 
 console.log(`OramaX SW proxy ready (${VERSION})`);
-
-
 
 
 

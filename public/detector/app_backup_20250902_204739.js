@@ -556,3 +556,8 @@ window.addEventListener('scroll', ()=>{ const i=document.getElementById('tic'); 
 document.addEventListener('click', (e)=>{ const m=document.getElementById('suggMenu'); const i=document.getElementById('tic'); if(!m||!i) return; if(e.target!==i && !m.contains(e.target)) hideSuggest(); });
 
 
+
+
+
+
+

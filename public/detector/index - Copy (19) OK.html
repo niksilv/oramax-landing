@@ -182,7 +182,7 @@ if ('serviceWorker' in navigator) {
 const API_BASE = window.API_BASE;
     const isLocal = /^(localhost|127\.0\.0\.1)$/i.test(h);
     // Local dev: FastAPI on :8000
-    if (isLocal) return 'window.API_BASE';
+    if (isLocal) return window.API_BASE;
     // Production / same-origin reverse proxy: serve under /exoplanet
     return '/exoplanet';
   }catch(_){
@@ -1059,5 +1059,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <script src="/detector/engine-toggle.js"></script>
 </body>
 </html>
+
+
+
+
 
 

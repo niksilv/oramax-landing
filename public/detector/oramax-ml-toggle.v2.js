@@ -1,6 +1,5 @@
 ﻿/**
- * OramaX ML Toggle + Badge (safe, self-contained)
- * Exports: window.updateMlBadge, window.setMlEnabled, window.getMlEnabled
+ * OramaX ML Toggle + Badge (safe)
  */
 (function () {
   var LS_KEY = "oramax_ml_enabled";
@@ -13,7 +12,7 @@
     if (!el) {
       el = document.createElement("span");
       el.id = "ml-badge";
-      el.style.cssText = "display:inline-block;margin-left:8px;padding:2px 8px;border-radius:12px;font:12px/18px system-ui, sans-serif;background:#eee;color:#333;vertical-align:middle;";
+      el.style.cssText = "display:inline-block;margin-left:8px;padding:2px 8px;border-radius:12px;font:12px/18px system-ui,sans-serif;background:#eee;color:#333;vertical-align:middle;";
       var host = document.querySelector("[data-ml-badge-host]") || document.body;
       host.appendChild(el);
     }
@@ -31,21 +30,19 @@
     state = !!next;
     try { localStorage.setItem(LS_KEY, state ? "1" : "0"); } catch(e){}
     updateMlBadge();
-    var ev;
-    try { ev = new CustomEvent("oramax:ml-toggle", { detail: { enabled: state } }); }
-    catch(e){ ev = document.createEvent("CustomEvent"); ev.initCustomEvent("oramax:ml-toggle", true, true, { enabled: state }); }
-    window.dispatchEvent(ev);
+    try {
+      var ev = new CustomEvent("oramax:ml-toggle", { detail: { enabled: state } });
+      window.dispatchEvent(ev);
+    } catch(_) {}
   }
 
   function getMlEnabled() { return !!state; }
 
-  // Expose APIs
   window.updateMlBadge = updateMlBadge;
-  window.setMlEnabled = setMlEnabled;
-  window.getMlEnabled = getMlEnabled;
+  window.setMlEnabled  = setMlEnabled;
+  window.getMlEnabled  = getMlEnabled;
 
-  // Wire UI controls if exist (checkbox or button)
-  function wireControls() {
+  function wire() {
     var cb = document.querySelector("#ml-toggle, [data-ml-toggle]");
     if (cb) {
       var isCheckbox = (cb.type === "checkbox");
@@ -57,13 +54,9 @@
     updateMlBadge();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", wireControls);
-  } else {
-    wireControls();
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
+  else wire();
 })();
-
 
 
 

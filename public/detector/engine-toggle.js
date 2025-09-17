@@ -15,7 +15,7 @@
     var optC = document.createElement("option"); optC.value = "cnn"; optC.textContent = "CNN";
     sel.appendChild(optB); sel.appendChild(optC);
     var KEY = "oramax_engine"; var init = localStorage.getItem(KEY) || "bls"; sel.value = init;
-    sel.addEventListener("change", function(){ localStorage.setItem(KEY, sel.value); window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } })); });
+    sel.addEventListener("change", function __fix__(){ localStorage.setItem(KEY, sel.value); window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } })); });
     box.appendChild(label); box.appendChild(sel); document.body.appendChild(box);
   }
 
@@ -86,6 +86,11 @@
   document.addEventListener("DOMContentLoaded", ensureEngineUI);
 })();
 console.log("engine-toggle (paths+top-right) loaded");
+
+
+
+
+
 
 
 
