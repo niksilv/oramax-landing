@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/detector/api/(.*)", "destination": "http://localhost:8000/exoplanet/$1" },
+    { "source": "/api/(.*)",          "destination": "http://localhost:8000/exoplanet/$1" }
+  ],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+  ],
+  "cleanUrls": true
+}
