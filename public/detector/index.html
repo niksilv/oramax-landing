@@ -280,7 +280,10 @@ if ('serviceWorker' in navigator) {
 
 <script>
 // ===== API base (dynamic) =====
-const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:8000/exoplanet' : (location.origin + '/api/exoplanet');
+const API_BASE =
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/exoplanet'
+    : (location.origin + '/api/exoplanet');
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -981,16 +984,46 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // ---- Fetch μόνο για neighbors (γρήγορο) ----
   async function fetchNeighborsOnly() {
-    const status = document.getElementById('status');
-    const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    const radius = Number(document.getElementById('neiRadius')?.value || 60);
-    if (!target) return;
+  const status = document.getElementById('status');
+  const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
+  const radius = Number(document.getElementById('neiRadius')?.value || 60);
+  if (!target) return;
 
-    try{
-      status.textContent = 'Neighbors…';
+  try{
+    status.textContent = 'Neighbors';
 
-      // 1) Προσπάθησε dedicated endpoint
-      let res = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${radius}`, {
+    // ΠΑΝΤΑ γρήγορο POST στο fetch_detect μόνο για neighbors
+    const body = JSON.stringify({
+      source:  document.getElementById('sourceSel')?.value || 'mast_spoc',
+      mission: document.getElementById('missionSel')?.value || 'TESS',
+      target, kpeaks: 0,
+      detrend: 'none', quality: false, remove_outliers: false,
+      neighbors: true, neighbors_radius: radius,
+      centroid: false
+    });
+
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json(); busySet(55,'Processing'); busyAdvance(90,'Processing');
+    const nei = (function normalizeNeighbors(nei, defaultRadius){
+      if (!nei) return { available:false, reason:'n/a' };
+      if (typeof nei.available === 'boolean') { if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius; return nei; }
+      if (Array.isArray(nei)) return { available:true, radius_arcsec: defaultRadius, items: nei };
+      const items = nei.items || nei.sources || nei.data || [];
+      return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
+    })(data.neighbors || data, radius);
+
+    window.lastNeighbors = nei;
+    renderNeighbors(nei);
+    busyAdvance(98,'Rendering'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+  } catch(e){
+    console.error(e);
+    status.textContent = 'Error';
+  }
+}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${radius}`, {
         headers:{'Accept':'application/json'}
       });
 
@@ -1300,6 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
