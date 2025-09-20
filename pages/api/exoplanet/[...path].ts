@@ -7,18 +7,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ error: 'ORAMAX_API_BASE is not set' });
     return;
   }
+
   const tail = ((req.query.path as string[]) || []).join('/');
-  const url = ${TARGET.replace(/\/+$/, '')}/;
+  const url = `${TARGET.replace(/\/+$/,'')}/${tail}`;
 
   const init: RequestInit = {
     method: req.method,
-    // προώθηση βασικών headers (όχι host/cookie)
     headers: {
       'content-type': (req.headers['content-type'] as string) || '',
       'accept': (req.headers['accept'] as string) || 'application/json'
     } as any,
-    // σώμα μόνο για methods με body
-    body: ['POST','PUT','PATCH'].includes(req.method || '') 
+    body: ['POST','PUT','PATCH'].includes(req.method || '')
       ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
       : undefined,
   };
