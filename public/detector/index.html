@@ -127,7 +127,7 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?b=43', { scope: '/detector/' })
+  navigator.serviceWorker.register('/detector/sw-oramax.js?b=44', { scope: '/detector/' })
     .then(() => console.log('OramaX SW proxy ready (reg)'))
     .catch(err => console.error('SW register failed', err));
 }
@@ -279,12 +279,8 @@ if ('serviceWorker' in navigator) {
   </div>
 
 <script>
-/* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
-<script>
-const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-  ? 'http://localhost:8000/exoplanet'
-  : '/api/exoplanet';
-</script>
+// ===== API base (dynamic) =====
+const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:8000/exoplanet' : '/api/exoplanet';
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
@@ -1304,5 +1300,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
