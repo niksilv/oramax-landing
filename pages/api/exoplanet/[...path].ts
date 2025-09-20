@@ -1,6 +1,6 @@
 ﻿import type { NextApiRequest, NextApiResponse } from 'next';
 
-const TARGET = process.env.ORAMAX_API_BASE; // π.χ. https://api.oramax.space/exoplanet
+const TARGET: string | undefined = process.env.ORAMAX_API_BASE; // π.χ. https://api.oramax.space/exoplanet
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (!TARGET) {
@@ -8,28 +8,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
 
-  const tail = ((req.query.path as string[]) || []).join('/');
-  const url = `${TARGET.replace(/\/+$/,'')}/${tail}`;
+  const raw = req.query.path;
+  const parts = Array.isArray(raw) ? raw : (raw ? [String(raw)] : []);
+  const tail = parts.filter(Boolean).join('/');
+
+  const url = `${TARGET.replace(/\/+$/, '')}/${tail}`;
+
+  const headers: Record<string, string> = {};
+  const contentType = req.headers['content-type'];
+  const accept = req.headers['accept'];
+  if (typeof contentType === 'string') headers['content-type'] = contentType;
+  if (typeof accept === 'string') headers['accept'] = accept;
 
   const init: RequestInit = {
     method: req.method,
-    headers: {
-      'content-type': (req.headers['content-type'] as string) || '',
-      'accept': (req.headers['accept'] as string) || 'application/json'
-    } as any,
-    body: ['POST','PUT','PATCH'].includes(req.method || '')
-      ? (typeof req.body === 'string' ? req.body : JSON.stringify(req.body))
-      : undefined,
+    headers
   };
 
+  if (req.method && ['POST', 'PUT', 'PATCH'].includes(req.method)) {
+    const bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    (init as RequestInit & { body?: string }).body = bodyStr;
+  }
+
   try {
-    const r = await fetch(url, init as any);
-    const ct = r.headers.get('content-type') || 'application/octet-stream';
-    const buf = Buffer.from(await r.arrayBuffer());
-    res.status(r.status);
-    res.setHeader('content-type', ct);
+    const upstream = await fetch(url, init);
+    const upstreamCT = upstream.headers.get('content-type') || 'application/octet-stream';
+    const arrayBuf = await upstream.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+
+    res.status(upstream.status);
+    res.setHeader('content-type', upstreamCT);
     res.send(buf);
-  } catch (e: any) {
-    res.status(502).json({ error: 'Proxy failed', detail: String(e?.message || e) });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    res.status(502).json({ error: 'Proxy failed', detail: message });
   }
 }
