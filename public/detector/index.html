@@ -283,7 +283,7 @@ if ('serviceWorker' in navigator) {
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : (location.origin + '/api/exoplanet');
+    : 'https://oramax-exoplanet.fly.dev/exoplanet';
 
 /* ---------- Helpers ---------- */
 function parseTxt(text){
