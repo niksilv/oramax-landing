@@ -7,8 +7,6 @@
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
 <script>
-updateMlBadge && updateMlBadge();
-
 // === Top-N suggestions on focus ===
 async function showTopSuggestOnFocus(){
   const input = document.getElementById('ticInput');
@@ -124,8 +122,6 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
       <script defer src="/ormax-ml-toggle.js"></script>
 <!-- moved inline call below -->
 <script>
-updateMlBadge && updateMlBadge();
-
 </script>
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
 </head>
@@ -137,7 +133,6 @@ if ('serviceWorker' in navigator) {
     .then(() => console.log('OramaX SW proxy ready (reg)'))
     .catch(err => console.error('SW register failed', err));
 }
-updateMlBadge && updateMlBadge();
 </script>
 
 
@@ -874,7 +869,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('browsePrevBtn')?.addEventListener('click', browsePrev);
   document.getElementById('browseQuery')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ _browsePage=0; searchBrowse(); }});
 });
-updateMlBadge && updateMlBadge();
 </script>
 
 <script id="neighbors-addon">
@@ -1057,7 +1051,6 @@ updateMlBadge && updateMlBadge();
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors = renderNeighborsSafe;
 })();
-updateMlBadge && updateMlBadge();
 </script>
 
 <script>
@@ -1264,7 +1257,6 @@ updateMlBadge && updateMlBadge();
     }
   };
 })();
-updateMlBadge && updateMlBadge();
 </script>
 
 <script>
@@ -1287,11 +1279,9 @@ document.addEventListener('DOMContentLoaded', () => {
     else alert('PDF generator function not found.');
   });
 });
-updateMlBadge && updateMlBadge();
 </script>
 
-    <script src="/detector/engine-toggle.js">updateMlBadge && updateMlBadge();
-</script>
+    <script src="/detector/engine-toggle.js"></script>
 
 <!-- Browse Modal -->
 <div id="browseModal">
