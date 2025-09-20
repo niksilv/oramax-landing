@@ -280,9 +280,20 @@ if ('serviceWorker' in navigator) {
 
 <script>
 // ===== API base (dynamic) =====
-const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:8000/exoplanet' : 'https://oramax-exoplanet.fly.dev/exoplanet';
+const API_BASE =
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/exoplanet'
+    : 'https://oramax-exoplanet.fly.dev/exoplanet';
 
 /* ---------- Helpers ---------- */
+window.makeRegex = function(pattern, flags){
+  try { return window.makeRegex(pattern, flags); }
+  catch(e){
+    var esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return window.makeRegex(esc, flags);
+  }
+};
+
 function parseTxt(text){
   const lines = text.trim().split(/\r?\n/);
   const T=[], F=[];
