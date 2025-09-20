@@ -13,4 +13,4 @@ WORKDIR /app
 COPY --from=build /app ./
 ENV PORT=8080
 EXPOSE 8080
-CMD ["npm", "run", "start", "--", "-p", "8080", "-H", "0.0.0.0"]
+CMD ["npm","run","start","--","-p","8080","-H","0.0.0.0"]
