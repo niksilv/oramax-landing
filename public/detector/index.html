@@ -287,10 +287,10 @@ const API_BASE =
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
-  try { return window.makeRegex(pattern, flags); }
+  try { return new RegExp(pattern, flags); }
   catch(e){
     var esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return window.makeRegex(esc, flags);
+    return new RegExp(esc, flags);
   }
 };
 
