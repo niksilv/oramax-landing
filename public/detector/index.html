@@ -878,211 +878,103 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script id="neighbors-addon">
 (() => {
-  // ---- Robust normalizer για διαφορετικά σχήματα neighbors ----
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
-
-    // A) Ήδη στο "σωστό" σχήμα (έχουμε available)
     if (typeof nei.available === 'boolean') {
-      // Βεβαιώσου ότι έχουμε radius
       if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius;
       return nei;
     }
-
-    // B) Αν είναι κατευθείαν array αντικειμένων
-    if (Array.isArray(nei)) {
-      return { available:true, radius_arcsec: defaultRadius, items: nei };
-    }
-
-    // C) Άλλο σχήμα: προσπάθεια εξαγωγής items
+    if (Array.isArray(nei)) return { available:true, radius_arcsec: defaultRadius, items: nei };
     const items = nei.items || nei.sources || nei.data || [];
-    return {
-      available: Array.isArray(items) && items.length > 0,
-      radius_arcsec: nei.radius_arcsec || defaultRadius,
-      items: items
-    };
+    return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
   }
 
-  // ---- Rendering με graceful degradation (αν λείπουν dx/dy) ----
   function renderNeighborsSafe(nei) {
-  const info = document.getElementById('neighborsInfo');
-  const tbl  = document.querySelector('#neighborsTbl tbody');
-  if(!info || !tbl) return;
+    const info = document.getElementById('neighborsInfo');
+    const tbl  = document.querySelector('#neighborsTbl tbody');
+    if(!info || !tbl) return;
+    tbl.innerHTML=''; try { Plotly.purge('neighborsPlot'); } catch{}
+    if(!nei || !nei.available){ info.textContent = nei?.reason ? ('Gaia: ' + nei.reason) : 'Gaia: n/a'; return; }
 
-  // καθάρισε plot/table
-  tbl.innerHTML='';
-  try { Plotly.purge('neighborsPlot'); } catch{}
+    const items = nei.items || [];
+    const rad   = Number(nei.radius_arcsec || 60);
+    info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
 
-  if(!nei || !nei.available){
-    info.textContent = nei?.reason ? ('Gaia: ' + nei.reason) : 'Gaia: n/a';
-    return;
+    const fix=(v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
+    const txt=v=>(v!=null?String(v):'');
+
+    items.slice(0,100).forEach(r=>{
+      const tr=document.createElement('tr');
+      const sep=fix(Number.isFinite(r.sep_arcsec)?r.sep_arcsec:(Number.isFinite(r.dx_arcsec)&&Number.isFinite(r.dy_arcsec)?Math.hypot(r.dx_arcsec,r.dy_arcsec):NaN),1);
+      const dx =fix(r.dx_arcsec,1), dy=fix(r.dy_arcsec,1);
+      const g  =(Number.isFinite(r.Gmag)?r.Gmag.toFixed(2):(Number.isFinite(r.gmag)?r.gmag.toFixed(2):''));
+      const c  =(Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):(Number.isFinite(r.bp_rp)?r.bp_rp.toFixed(2):''));
+      const par=fix(r.parallax,2), pmra=fix(r.pmra,2), pmde=fix(r.pmdec,2), ruwe=fix(r.ruwe,2), sid=txt(r.source_id);
+      tr.innerHTML=`<td>${sep}</td><td>${dx}</td><td>${dy}</td><td>${g}</td><td>${c}</td><td>${par}</td><td>${pmra}</td><td>${pmde}</td><td>${ruwe}</td><td>${sid}</td>`;
+      tbl.appendChild(tr);
+    });
+
+    const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
+    if (hasXY) {
+      const x=items.map(r=>r.dx_arcsec??0), y=items.map(r=>r.dy_arcsec??0);
+      const s=items.map(r=>{ const m=(Number.isFinite(r.Gmag)?r.Gmag:(Number.isFinite(r.gmag)?r.gmag:15)); return Math.max(6,12-0.8*(m-10)); });
+      Plotly.newPlot('neighborsPlot',[
+        {x:[0],y:[0],mode:'markers+text',text:['target'],textposition:'top center',marker:{size:10,symbol:'x'}},
+        {x,y,mode:'markers',marker:{size:s}}
+      ],{margin:{t:10},xaxis:{title:'East ["]'},yaxis:{title:'North ["]',scaleanchor:'x',scaleratio:1},
+         shapes:[{type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21,line:{dash:'dot'}},
+                 {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad,line:{dash:'solid'}}]});
+    } else {
+      const sep=items.map(r=>r.sep_arcsec??0);
+      const s=items.map(r=>{ const m=(Number.isFinite(r.Gmag)?r.Gmag:(Number.isFinite(r.gmag)?r.gmag:15)); return Math.max(6,12-0.8*(m-10)); });
+      Plotly.newPlot('neighborsPlot',[
+        {x:sep,y:sep.map(()=>0),mode:'markers',marker:{size:s},name:'sources'}
+      ],{margin:{t:10},xaxis:{title:'Separation ["]'},yaxis:{visible:false,range:[-1,1]},shapes:[{type:'line',x0:21,x1:21,y0:-1,y1:1,line:{dash:'dot'}}]});
+    }
   }
 
-  const items = nei.items || [];
-  const rad   = Number(nei.radius_arcsec || 60);
-  info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
-
-  const fix = (v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
-  const txt = v => (v!=null ? String(v) : '');
-
-  // Table με νέες στήλες
-  items.slice(0,100).forEach(r=>{
-    const tr = document.createElement('tr');
-    const sep = fix(
-      Number.isFinite(r.sep_arcsec) ? r.sep_arcsec
-      : (Number.isFinite(r.dx_arcsec)&&Number.isFinite(r.dy_arcsec) ? Math.hypot(r.dx_arcsec,r.dy_arcsec) : NaN)
-      ,1);
-    const dx  = fix(r.dx_arcsec,1);
-    const dy  = fix(r.dy_arcsec,1);
-    const g   = (Number.isFinite(r.Gmag) ? r.Gmag.toFixed(2)
-              : Number.isFinite(r.gmag)  ? r.gmag.toFixed(2) : '');
-    const bprp = (Number.isFinite(r.BP_RP) ? r.BP_RP.toFixed(2)
-                : Number.isFinite(r.bp_rp) ? r.bp_rp.toFixed(2) : '');
-    const par  = fix(r.parallax,2);
-    const pmra = fix(r.pmra,2);
-    const pmde = fix(r.pmdec,2);
-    const ruwe = fix(r.ruwe,2);
-    const sid  = txt(r.source_id);
-
-    tr.innerHTML = `<td>${sep}</td><td>${dx}</td><td>${dy}</td>
-                    <td>${g}</td><td>${bprp}</td>
-                    <td>${par}</td><td>${pmra}</td><td>${pmde}</td>
-                    <td>${ruwe}</td><td>${sid}</td>`;
-    tbl.appendChild(tr);
-  });
-
-  // Plot: όπως πριν (XY αν υπάρχουν, αλλιώς radial)
-  const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
-  if (hasXY) {
-    const x = items.map(r=>r.dx_arcsec ?? 0);
-    const y = items.map(r=>r.dy_arcsec ?? 0);
-    const s = items.map(r=>{
-      const mag = (Number.isFinite(r.Gmag) ? r.Gmag : (Number.isFinite(r.gmag) ? r.gmag : 15));
-      return Math.max(6, 12 - 0.8*(mag-10));
-    });
-    Plotly.newPlot('neighborsPlot',[
-      {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
-      {x,y, mode:'markers', marker:{size:s}}
-    ],{
-      margin:{t:10},
-      xaxis:{title:'East ["]'},
-      yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
-      shapes:[
-        {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
-        {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad, line:{dash:'solid'}}
-      ]
-    });
-  } else {
-    const sep = items.map(r=>r.sep_arcsec ?? 0);
-    const s = items.map(r=>{
-      const mag = (Number.isFinite(r.Gmag) ? r.Gmag : (Number.isFinite(r.gmag) ? r.gmag : 15));
-      return Math.max(6, 12 - 0.8*(mag-10));
-    });
-    Plotly.newPlot('neighborsPlot',[
-      {x:sep, y:sep.map(()=>0), mode:'markers', marker:{size:s}, name:'sources'}
-    ],{
-      margin:{t:10},
-      xaxis:{title:'Separation ["]'},
-      yaxis:{visible:false, range:[-1,1]},
-      shapes:[{type:'line', x0:21, x1:21, y0:-1, y1:1, line:{dash:'dot'}}]
-    });
-  }
-}
-
-
-  // ---- Fetch μόνο για neighbors (γρήγορο) ----
   async function fetchNeighborsOnly() {
-  const status = document.getElementById('status');
-  const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
-  const radius = Number(document.getElementById('neiRadius')?.value || 60);
-  if (!target) return;
+    const status = document.getElementById('status');
+    const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
+    const radius = Number(document.getElementById('neiRadius')?.value || 60);
+    if (!target) return;
 
-  try{
-    status.textContent = 'Neighbors';
-
-    // ΠΑΝΤΑ γρήγορο POST στο fetch_detect μόνο για neighbors
-    const body = JSON.stringify({
-      source:  document.getElementById('sourceSel')?.value || 'mast_spoc',
-      mission: document.getElementById('missionSel')?.value || 'TESS',
-      target, kpeaks: 0,
-      detrend: 'none', quality: false, remove_outliers: false,
-      neighbors: true, neighbors_radius: radius,
-      centroid: false
-    });
-
-    const res = await fetch(`${API_BASE}/fetch_detect`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json(); busySet(55,'Processing'); busyAdvance(90,'Processing');
-    const nei = (function normalizeNeighbors(nei, defaultRadius){
-      if (!nei) return { available:false, reason:'n/a' };
-      if (typeof nei.available === 'boolean') { if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius; return nei; }
-      if (Array.isArray(nei)) return { available:true, radius_arcsec: defaultRadius, items: nei };
-      const items = nei.items || nei.sources || nei.data || [];
-      return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
-    })(data.neighbors || data, radius);
-
-    window.lastNeighbors = nei;
-    renderNeighbors(nei);
-    busyAdvance(98,'Rendering'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
-  } catch(e){
-    console.error(e);
-    status.textContent = 'Error';
-  }
-}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${radius}`, {
-        headers:{'Accept':'application/json'}
+    try{
+      status.textContent = 'Neighbors';
+      const body = JSON.stringify({
+        source:  document.getElementById('sourceSel')?.value || 'mast_spoc',
+        mission: document.getElementById('missionSel')?.value || 'TESS',
+        target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
+        neighbors:true, neighbors_radius: radius, centroid:false
       });
-
-      // 2) Fallback: αν δεν υπάρχει, ξανακάνε fetch_detect ΓΡΗΓΟΡΑ μόνο για neighbors
-      if (res.status === 404 || res.status === 405) {
-        const body = JSON.stringify({
-          source: document.getElementById('sourceSel')?.value || 'mast_spoc',
-          mission: document.getElementById('missionSel')?.value || 'TESS',
-          target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
-          neighbors: true, neighbors_radius: radius
-        });
-        res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-      }
-
+      const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+      const data = await res.json(); busySet(55,'Processing'); busyAdvance(90,'Processing');
       const nei = normalizeNeighbors(data.neighbors || data, radius);
       window.lastNeighbors = nei;
       renderNeighborsSafe(nei);
-      busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
-    } catch(e){
-      console.error(e);
-      status.textContent = 'Error';
+      busyAdvance(98,'Rendering'); status.textContent='Done'; setTimeout(()=>busyStop(),600); updateMlBadge();
+    } catch(e) {
+      console.error(e); status.textContent = 'Error';
     }
   }
 
-  // ---- Συνδέσεις UI → αυτόματο refresh neighbors ----
   document.getElementById('gaiaChk')?.addEventListener('change', (e)=>{
-    if (e.target.checked) fetchNeighborsOnly();
-    else renderNeighborsSafe(null);
+    if (e.target.checked) fetchNeighborsOnly(); else renderNeighborsSafe(null);
   });
-  // όταν αλλάζει το radius και είναι ενεργό το checkbox, κάνε refresh
   document.getElementById('neiRadius')?.addEventListener('change', ()=>{
-    const chk = document.getElementById('gaiaChk');
-    if (chk && chk.checked) fetchNeighborsOnly();
+    const chk=document.getElementById('gaiaChk'); if (chk && chk.checked) fetchNeighborsOnly();
   });
 
-  // ---- Hook μέσα στο runFetch: αν backend δεν επιστρέψει neighbors, ζήτα τα μετά ----
   const _runFetch = window.runFetch;
   window.runFetch = async function(){
     await _runFetch();
-    const chk = document.getElementById('gaiaChk');
+    const chk=document.getElementById('gaiaChk');
     if (chk && chk.checked) {
-      // αν από το τελευταίο fetch λείπουν neighbors ή δεν είναι available, τράβηξέ τα τώρα
-      if (!window.lastNeighbors || window.lastNeighbors.available === false) {
-        fetchNeighborsOnly();
-      }
+      if (!window.lastNeighbors || window.lastNeighbors.available === false) fetchNeighborsOnly();
     }
   };
 
-  // Εξαγωγή για debug από console:
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors = renderNeighborsSafe;
 })();
@@ -1341,6 +1233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
