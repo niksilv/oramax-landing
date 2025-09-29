@@ -1,0 +1,30 @@
+:root { --ox-bg:#0b0e1a; --ox-bg2:#13172a; --ox-text:#e5e7eb; --ox-border:rgba(255,255,255,.10); }
+
+.ox-topbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:color-mix(in oklab,var(--ox-bg) 95%, transparent);border-bottom:1px solid var(--ox-border);height:64px}
+.ox-nav{max-width:1160px;margin:0 auto;height:64px;display:flex;align-items:center;gap:40px;padding:0 24px;color:var(--ox-text);font:500 15px/1 ui-sans-serif,system-ui,Segoe UI,Inter}
+.ox-a{color:var(--ox-text);text-decoration:none}
+.ox-a:hover{opacity:.85}
+.ox-brand{display:flex;align-items:center;gap:12px;white-space:nowrap}
+.ox-brand img{height:32px;width:auto}
+.ox-menu{display:flex;align-items:center;gap:32px}
+.ox-dd{position:relative}
+.ox-ddbtn{cursor:pointer}
+.ox-ddm{display:none;position:absolute;top:100%;margin-top:10px;background:var(--ox-bg2);border:1px solid var(--ox-border);
+       border-radius:12px;min-width:360px;box-shadow:0 14px 34px rgba(0,0,0,.45);padding:8px}
+.ox-ddm a{display:block;padding:10px 14px;border-radius:10px}
+.ox-ddm a:hover{background:rgba(255,255,255,.06)}
+
+.ox-nav{ max-width:1160px; margin:0 auto; height:64px; display:flex; align-items:center;
+  justify-content:center; gap:40px; padding:0 24px; color:var(--ox-text);
+  font:500 15px/1 ui-sans-serif,system-ui,Segoe UI,Inter; }
+
+.ox-footer-inner{ max-width:1160px; margin:0 auto; text-align:center; }
+
+@media (max-width:820px){
+  .ox-nav{gap:20px}
+  .ox-menu{gap:16px}
+  .ox-brand img{height:28px}
+}
+
+/* για να μην κρύβεται το περιεχόμενο κάτω από το fixed navbar */
+body { margin-top: 72px; }

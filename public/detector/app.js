@@ -110,7 +110,7 @@ async function selectCandidate(i) {
     t0: +c.t0
   };
 
-  const res = await fetch(`${API}/exoplanet/predict`, {
+  const res = await fetch(`${API}/predict`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)
@@ -163,7 +163,7 @@ async function onFetchAndDetect() {
     neighbors_radius: 60
   };
 
-  const res = await fetch(`${API}/exoplanet/fetch_detect`, {
+  const res = await fetch(`${API}/fetch_detect`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body)

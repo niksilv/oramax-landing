@@ -1,0 +1,31 @@
+/* για να μην κρύβεται το content κάτω από το fixed menu */
+body { margin-top: 72px; }
+
+/* γενικά links χωρίς υπογράμμιση, αλλά MΕΣΑ στο content να έχουν */
+a { text-decoration: none; }
+main a, section a { text-decoration: underline; }
+
+section { padding-top: 8px; } /* λίγο αέρας κάτω από το menu */
+
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+
+.hero-gradient {
+  background: radial-gradient(60% 60% at 50% 30%, rgba(80,120,255,.25), transparent 60%);
+}
+
+/* αντικατάστησε ό,τι είχαμε για .card */
+.card {
+  border-radius: 1rem;                /* ~ rounded-2xl */
+  border: 1px solid rgba(255,255,255,.10);
+  background: #12162a;
+  padding: 1.5rem;                    /* ~ p-6 */
+  box-shadow:
+    0 10px 15px -3px rgba(0,0,0,.25),
+    0 4px 6px -2px rgba(0,0,0,.15);   /* ~ shadow-xl */
+}
