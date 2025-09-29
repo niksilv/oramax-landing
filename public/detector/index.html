@@ -937,17 +937,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // --- safe render (χωρίς να “αδειάζει” σε αποτυχία) ---
   function renderNeighborsSafe(nei) {
-    const info = document.getElementById('neighborsInfo');
-    const tbl  = document.querySelector('#neighborsTbl tbody');
-    if (!info || !tbl) return;
+  // normalize Ο,ΤΙ κι αν ήρθε (array/items/sources → {available, items})
+  const defR = Number(document.getElementById('neiRadius')?.value || 60);
+  nei = normalizeNeighbors(nei, defR);
 
-    // clear table/plot μόνο όταν έχουμε έγκυρα δεδομένα
-    if (!nei || !nei.available) {
-      info.textContent = 'Gaia: ' + (nei?.reason || 'n/a');
-      Plotly.purge('neighborsPlot');
-      tbl.innerHTML = '';
-      return;
-    }
+  const info = document.getElementById('neighborsInfo');
+  const tbl  = document.querySelector('#neighborsTbl tbody');
+  if (!info || !tbl) return;
+
+  if (!nei || !nei.available) {
+    info.textContent = 'Gaia: ' + (nei?.reason || 'n/a');
+    Plotly.purge('neighborsPlot');
+    tbl.innerHTML = '';
+    return;
+  }
 
     const items = nei.items || [];
     const rad   = Number(nei.radius_arcsec || 60);
