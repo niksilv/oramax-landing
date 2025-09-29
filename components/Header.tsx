@@ -1,20 +1,8 @@
-// components/Header.tsx
-import Image from "next/image";
-import Link from "next/link";
-
-export default function Header() {
+﻿export default function Header({ title = "Orama X", subtitle = "" }: { title?: string; subtitle?: string }) {
   return (
-    <header className="w-full px-6 py-4 flex items-center">
-      <Link href="/" className="flex items-center space-x-2">
-        <Image
-          src="/logos/oramax-logo.png"
-          alt="Oramax Logo"
-          width={48}
-          height={48}
-          priority
-        />
-        <span className="text-xl font-semibold text-white">Orama X</span>
-      </Link>
+    <header className="max-w-5xl mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold">{title}</h1>
+      {subtitle ? <p className="text-sm opacity-80 mt-1">{subtitle}</p> : null}
     </header>
   );
 }
