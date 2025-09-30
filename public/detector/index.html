@@ -1010,54 +1010,63 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
 </script>
 
 <script id="neighbors-addon">
-(() => {
-  // helpers & config
+;(() => {
+  // ==== helpers & config ====
   const byId = (id) => document.getElementById(id);
   const setStatus = (t) => { const s = byId('status'); if (s) s.textContent = t; };
   const BASE = window.API_BASE;
   const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
 
-function getCoordsFromPreproc(){
-  // ψάχνουμε πρώτα στο τελευταίο αποτέλεσμα του detect
-  const p = (window.lastPreproc || window.preproc || {});
-  // πιθανές θέσεις/ονόματα πεδίων
-  const ra  = p.ra ?? p.RA ?? p.ra_deg ?? p.target_ra ?? null;
-  const dec = p.dec ?? p.DEC ?? p.dec_deg ?? p.target_dec ?? null;
-  if (Number.isFinite(ra) && Number.isFinite(dec)) return { ra:Number(ra), dec:Number(dec) };
-  // δες και στο βασικό αντικείμενο στόχου αν υπάρχει
-  const t  = (window.currentTargetInfo || {});
-  const ra2  = t.ra ?? t.RA ?? t.ra_deg ?? null;
-  const dec2 = t.dec ?? t.DEC ?? t.dec_deg ?? null;
-  if (Number.isFinite(ra2) && Number.isFinite(dec2)) return { ra:Number(ra2), dec:Number(dec2) };
-  return null;
-}
+  // ΠΡΟΣΟΧΗ για το async σφάλμα: βάζουμε leading ';' (το βλέπεις πάνω) ώστε να μην "κουμπώσει"
+  // το IIFE επάνω σε προηγούμενο <script> μπλοκ (ASI issue).
 
-async function resolveTargetRaw(raw){
-  const q = /^\d{3,}$/.test(raw) ? `TIC ${raw}` : raw;
-  // Προτίμησε TESS όταν είμαστε σε SPOC/QLP
-  const src = byId('sourceSel')?.value || 'mast_spoc';
-  const mission = byId('missionSel')?.value || 'auto';
-  const domParam =
-    (mission === 'TESS' || src.startsWith('mast_')) ? '&domain=TESS'
-    : (mission === 'Kepler' ? '&domain=Kepler' : '');
-  try{
-    const r = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=5&contains=1`, { headers:{Accept:'application/json'} });
-    if(!r.ok) return q; // άστο όπως είναι
-    const data = await r.json();
-    const items = Array.isArray(data) ? data : (data.items || data.results || data.suggestions || data.data || []);
-    if(!items.length) return q;
-    // Προσπάθησε exact-match ή “label starts with”
-    const best = items.find(it => (it.value||it.label||'').toString().toUpperCase() === q.toUpperCase())
-              || items.find(it => (it.label||it.value||'').toString().toUpperCase().startsWith(q.toUpperCase()))
-              || items[0];
-    const val = (best.value || best.label || '').toString().trim();
-    return val || q;
-  }catch{
-    return q;
+  // ==== take RA/Dec from detect ====
+  function getCoordsFromState() {
+    // προσπάθησε από πρόσφατα αποτελέσματα detect
+    const p = (window.lastPreproc || window.preproc || window.detectResult || {});
+    const pick = (o,k) => (o && k in o && Number.isFinite(+o[k])) ? +o[k] : null;
+    const ra  = pick(p,'ra')  ?? pick(p,'RA')  ?? pick(p,'ra_deg')  ?? pick(p,'target_ra');
+    const dec = pick(p,'dec') ?? pick(p,'DEC') ?? pick(p,'dec_deg') ?? pick(p,'target_dec');
+    if (Number.isFinite(ra) && Number.isFinite(dec)) return { ra, dec };
+
+    // προσπάθησε από target info (αν υπάρχει)
+    const t = (window.currentTargetInfo || {});
+    const ra2  = pick(t,'ra')  ?? pick(t,'RA')  ?? pick(t,'ra_deg');
+    const dec2 = pick(t,'dec') ?? pick(t,'DEC') ?? pick(t,'dec_deg');
+    if (Number.isFinite(ra2) && Number.isFinite(dec2)) return { ra:ra2, dec:dec2 };
+
+    // DOM hints (αν έχεις data attributes)
+    const el = document.querySelector('[data-ra][data-dec]');
+    if (el) {
+      const r = +el.getAttribute('data-ra'); const d = +el.getAttribute('data-dec');
+      if (Number.isFinite(r) && Number.isFinite(d)) return { ra:r, dec:d };
+    }
+    return null;
   }
-}
 
-  // normalize & render
+  // resolve ονόματος (ώστε να στείλουμε σωστή μορφή όταν χρειαστεί target)
+  async function resolveTargetRaw(raw){
+    const q = /^\d{3,}$/.test(raw) ? `TIC ${raw}` : raw;
+    try{
+      const src = byId('sourceSel')?.value || 'mast_spoc';
+      const mission = byId('missionSel')?.value || 'auto';
+      const domParam =
+        (mission === 'TESS' || src.startsWith('mast_')) ? '&domain=TESS'
+        : (mission === 'Kepler' ? '&domain=Kepler' : '');
+      const r = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=5&contains=1`, { headers:{Accept:'application/json'} });
+      if(!r.ok) return q;
+      const data = await r.json();
+      const items = Array.isArray(data) ? data : (data.items || data.results || data.suggestions || data.data || []);
+      if(!items.length) return q;
+      const best = items.find(it => (it.value||it.label||'').toString().toUpperCase() === q.toUpperCase())
+                || items.find(it => (it.label||it.value||'').toString().toUpperCase().startsWith(q.toUpperCase()))
+                || items[0];
+      const val = (best.value || best.label || '').toString().trim();
+      return val || q;
+    }catch{ return q; }
+  }
+
+  // ==== normalize & render ====
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
     if (typeof nei.available === 'boolean') {
@@ -1126,19 +1135,26 @@ async function resolveTargetRaw(raw){
     }
   }
 
-  // fetchers
-  async function fetchGaiaDirect(target, radius) {
+  // ==== fetchers (coords first, then name) ====
+  async function fetchGaiaByCoords(coords, radius){
+    const url = `${BASE}/gaia_neighbors?ra=${encodeURIComponent(coords.ra)}&dec=${encodeURIComponent(coords.dec)}&radius=${encodeURIComponent(radius)}`;
+    log('GET', url);
+    const r = await fetch(url, { headers:{accept:'application/json'} });
+    if (!r.ok) throw new Error(`gaia_neighbors(ra,dec) HTTP ${r.status}`);
+    return await r.json();
+  }
+  async function fetchGaiaByName(target, radius){
     const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
     log('GET', url);
     const r = await fetch(url, { headers:{accept:'application/json'} });
-    if (!r.ok) throw new Error(`gaia_neighbors HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`gaia_neighbors(name) HTTP ${r.status}`);
     return await r.json();
   }
   async function fetchGaiaViaDetect(target, radius) {
     const body = JSON.stringify({
       source:  byId('sourceSel')?.value || 'mast_spoc',
       mission: byId('missionSel')?.value || 'TESS',
-      target, kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+      target, kpeaks: 0, detrend:'none', quality: false, remove_outliers: false,
       neighbors: true, neighbors_radius: radius, centroid: false
     });
     log('POST', `${BASE}/fetch_detect`);
@@ -1148,101 +1164,73 @@ async function resolveTargetRaw(raw){
     return d.neighbors ?? d;
   }
 
-  // === (2) + normalization στόχου
+  // ==== main ====
   async function fetchNeighborsOnly() {
-  setStatus('Neighbors');
-  try {
-    // 1) Στόχος από input (κρατάμε το resolver που έχεις ήδη)
-    let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    if (!targetRaw) { setStatus('Done'); return; }
-    const target = await resolveTargetRaw(targetRaw);
-    const radius = Number(byId('neiRadius')?.value || 60);
-
-    // 2) 🔁 ΠΡΩΤΑ με RA/Dec (αν υπάρχουν από το detect) — αποφεύγουμε MAST name lookup
-    let raw, used = 'coords';
-    const coords = getCoordsFromPreproc();
-    if (coords) {
-      const url = `${BASE}/gaia_neighbors?ra=${encodeURIComponent(coords.ra)}&dec=${encodeURIComponent(coords.dec)}&radius=${encodeURIComponent(radius)}`;
-      try {
-        const r = await fetch(url, { headers:{accept:'application/json'} });
-        if (!r.ok) throw new Error(`gaia_neighbors(ra,dec) HTTP ${r.status}`);
-        raw = await r.json();
-      } catch (e) {
-        // αν αποτύχει με coords, θα δοκιμάσουμε με όνομα
-        used = 'name';
+    setStatus('Neighbors');
+    try {
+      // A) εξασφάλισε coords — αν δεν υπάρχουν, τρέξε πρώτα το detect για να τα αποκτήσεις
+      let coords = getCoordsFromState();
+      if (!coords && window.runFetch && typeof window.runFetch === 'function') {
+        // τρέξε detect να γεμίσουν RA/Dec
+        await (window._bareRunFetch ? window._bareRunFetch() : window.runFetch());
+        // αποθήκευσε πιθανό preproc για επόμενη φορά
+        window.lastPreproc = window.preproc || window.detectResult || window.lastPreproc || {};
+        coords = getCoordsFromState();
       }
-    } else {
-      used = 'name';
-    }
 
-    // 3) Αν δεν πετύχαμε με coords → δοκίμασε με ΟΝΟΜΑ (direct → fallback)
-    if (used === 'name' || !raw) {
-      try {
-        const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
-        const r = await fetch(url, { headers:{accept:'application/json'} });
-        if (!r.ok) throw new Error(`gaia_neighbors(name) HTTP ${r.status}`);
-        raw = await r.json();
-      } catch (e1) {
-        // fallback μέσω detect (neighbors μόνο)
-        const body = JSON.stringify({
-          source:  byId('sourceSel')?.value || 'mast_spoc',
-          mission: byId('missionSel')?.value || 'TESS',
-          target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
-          neighbors: true, neighbors_radius: radius, centroid: false
-        });
-        const r2 = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-        if (!r2.ok) throw new Error(`fetch_detect HTTP ${r2.status}`);
-        const d2 = await r2.json();
-        raw = d2.neighbors ?? d2;
+      // B) διάβασε target (για fallback) και radius
+      let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
+      if (/^\d{3,}$/.test(targetRaw)) targetRaw = `TIC ${targetRaw}`;
+      const target = await resolveTargetRaw(targetRaw);
+      const radius = Number(byId('neiRadius')?.value || 60);
+
+      // C) ΠΡΩΤΑ με coords, μετά με όνομα, τέλος fallback μέσω detect
+      let raw = null;
+      if (coords) {
+        try { raw = await fetchGaiaByCoords(coords, radius); }
+        catch (e) { log('coords failed → try name', e?.message||e); }
       }
-    }
+      if (!raw) {
+        try { raw = await fetchGaiaByName(target, radius); }
+        catch (e1) {
+          log('name failed → fallback detect', e1?.message||e1);
+          raw = await fetchGaiaViaDetect(target, radius);
+        }
+      }
 
-    // 4) render
-    const nei = normalizeNeighbors(raw, radius);
-    window.lastNeighbors = nei;
-    renderNeighborsSafe(nei);
-    setStatus('Done');
-  } catch (e) {
-    const msg = (e && e.message || '').toString();
-    const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
-    renderNeighborsSafe({ available:false, reason });
-    setStatus('Error');
-  }
-}
-
-
-
-  // === (3) checkbox handlers ===
-  byId('gaiaChk')?.addEventListener('change', (e) => {
-    if (e.target.checked) {
-      setStatus('Neighbors');
-      fetchNeighborsOnly();
-    } else {
+      const nei = normalizeNeighbors(raw, radius);
+      window.lastNeighbors = nei;
+      renderNeighborsSafe(nei);
       setStatus('Done');
-      renderNeighborsSafe(null);
+    } catch (e) {
+      const msg = (e && e.message || '').toString();
+      const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
+      renderNeighborsSafe({ available:false, reason });
+      setStatus('Error');
     }
+  }
+
+  // === UI bindings (αν δεν τα έχεις ήδη αλλού) ===
+  byId('gaiaChk')?.addEventListener('change', (e) => {
+    if (e.target.checked) { setStatus('Neighbors'); fetchNeighborsOnly(); }
+    else { setStatus('Done'); renderNeighborsSafe(null); }
   });
   byId('neiRadius')?.addEventListener('input', () => {
-    if (byId('gaiaChk')?.checked) {
-      setStatus('Neighbors');
-      fetchNeighborsOnly();
-    }
+    if (byId('gaiaChk')?.checked) { setStatus('Neighbors'); fetchNeighborsOnly(); }
   });
 
-  // === (4) τρέξε GAIA ΜΕΤΑ το κύριο detect και δείξε status ===
+  // Τρέξε GAIA ΜΕΤΑ το βασικό detect (και φύλαξε το παλιό runFetch για να μπορούμε να το καλέσουμε σκέτο)
   const _runFetch = window.runFetch;
+  window._bareRunFetch = _runFetch;
   window.runFetch = async function () {
-    const r = _runFetch ? await _runFetch() : undefined; // το βασικό γράφει "Done"
-    if (byId('gaiaChk')?.checked) {
-      setStatus('Neighbors');
-      await fetchNeighborsOnly();
-    }
+    const r = _runFetch ? await _runFetch() : undefined;  // το βασικό γράφει "Done"
+    if (byId('gaiaChk')?.checked) { setStatus('Neighbors'); await fetchNeighborsOnly(); }
     return r;
   };
 
-  // expose (για debug από console)
-  window.renderNeighbors = renderNeighborsSafe;
+  // expose για debug
   window.fetchNeighborsOnly = fetchNeighborsOnly;
+  window.renderNeighbors = renderNeighborsSafe;
 })();
 </script>
 
