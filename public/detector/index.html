@@ -328,7 +328,7 @@ if ('serviceWorker' in navigator) {
 window.API_BASE = (location.hostname.endsWith('oramax.space') || location.hostname.endsWith('vercel.app'))
     ? '/api/exoplanet'
     : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
-const API_BASE = window.API_BASE;   <!-- προσθήκη -->
+const API_BASE = window.API_BASE;
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -1166,49 +1166,63 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
 
   // ==== main ====
   async function fetchNeighborsOnly() {
-    setStatus('Neighbors');
-    try {
-      // A) εξασφάλισε coords — αν δεν υπάρχουν, τρέξε πρώτα το detect για να τα αποκτήσεις
-      let coords = getCoordsFromState();
-      if (!coords && window.runFetch && typeof window.runFetch === 'function') {
-        // τρέξε detect να γεμίσουν RA/Dec
-        await (window._bareRunFetch ? window._bareRunFetch() : window.runFetch());
-        // αποθήκευσε πιθανό preproc για επόμενη φορά
-        window.lastPreproc = window.preproc || window.detectResult || window.lastPreproc || {};
-        coords = getCoordsFromState();
-      }
+  setStatus('Neighbors');
+  try {
+    const radius = Number(byId('neiRadius')?.value || 60);
 
-      // B) διάβασε target (για fallback) και radius
-      let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-      if (/^\d{3,}$/.test(targetRaw)) targetRaw = `TIC ${targetRaw}`;
-      const target = await resolveTargetRaw(targetRaw);
-      const radius = Number(byId('neiRadius')?.value || 60);
+    // 1) Διάβασε target & normalize
+    let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
+    if (!targetRaw) { setStatus('Done'); return; }
+    if (/^\d{3,}$/.test(targetRaw)) targetRaw = `TIC ${targetRaw}`;
+    const target = await resolveTargetRaw(targetRaw);
 
-      // C) ΠΡΩΤΑ με coords, μετά με όνομα, τέλος fallback μέσω detect
-      let raw = null;
-      if (coords) {
-        try { raw = await fetchGaiaByCoords(coords, radius); }
-        catch (e) { log('coords failed → try name', e?.message||e); }
-      }
-      if (!raw) {
-        try { raw = await fetchGaiaByName(target, radius); }
-        catch (e1) {
-          log('name failed → fallback detect', e1?.message||e1);
-          raw = await fetchGaiaViaDetect(target, radius);
-        }
-      }
+    // 2) ΠΑΝΤΑ πρώτα fetch_detect (φέρνει preprocess με RA/Dec και ίσως neighbors)
+    const body = JSON.stringify({
+      source:  byId('sourceSel')?.value || 'mast_spoc',
+      mission: byId('missionSel')?.value || 'TESS',
+      target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
+      neighbors: true, neighbors_radius: radius, centroid: false
+    });
+    const r0 = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    if (!r0.ok) throw new Error(`fetch_detect HTTP ${r0.status}`);
+    const d0 = await r0.json();
 
-      const nei = normalizeNeighbors(raw, radius);
+    // Αν ο server έδωσε ήδη neighbors, τελείωσες.
+    if (d0 && d0.neighbors && d0.neighbors.available) {
+      const nei = normalizeNeighbors(d0.neighbors, radius);
+      window.lastPreproc   = d0.preprocess || window.lastPreproc || null;
       window.lastNeighbors = nei;
       renderNeighborsSafe(nei);
       setStatus('Done');
-    } catch (e) {
-      const msg = (e && e.message || '').toString();
-      const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
-      renderNeighborsSafe({ available:false, reason });
-      setStatus('Error');
+      return;
     }
+
+    // 3) Πάρε RA/Dec από preprocess και ζήτα GAIA με coords (χωρίς MAST lookup)
+    const pp = d0.preprocess || {};
+    const ra  = (+pp.ra_deg)  || (+pp.ra)  || (+pp.RA)  || (+pp.target_ra);
+    const dec = (+pp.dec_deg) || (+pp.dec) || (+pp.DEC) || (+pp.target_dec);
+
+    let raw = null;
+    if (Number.isFinite(ra) && Number.isFinite(dec)) {
+      raw = await fetchGaiaByCoords({ ra, dec }, radius);
+    } else {
+      // 4) Έσχατο fallback: με όνομα (μπορεί να αποτύχει σε μεμονωμένα TIC → τότε reason 404)
+      raw = await fetchGaiaByName(target, radius);
+    }
+
+    const nei = normalizeNeighbors(raw, radius);
+    window.lastPreproc   = d0.preprocess || window.lastPreproc || null;
+    window.lastNeighbors = nei;
+    renderNeighborsSafe(nei);
+    setStatus('Done');
+  } catch (e) {
+    const msg = (e && e.message || '').toString();
+    const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
+    renderNeighborsSafe({ available:false, reason });
+    setStatus('Error');
   }
+}
+
 
   // === UI bindings (αν δεν τα έχεις ήδη αλλού) ===
   byId('gaiaChk')?.addEventListener('change', (e) => {
