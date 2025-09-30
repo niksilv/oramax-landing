@@ -326,8 +326,9 @@ if ('serviceWorker' in navigator) {
 <script>
 // ===== API base (dynamic) =====
 window.API_BASE = (location.hostname.endsWith('oramax.space') || location.hostname.endsWith('vercel.app'))
-    ? '/api/exoplanet'              // production: περνάει από Vercel proxy (χωρίς CORS)
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet'; // local fallback
+    ? '/api/exoplanet'
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+const API_BASE = window.API_BASE;   <!-- προσθήκη -->
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -1016,6 +1017,31 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
   const BASE = window.API_BASE;
   const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
 
+async function resolveTargetRaw(raw){
+  const q = /^\d{3,}$/.test(raw) ? `TIC ${raw}` : raw;
+  // Προτίμησε TESS όταν είμαστε σε SPOC/QLP
+  const src = byId('sourceSel')?.value || 'mast_spoc';
+  const mission = byId('missionSel')?.value || 'auto';
+  const domParam =
+    (mission === 'TESS' || src.startsWith('mast_')) ? '&domain=TESS'
+    : (mission === 'Kepler' ? '&domain=Kepler' : '');
+  try{
+    const r = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=5&contains=1`, { headers:{Accept:'application/json'} });
+    if(!r.ok) return q; // άστο όπως είναι
+    const data = await r.json();
+    const items = Array.isArray(data) ? data : (data.items || data.results || data.suggestions || data.data || []);
+    if(!items.length) return q;
+    // Προσπάθησε exact-match ή “label starts with”
+    const best = items.find(it => (it.value||it.label||'').toString().toUpperCase() === q.toUpperCase())
+              || items.find(it => (it.label||it.value||'').toString().toUpperCase().startsWith(q.toUpperCase()))
+              || items[0];
+    const val = (best.value || best.label || '').toString().trim();
+    return val || q;
+  }catch{
+    return q;
+  }
+}
+
   // normalize & render
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
@@ -1109,30 +1135,38 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
 
   // === (2) + normalization στόχου
   async function fetchNeighborsOnly() {
-    setStatus('Neighbors');
-    try {
-      // στόχος: αν δώσεις μόνο ψηφία → πρόσθεσε "TIC "
-      let target = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-      if (!target) return;
-      if (/^\d{3,}$/.test(target)) target = `TIC ${target}`;
+  setStatus('Neighbors');
+  try {
+    let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
+    if (!targetRaw) { setStatus('Done'); return; }
 
-      const radius = Number(byId('neiRadius')?.value || 60);
+    // NEW: resolve σε canonical name που δέχεται η MAST
+    const target = await resolveTargetRaw(targetRaw);
 
-      // direct → fallback
-      let raw;
-      try { raw = await fetchGaiaDirect(target, radius); }
-      catch (e1) { log('direct failed → fallback', e1?.message||e1); raw = await fetchGaiaViaDetect(target, radius); }
+    const radius = Number(byId('neiRadius')?.value || 60);
 
-      const nei = normalizeNeighbors(raw, radius);
-      window.lastNeighbors = nei;
-      renderNeighborsSafe(nei);
-      setStatus('Done');
-    } catch (e) {
-      log('error', e);
-      renderNeighborsSafe({ available:false, reason: e?.message || 'fetch failed' });
-      setStatus('Error');
+    // direct → fallback
+    let raw;
+    try { raw = await fetchGaiaDirect(target, radius); }
+    catch (e1) {
+      log('direct failed → fallback', e1?.message||e1);
+      raw = await fetchGaiaViaDetect(target, radius);
     }
+
+    const nei = normalizeNeighbors(raw, radius);
+    window.lastNeighbors = nei;
+    renderNeighborsSafe(nei);
+    setStatus('Done');
+  } catch (e) {
+    log('error', e);
+    // Δείξε καθαρό reason όταν είναι 404 από MAST
+    const msg = (e && e.message || '').toString();
+    const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
+    renderNeighborsSafe({ available:false, reason });
+    setStatus('Error');
   }
+}
+
 
   // === (3) checkbox handlers ===
   byId('gaiaChk')?.addEventListener('change', (e) => {
