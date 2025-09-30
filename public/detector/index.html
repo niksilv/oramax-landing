@@ -579,7 +579,59 @@ function selectCandidate(i){
   document.getElementById('fitBox').style.display='none';
   lastFit = null;
 }
+
+// ===== NEW: helpers for probability fallback =====
+function znorm(arr){
+  const xs = arr.filter(Number.isFinite);
+  if (!xs.length) return arr.map(_=>0);
+  const mu = xs.reduce((a,b)=>a+b,0)/xs.length;
+  const sd = Math.sqrt(xs.reduce((a,b)=>a+(b-mu)**2,0)/xs.length) || 1;
+  return arr.map(x => Number.isFinite(x) ? (x - mu) / sd : 0);
+}
+function softmax(xs){
+  const m = Math.max(...xs.map(x=>Number.isFinite(x)?x:-Infinity));
+  const ex = xs.map(x => Number.isFinite(x) ? Math.exp(x - m) : 0);
+  const s  = ex.reduce((a,b)=>a+b,0) || 1;
+  return ex.map(e => e / s);
+}
+
+// ===== NEW: approx SNR if backend SNRs are all same/missing =====
+function phaseFoldForCand(T,F,c){
+  return phaseFold(T,F,c.period,c.t0);
+}
+function approxSNR(T, F, cand){
+  if (!Number.isFinite(cand.period) || !Number.isFinite(cand.duration) || !Number.isFinite(cand.t0)) return NaN;
+  const pf = phaseFoldForCand(T, F, cand);
+  const w = Math.max(1e-5, (cand.duration || 0) / cand.period);
+  const h = w/2;
+  const inFlux = [], outFlux = [];
+  for (const d of pf){
+    const x = d.x;
+    const inWin = (x <= h) || (x >= 1 - h);
+    (inWin ? inFlux : outFlux).push(d.y);
+  }
+  if (inFlux.length < 5 || outFlux.length < 20) return NaN;
+  const mean = a => a.reduce((p,q)=>p+q,0)/a.length;
+  const muIn = mean(inFlux), muOut = mean(outFlux);
+  const depth = muOut - muIn;
+  const sOut = Math.sqrt(outFlux.reduce((s,x)=>s+(x-muOut)*(x-muOut),0)/(outFlux.length-1)) || 0;
+  return sOut ? Math.abs(depth)*Math.sqrt(inFlux.length)/sOut : NaN;
+}
+function enrichWithApproxSNR(T, F, cands){
+  const seen = new Set(cands.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr.toFixed(1) : 'NaN'));
+  const allSame = seen.size <= 1; // όλα ίδια ή όλα NaN
+  if (!allSame) return;
+  cands.forEach(c=>{
+    const s = approxSNR(T,F,c);
+    if (!c.fit) c.fit = {};
+    if (Number.isFinite(s)) c.fit.snr = s;
+  });
+}
+
 function renderAll(T, F, candidates, neighbors){
+  // NEW: enrich SNRs if needed (before probabilities fallback uses SNR)
+  enrichWithApproxSNR(T, F, candidates||[]);
+
   lcTime=T; lcFlux=F; lastCands=candidates||[]; selectedIdx=0;
   lastNeighbors = neighbors || null;
   busySet(70,'Rendering light curve…');
@@ -629,23 +681,27 @@ function normalizeCandidates(cands){
     };
   });
 
-  // --- Fallback: αν όλα τα P είναι ίδια ή μη-αριθμοί, υπολόγισε από power ---
+  // --- Improved fallback: softmax(power, SNR, -ΔBIC) όταν οι πιθανότητες είναι ίδιες/λείπουν ---
   const probs = out.map(c=>c.probability).filter(p=>Number.isFinite(p));
   const k = out.length;
   const same = (probs.length===k) && new Set(probs.map(p=>p.toFixed(3))).size===1;
   const invalid = probs.length===0;
 
   if (k>0 && (same || invalid)) {
-    const xs = out.map(c=>Math.max(0, Number.isFinite(c.power)?c.power:0));
-    const sum = xs.reduce((a,b)=>a+b,0);
-    if (sum>0) {
-      xs.forEach((x,i)=> out[i].probability = x/sum);
-    } else {
-      // fallback του fallback: top=0.7, τα υπόλοιπα μοιράζονται 0.3
-      const max = Math.max(...xs);
-      const idx = xs.indexOf(max);
-      out.forEach((c,i)=> c.probability = (i===idx) ? 0.7 : (0.3/(k-1)));
+    const pow = out.map(c => Number.isFinite(c.power) ? c.power : 0);
+    const snr = out.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr : NaN);
+    const db  = out.map(c => Number.isFinite(c?.fit?.delta_bic) ? -c.fit.delta_bic : NaN); // -ΔBIC (μικρότερο καλύτερο)
+
+    // βάρη: power 1.0, SNR 0.7, -ΔBIC 0.5
+    const z1 = znorm(pow), z2 = znorm(snr), z3 = znorm(db);
+    const logits = out.map((_,i) => 1.0*z1[i] + 0.7*z2[i] + 0.5*z3[i]);
+    let P = softmax(logits);
+
+    if (!P.some(p => p > 0)) {
+      const sum = pow.reduce((a,b)=>a+b,0);
+      P = sum>0 ? pow.map(x=>x/sum) : out.map((_,i)=> i===0 ? 0.7 : 0.3/(k-1));
     }
+    out.forEach((c,i)=> c.probability = P[i]);
   }
   return out;
 }
