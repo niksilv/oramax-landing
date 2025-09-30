@@ -8,7 +8,7 @@
 <!-- moved inline JS below -->
 <script>
 // === Top-N suggestions on focus ===
-;async function showTopSuggestOnFocus(){
+;window.showTopSuggestOnFocus = async function(){
   const input = document.getElementById('ticInput');
   if(!input) return;
   try{
@@ -49,7 +49,7 @@ function renderBrowse(list, totalGuess){
     });
   });
 }
-;async function searchBrowse(){
+;window.searchBrowse = async function(){
   const q = (document.getElementById('browseQuery')?.value || _browseLastQuery || '').trim() || 'TIC ';
   _browseLastQuery = q;
   const limit = 20, offset = _browsePage * limit;
@@ -714,7 +714,7 @@ function toggleInputs(){
 }
 
 // ---------- Fetch & Detect ----------
-;async function runFetch(){
+;window.runFetch = async function(){
   const status = document.getElementById('status');
   try{
     busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
@@ -750,7 +750,7 @@ function toggleInputs(){
 }
 
 // ---------- Upload TXT ----------
-;async function runUpload(){
+;window.runUpload = async function(){
   const status = document.getElementById('statusUp');
   try{
     status.textContent = 'Running...';
@@ -865,7 +865,7 @@ const updateSuggest = debounce(async ()=>{
 
 
 // ---------- Transit Fit ----------
-;async function runFit(){
+;window.runFit = async function(){
   const fitStatus = document.getElementById('fitStatus');
   const fitBox = document.getElementById('fitBox');
   try{
@@ -910,7 +910,7 @@ const updateSuggest = debounce(async ()=>{
 }
 
 // ---------- PDF report ----------
-;async function runPdf(){
+;window.runPdf = async function(){
   try{
     if(!lastCands.length){ alert('Run detect first'); return; }
     const cand = lastCands[selectedIdx];
@@ -1045,7 +1045,7 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
   }
 
   // resolve ονόματος (ώστε να στείλουμε σωστή μορφή όταν χρειαστεί target)
-  ;async function resolveTargetRaw(raw){
+  ;window.resolveTargetRaw = async function(raw){
     const q = /^\d{3,}$/.test(raw) ? `TIC ${raw}` : raw;
     try{
       const src = byId('sourceSel')?.value || 'mast_spoc';
@@ -1136,21 +1136,21 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
   }
 
   // ==== fetchers (coords first, then name) ====
-  ;async function fetchGaiaByCoords(coords, radius){
+  ;window.fetchGaiaByCoords = async function(coords, radius){
     const url = `${BASE}/gaia_neighbors?ra=${encodeURIComponent(coords.ra)}&dec=${encodeURIComponent(coords.dec)}&radius=${encodeURIComponent(radius)}`;
     log('GET', url);
     const r = await fetch(url, { headers:{accept:'application/json'} });
     if (!r.ok) throw new Error(`gaia_neighbors(ra,dec) HTTP ${r.status}`);
     return await r.json();
   }
-  ;async function fetchGaiaByName(target, radius){
+  ;window.fetchGaiaByName = async function(target, radius){
     const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
     log('GET', url);
     const r = await fetch(url, { headers:{accept:'application/json'} });
     if (!r.ok) throw new Error(`gaia_neighbors(name) HTTP ${r.status}`);
     return await r.json();
   }
-  ;async function fetchGaiaViaDetect(target, radius) {
+  ;window.fetchGaiaViaDetect = async function(target, radius) {
     const body = JSON.stringify({
       source:  byId('sourceSel')?.value || 'mast_spoc',
       mission: byId('missionSel')?.value || 'TESS',
@@ -1165,7 +1165,7 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
   }
 
   // ==== main ====
-  ;async function fetchNeighborsOnly() {
+  ;window.fetchNeighborsOnly = async function() {
   setStatus('Neighbors');
   try {
     const radius = Number(byId('neiRadius')?.value || 60);
