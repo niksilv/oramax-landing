@@ -172,7 +172,7 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?b=44', { scope: '/detector/' })
+  navigator.serviceWorker.register('/detector/sw-oramax.js?b=45', { scope: '/detector/' })
     .then(() => console.log('OramaX SW proxy ready (reg)'))
     .catch(err => console.error('SW register failed', err));
 }
