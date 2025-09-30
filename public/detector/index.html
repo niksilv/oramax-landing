@@ -325,10 +325,9 @@ if ('serviceWorker' in navigator) {
 
 <script>
 // ===== API base (dynamic) =====
-const API_BASE =
-  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+window.API_BASE = (location.hostname.endsWith('oramax.space') || location.hostname.endsWith('vercel.app'))
+    ? '/api/exoplanet'              // production: περνάει από Vercel proxy (χωρίς CORS)
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet'; // local fallback
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -984,13 +983,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script id="neighbors-addon">
 (() => {
-  // ---- CONFIG ----
-  const BASE = (typeof API_BASE !== 'undefined' && API_BASE) ? API_BASE
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+  const BASE = window.API_BASE;
 
-  // ---- UTILS ----
-  const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
   const byId = id => document.getElementById(id);
+  const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
 
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
@@ -1003,11 +999,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
     return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
   }
   const fix=(v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
-  const txt=v=>(v!=null?String(v):'');
 
-  // ---- RENDER ----
   function renderNeighborsSafe(raw) {
-    const defR = Number(byId('neiRadius')?.value || 60);
+    const defR = Number(byId('neiRadius')?.value || 120);
     const nei  = normalizeNeighbors(raw, defR);
     const info = byId('neighborsInfo');
     const tbl  = document.querySelector('#neighborsTbl tbody');
@@ -1015,7 +1009,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
     if (!nei.available) {
       info.textContent = 'Gaia: ' + (nei.reason || 'n/a');
-      log('no data', nei.reason);
+      log('no data:', nei.reason);
       try { Plotly.purge('neighborsPlot'); } catch {}
       tbl.innerHTML = '';
       return;
@@ -1026,19 +1020,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
     info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
     log('items:', items.length, 'rad:', rad);
 
+    // table
     tbl.innerHTML = '';
     items.slice(0,100).forEach(r=>{
       const tr=document.createElement('tr');
       const sep=fix(Number.isFinite(r.sep_arcsec)?r.sep_arcsec:(Number.isFinite(r.dx_arcsec)&&Number.isFinite(r.dy_arcsec)?Math.hypot(r.dx_arcsec,r.dy_arcsec):NaN),1);
-      const dx =fix(r.dx_arcsec,1), dy=fix(r.dy_arcsec,1);
-      const g  =(Number.isFinite(r.Gmag)?r.Gmag.toFixed(2):(Number.isFinite(r.gmag)?r.gmag.toFixed(2):''));
-      const c  =(Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):(Number.isFinite(r.bp_rp)?r.bp_rp.toFixed(2):''));
-      const par=fix(r.parallax,2), pmra=fix(r.pmra,2), pmde=fix(r.pmdec,2), ruwe=fix(r.ruwe,2), sid=txt(r.source_id);
-      tr.innerHTML=`<td>${sep}</td><td>${dx}</td><td>${dy}</td><td>${g}</td><td>${c}</td>
-                    <td>${par}</td><td>${pmra}</td><td>${pmde}</td><td>${ruwe}</td><td>${sid}</td>`;
+      tr.innerHTML = `
+        <td>${sep}</td><td>${fix(r.dx_arcsec,1)}</td><td>${fix(r.dy_arcsec,1)}</td>
+        <td>${Number.isFinite(r.Gmag)?r.Gmag.toFixed(2):Number.isFinite(r.gmag)?r.gmag.toFixed(2):''}</td>
+        <td>${Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):Number.isFinite(r.bp_rp)?r.bp_rp.toFixed(2):''}</td>
+        <td>${fix(r.parallax,2)}</td><td>${fix(r.pmra,2)}</td><td>${fix(r.pmdec,2)}</td>
+        <td>${fix(r.ruwe,2)}</td><td>${r.source_id??''}</td>`;
       tbl.appendChild(tr);
     });
 
+    // plot
     const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
     if (hasXY) {
       const x=items.map(r=>r.dx_arcsec??0), y=items.map(r=>r.dy_arcsec??0);
@@ -1047,9 +1043,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
         {x:[0],y:[0],mode:'markers+text',text:['target'],textposition:'top center',marker:{size:10,symbol:'x'}},
         {x,y,mode:'markers',marker:{size:s}}
       ],{
-        margin:{t:10},
-        xaxis:{title:'East ["]'},
-        yaxis:{title:'North ["]',scaleanchor:'x',scaleratio:1},
+        margin:{t:10}, xaxis:{title:'East ["]'}, yaxis:{title:'North ["]',scaleanchor:'x',scaleratio:1},
         shapes:[
           {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21,line:{dash:'dot'}},
           {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad,line:{dash:'solid'}}
@@ -1057,19 +1051,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
       });
     } else {
       const sep=items.map(r=>r.sep_arcsec??0);
-      const s=items.map(r=>{ const m=(Number.isFinite(r.Gmag)?r.Gmag:(Number.isFinite(r.gmag)?r.gmag:15)); return Math.max(6,12-0.8*(m-10)); });
       Plotly.newPlot('neighborsPlot',[
-        {x:sep,y:sep.map(()=>0),mode:'markers',marker:{size:s},name:'sources'}
-      ],{
-        margin:{t:10},
-        xaxis:{title:'Separation ["]'},
-        yaxis:{visible:false,range:[-1,1]},
-        shapes:[{type:'line',x0:21,x1:21,y0:-1,y1:1,line:{dash:'dot'}}]
-      });
+        {x:sep,y:sep.map(()=>0),mode:'markers',name:'sources'}
+      ],{ margin:{t:10}, xaxis:{title:'Separation ["]'}, yaxis:{visible:false,range:[-1,1]},
+          shapes:[{type:'line',x0:21,x1:21,y0:-1,y1:1,line:{dash:'dot'}}] });
     }
   }
 
-  // ---- FETCHERS ----
   async function fetchGaiaDirect(target, radius) {
     const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
     log('GET', url);
@@ -1084,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       target, kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
       neighbors: true, neighbors_radius: radius, centroid: false
     });
-    log('POST', `${BASE}/fetch_detect`, body);
+    log('POST', `${BASE}/fetch_detect`);
     const r = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if (!r.ok) throw new Error(`fetch_detect HTTP ${r.status}`);
     const d = await r.json();
@@ -1094,20 +1082,18 @@ document.addEventListener('DOMContentLoaded', ()=>{
   async function fetchNeighborsOnly() {
     const status = byId('status');
     const target = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    const radius = Number(byId('neiRadius')?.value || 60);
+    const radius = Number(byId('neiRadius')?.value || 120);
     if (!target) return;
     if (status) status.textContent = 'Neighbors';
 
     try {
       let raw;
       try { raw = await fetchGaiaDirect(target, radius); }
-      catch (e1) { log('direct failed -> fallback', e1?.message || e1); raw = await fetchGaiaViaDetect(target, radius); }
+      catch (e1) { log('direct failed, fallback:', e1?.message||e1); raw = await fetchGaiaViaDetect(target, radius); }
 
       const nei = normalizeNeighbors(raw, radius);
       window.lastNeighbors = nei;
       renderNeighborsSafe(nei);
-
-      try { busyAdvance?.(98,'Rendering'); updateMlBadge?.(); setTimeout(()=>busyStop?.(), 600); } catch {}
       if (status) status.textContent = 'Done';
     } catch (e) {
       log('error', e);
@@ -1116,7 +1102,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }
 
-  // ---- WIRES ----
   byId('gaiaChk')?.addEventListener('change', (e) => {
     if (e.target.checked) fetchNeighborsOnly(); else renderNeighborsSafe(null);
   });
@@ -1124,14 +1109,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (byId('gaiaChk')?.checked) fetchNeighborsOnly();
   });
 
-  // GAIA ΠΡΩΤΟ μετά το detect
+  // τρέχει GAIA *πριν* τους υπόλοιπους υπολογισμούς
   const _runFetch = window.runFetch;
   window.runFetch = async function () {
-    if (byId('gaiaChk')?.checked) { await fetchNeighborsOnly(); }
+    if (byId('gaiaChk')?.checked) await fetchNeighborsOnly();
     return _runFetch ? _runFetch() : undefined;
   };
 
-  // expose για γρήγορο έλεγχο από console
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors   = renderNeighborsSafe;
 })();
