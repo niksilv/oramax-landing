@@ -984,7 +984,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script id="neighbors-addon">
 (() => {
-  // --- normalize ---
+  // ---- CONFIG ----
+  const BASE = (typeof API_BASE !== 'undefined' && API_BASE) ? API_BASE
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+
+  // ---- UTILS ----
+  const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
+  const byId = id => document.getElementById(id);
+
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
     if (typeof nei.available === 'boolean') {
@@ -995,28 +1002,30 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const items = nei.items || nei.sources || nei.data || [];
     return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
   }
+  const fix=(v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
+  const txt=v=>(v!=null?String(v):'');
 
-  // --- ασφαλές render (χωρίς να "αδειάζει" σε αποτυχία) ---
-  function renderNeighborsSafe(nei) {
-    const info = document.getElementById('neighborsInfo');
+  // ---- RENDER ----
+  function renderNeighborsSafe(raw) {
+    const defR = Number(byId('neiRadius')?.value || 60);
+    const nei  = normalizeNeighbors(raw, defR);
+    const info = byId('neighborsInfo');
     const tbl  = document.querySelector('#neighborsTbl tbody');
-    if(!info || !tbl) return;
+    if (!info || !tbl) return;
 
-    const defR = Number(document.getElementById('neiRadius')?.value || 60);
-    nei = normalizeNeighbors(nei, defR);
-
-    if(!nei || !nei.available){
-      info.textContent = 'Gaia: ' + (nei?.reason || 'n/a (showing last good result)');
-      return; // αφήνουμε τον υπάρχοντα πίνακα/plot ως έχει
+    if (!nei.available) {
+      info.textContent = 'Gaia: ' + (nei.reason || 'n/a');
+      log('no data', nei.reason);
+      try { Plotly.purge('neighborsPlot'); } catch {}
+      tbl.innerHTML = '';
+      return;
     }
 
     const items = nei.items || [];
     const rad   = Number(nei.radius_arcsec || defR);
     info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
+    log('items:', items.length, 'rad:', rad);
 
-    // table
-    const fix=(v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
-    const txt=v=>(v!=null?String(v):'');
     tbl.innerHTML = '';
     items.slice(0,100).forEach(r=>{
       const tr=document.createElement('tr');
@@ -1025,11 +1034,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const g  =(Number.isFinite(r.Gmag)?r.Gmag.toFixed(2):(Number.isFinite(r.gmag)?r.gmag.toFixed(2):''));
       const c  =(Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):(Number.isFinite(r.bp_rp)?r.bp_rp.toFixed(2):''));
       const par=fix(r.parallax,2), pmra=fix(r.pmra,2), pmde=fix(r.pmdec,2), ruwe=fix(r.ruwe,2), sid=txt(r.source_id);
-      tr.innerHTML=`<td>${sep}</td><td>${dx}</td><td>${dy}</td><td>${g}</td><td>${c}</td><td>${par}</td><td>${pmra}</td><td>${pmde}</td><td>${ruwe}</td><td>${sid}</td>`;
+      tr.innerHTML=`<td>${sep}</td><td>${dx}</td><td>${dy}</td><td>${g}</td><td>${c}</td>
+                    <td>${par}</td><td>${pmra}</td><td>${pmde}</td><td>${ruwe}</td><td>${sid}</td>`;
       tbl.appendChild(tr);
     });
 
-    // plot
     const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
     if (hasXY) {
       const x=items.map(r=>r.dx_arcsec??0), y=items.map(r=>r.dy_arcsec??0);
@@ -1060,59 +1069,71 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }
   }
 
-  // --- μόνο GAIA fetch (μέσω fetch_detect) ---
+  // ---- FETCHERS ----
+  async function fetchGaiaDirect(target, radius) {
+    const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
+    log('GET', url);
+    const r = await fetch(url, { headers:{accept:'application/json'} });
+    if (!r.ok) throw new Error(`gaia_neighbors HTTP ${r.status}`);
+    return await r.json();
+  }
+  async function fetchGaiaViaDetect(target, radius) {
+    const body = JSON.stringify({
+      source:  byId('sourceSel')?.value || 'mast_spoc',
+      mission: byId('missionSel')?.value || 'TESS',
+      target, kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+      neighbors: true, neighbors_radius: radius, centroid: false
+    });
+    log('POST', `${BASE}/fetch_detect`, body);
+    const r = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    if (!r.ok) throw new Error(`fetch_detect HTTP ${r.status}`);
+    const d = await r.json();
+    return d.neighbors ?? d;
+  }
+
   async function fetchNeighborsOnly() {
-    const status = document.getElementById('status');
-    const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    const radius = Number(document.getElementById('neiRadius')?.value || 60);
+    const status = byId('status');
+    const target = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
+    const radius = Number(byId('neiRadius')?.value || 60);
     if (!target) return;
+    if (status) status.textContent = 'Neighbors';
 
-    const prev = window.lastNeighbors || null; // κράτα προηγούμενο καλό
     try {
-      if (status) status.textContent = 'Neighbors';
-      const body = JSON.stringify({
-        source:  document.getElementById('sourceSel')?.value || 'mast_spoc',
-        mission: document.getElementById('missionSel')?.value || 'TESS',
-        target, kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
-        neighbors: true, neighbors_radius: radius, centroid: false
-      });
-      const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      let raw;
+      try { raw = await fetchGaiaDirect(target, radius); }
+      catch (e1) { log('direct failed -> fallback', e1?.message || e1); raw = await fetchGaiaViaDetect(target, radius); }
 
-      const nei = normalizeNeighbors(data.neighbors || data, radius);
-      if (!nei.available) {
-        window.lastNeighbors = prev || { available:false, reason: nei.reason || 'n/a' };
-      } else {
-        window.lastNeighbors = nei;
-      }
-      renderNeighborsSafe(window.lastNeighbors);
-      if (status) { busyAdvance?.(98,'Rendering'); status.textContent = 'Done'; setTimeout(()=>busyStop?.(), 600); updateMlBadge?.(); }
+      const nei = normalizeNeighbors(raw, radius);
+      window.lastNeighbors = nei;
+      renderNeighborsSafe(nei);
+
+      try { busyAdvance?.(98,'Rendering'); updateMlBadge?.(); setTimeout(()=>busyStop?.(), 600); } catch {}
+      if (status) status.textContent = 'Done';
     } catch (e) {
-      console.error(e);
+      log('error', e);
       if (status) status.textContent = 'Error';
-      window.lastNeighbors = prev || { available:false, reason: e?.message || 'error' };
-      renderNeighborsSafe(window.lastNeighbors);
+      renderNeighborsSafe({ available:false, reason: e?.message || 'fetch failed' });
     }
   }
 
-  // wires
-  document.getElementById('gaiaChk')?.addEventListener('change', (e) => {
+  // ---- WIRES ----
+  byId('gaiaChk')?.addEventListener('change', (e) => {
     if (e.target.checked) fetchNeighborsOnly(); else renderNeighborsSafe(null);
   });
-  document.getElementById('neiRadius')?.addEventListener('change', () => {
-    if (document.getElementById('gaiaChk')?.checked) fetchNeighborsOnly();
+  byId('neiRadius')?.addEventListener('change', () => {
+    if (byId('gaiaChk')?.checked) fetchNeighborsOnly();
   });
 
+  // GAIA ΠΡΩΤΟ μετά το detect
   const _runFetch = window.runFetch;
   window.runFetch = async function () {
-    await _runFetch();
-    if (document.getElementById('gaiaChk')?.checked) fetchNeighborsOnly();
+    if (byId('gaiaChk')?.checked) { await fetchNeighborsOnly(); }
+    return _runFetch ? _runFetch() : undefined;
   };
 
-  // expose
+  // expose για γρήγορο έλεγχο από console
   window.fetchNeighborsOnly = fetchNeighborsOnly;
-  window.renderNeighbors = renderNeighborsSafe;
+  window.renderNeighbors   = renderNeighborsSafe;
 })();
 </script>
 
