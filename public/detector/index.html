@@ -1082,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   async function fetchNeighborsOnly() {
     const status = byId('status');
     const target = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    const radius = Number(byId('neiRadius')?.value || 120);
+    const radius = Number(byId('neiRadius')?.value || 60);
     if (!target) return;
     if (status) status.textContent = 'Neighbors';
 
@@ -1109,12 +1109,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if (byId('gaiaChk')?.checked) fetchNeighborsOnly();
   });
 
-  // τρέχει GAIA *πριν* τους υπόλοιπους υπολογισμούς
-  const _runFetch = window.runFetch;
-  window.runFetch = async function () {
-    if (byId('gaiaChk')?.checked) await fetchNeighborsOnly();
-    return _runFetch ? _runFetch() : undefined;
-  };
+  // Τρέξε πρώτα το κύριο fetch/detect, μετά φέρε GAIA αν είναι ενεργό ή αν λείπει
+const _runFetch = window.runFetch;
+window.runFetch = async function(){
+  const r = _runFetch ? await _runFetch() : undefined;
+
+  const chk = byId('gaiaChk');
+  if (chk && chk.checked) {
+    // Αν από το τελευταίο detect λείπουν neighbors ή δεν είναι διαθέσιμοι, τράβηξέ τους τώρα
+    if (!window.lastNeighbors || window.lastNeighbors.available === false) {
+      await fetchNeighborsOnly();
+    }
+  }
+  return r;
+};
+
 
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors   = renderNeighborsSafe;
