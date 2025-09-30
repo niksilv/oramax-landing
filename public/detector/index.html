@@ -947,7 +947,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   ticInp.addEventListener('focus', ()=>{ showTopSuggestOnFocus(); });
   ticInp.addEventListener('change', ()=>{ hideSuggest(); });
 
-  document.getElementById('runFetch').addEventListener('click', runFetch);
+  document.getElementById('runFetch').addEventListener('click', () => window.runFetch());
   document.getElementById('runUpload').addEventListener('click', runUpload);
 
   document.getElementById('exportCsv').addEventListener('click', ()=>{
@@ -971,6 +971,33 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('fitBtn').addEventListener('click', runFit);
   document.getElementById('pdfBtn').addEventListener('click', runPdf);
+
+// GAIA status + live fetch
+const gaia = document.getElementById('gaiaChk');
+
+gaia?.addEventListener('change', (e) => {
+  const s = document.getElementById('status');
+  if (e.target.checked) {
+    if (s) s.textContent = 'Neighbors';
+    window.fetchNeighborsOnly?.();
+  } else {
+    if (s) s.textContent = 'Done';
+    // καθάρισε view
+    document.querySelector('#neighborsTbl tbody')?.replaceChildren();
+    try { Plotly.purge('neighborsPlot'); } catch {}
+    const info = document.getElementById('neighborsInfo');
+    if (info) info.textContent = 'Gaia: n/a';
+  }
+});
+
+document.getElementById('neiRadius')?.addEventListener('input', () => {
+  if (gaia?.checked) {
+    const s = document.getElementById('status');
+    if (s) s.textContent = 'Neighbors';
+    window.fetchNeighborsOnly?.();
+  }
+});
+
   // Browse modal bindings
   document.getElementById('browseBtn')?.addEventListener('click', openBrowse);
   document.getElementById('browseCloseBtn')?.addEventListener('click', closeBrowse);
