@@ -1,8 +1,8 @@
 // app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "@/components/Header";   // ⬅ χρησιμοποιούμε τον νέο Header (fixed, με hover dropdown)
-import Footer from "@/components/Footer";   // ⬅ Footer χωρίς border
+import Header from "@/components/Header";   // νέο fixed header (logo + dropdown Our Project)
+import Footer from "@/components/Footer";   // footer χωρίς border
 
 export const metadata: Metadata = {
   title: "Orama X — Exoplanet AI",
@@ -13,11 +13,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="scroll-smooth">
-      {/* Προσοχή: το Header είναι fixed, άρα δίνουμε top padding για να μην κρύβεται το περιεχόμενο */}
-      <body className="bg-[#0b0e1a] text-slate-100 antialiased">
+      <body className="bg-[#0f1220] text-slate-100 antialiased">
         <Header />
-        {/* pt-14 ≈ 56px για να “καθαρίσει” κάτω από το fixed header */}
-        <main className="min-h-[calc(100vh-120px)] pt-14">
+        {/* pt-12 για να μην καλύπτεται το περιεχόμενο από το fixed header (ύψος ~48px) */}
+        <main className="min-h-[calc(100vh-120px)] pt-12">
           {children}
         </main>
         <Footer />
