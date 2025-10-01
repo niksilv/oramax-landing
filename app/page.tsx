@@ -1,4 +1,4 @@
-﻿export default function Page() {
+export default function Page() {
   return (
     <section className="block w-full max-w-full h-auto rounded-xl">
       <div className="mx-auto max-w-6xl px-4 pt-10 pb-16 hero-gradient">
@@ -53,25 +53,34 @@
             </p>
           </div>
 
-          {/* Image column with centered overlay button */}
-<div className="w-full flex justify-center">
-  <div className="relative w-full max-w-xl mx-auto">
-    <img
-      src="/images/main.gif"
-      alt="Space background"
-      className="block w-full h-auto rounded-xl"
-    />
-    <div className="absolute inset-0 flex items-center justify-center">
-      <a
-        href="https://www.oramax.space/our-project/exoplanet-detector"
-        className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white text-lg font-semibold rounded-lg shadow-lg"
-      >
-        GET STARTED
-      </a>
-    </div>
-  </div>
-</div>
-
+          {/* Image column with prominent centered CTA */}
+          <div className="w-full flex justify-center">
+            <div className="relative w-full max-w-3xl md:max-w-4xl mx-auto">
+              <img
+                src="/images/main.gif"
+                alt="Exoplanet Predictor"
+                className="block w-full h-auto rounded-xl"
+              />
+              {/* Centered CTA just below the big title inside the GIF */}
+              <a
+                href="https://www.oramax.space/our-project/exoplanet-detector"
+                className="
+                  absolute left-1/2 -translate-x-1/2
+                  top-[62%] md:top-[60%]
+                  px-8 md:px-10 py-3 md:py-3.5
+                  text-white text-base md:text-lg font-semibold tracking-wider
+                  rounded-xl
+                  bg-gradient-to-b from-blue-600 to-blue-700
+                  shadow-lg shadow-blue-900/40
+                  ring-1 ring-white/10
+                  hover:from-blue-500 hover:to-blue-600
+                  transition-colors
+                "
+              >
+                GET STARTED
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </section>
