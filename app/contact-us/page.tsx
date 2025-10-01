@@ -1,34 +1,37 @@
-// app/contact-us/page.tsx
-import BgHero from "@/components/BgHero";
+// components/BgHero.tsx
+import React from "react";
 
-export const metadata = {
-  title: "Contact Us — Orama X",
-  description: "Contact Orama X team",
+type Props = {
+  image?: string;      // π.χ. "/images/contact.jpg"
+  title?: string;      // π.χ. "Contact"
+  subtitle?: string;   // π.χ. "Get in touch"
+  children?: React.ReactNode;
 };
 
-export default function ContactPage() {
+export default function BgHero({ image, title, subtitle, children }: Props) {
   return (
-    <main className="min-h-[80vh] px-4 py-10">
-      <div className="max-w-6xl mx-auto space-y-10">
-        <BgHero
-          image="/images/contact.jpg"
-          title="Contact"
-          subtitle="Get in touch"
-        >
-          <p className="max-w-xl mx-auto text-base md:text-lg leading-7">
-            Για συνεργασίες ή ερωτήσεις σχετικές με το NASA Challenge 2025, στείλε μας email.
+    <section className="relative w-full min-h-[280px] flex items-center justify-center text-white overflow-hidden rounded-2xl">
+      {/* background image */}
+      <div
+        className="absolute inset-0 bg-center bg-cover"
+        style={{
+          backgroundImage: image ? `url(${image})` : undefined,
+        }}
+      />
+      {/* gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/60" />
+      {/* content */}
+      <div className="relative z-10 px-6 py-14 text-center">
+        {subtitle && (
+          <p className="text-sm md:text-base opacity-90 tracking-wide uppercase">
+            {subtitle}
           </p>
-          <p className="mt-4 text-lg">
-            Email:{" "}
-            <a
-              className="underline hover:opacity-80"
-              href="mailto:info@oramax.space"
-            >
-              info@oramax.space
-            </a>
-          </p>
-        </BgHero>
+        )}
+        {title && (
+          <h1 className="mt-2 text-3xl md:text-5xl font-semibold">{title}</h1>
+        )}
+        {children && <div className="mt-5">{children}</div>}
       </div>
-    </main>
+    </section>
   );
 }
