@@ -1,63 +1,74 @@
-// components/Header.tsx
-import Link from "next/link";
-import { useState } from "react";
+"use client";
 
-export default function Header() {
-  const [open, setOpen] = useState(false);
+import React from "react";
+import Link from "next/link";
+
+export default function Navbar() {
+  const [open, setOpen] = React.useState(false);
+  const keepOpen = () => setOpen(true);
+  const close = () => setOpen(false);
 
   return (
-    <header className="bg-white shadow-sm">
-      <nav className="container mx-auto flex justify-between items-center py-4">
-        <div className="font-bold text-lg">ORAMA X</div>
-        <ul className="flex space-x-8">
-          <li>
-            <Link href="/">Home</Link>
-          </li>
-          <li
-            className="relative group"
-            onMouseEnter={() => setOpen(true)}
-            onMouseLeave={() => setOpen(false)}
+    <div className="flex items-center justify-between">
+      {/* Brand */}
+      <Link href="/" className="font-semibold tracking-wide text-slate-900">
+        ORAMA X
+      </Link>
+
+      {/* Main menu */}
+      <nav className="relative hidden md:flex items-center gap-10 text-[15px] text-slate-900">
+        <Link href="/" className="hover:opacity-80">Home</Link>
+
+        {/* Our Project (clickable + dropdown on hover) */}
+        <div
+          className="relative"
+          onMouseEnter={keepOpen}
+          onMouseLeave={close}
+        >
+          {/* το label είναι και link */}
+          <Link
+            href="/our-project"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-black/[0.04]"
+            onFocus={keepOpen}
+            onBlur={close}
           >
-            <button className="flex items-center">
-              Our Project <span className="ml-1">▼</span>
-            </button>
-            {open && (
-              <ul className="absolute top-full left-0 mt-2 bg-black text-white rounded-lg shadow-lg py-2 w-48">
-                <li>
-                  <Link
-                    href="/exoplanet-detector"
-                    className="block px-4 py-2 hover:bg-gray-800"
-                  >
-                    Exoplanet Detector
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/our-project/our-challenge"
-                    className="block px-4 py-2 hover:bg-gray-800"
-                  >
-                    Our Challenge
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/our-project/our-resources"
-                    className="block px-4 py-2 hover:bg-gray-800"
-                  >
-                    Our Resources
-                  </Link>
-                </li>
-              </ul>
-            )}
-          </li>
-          <li>
-            <Link href="/our-team">Our Team</Link>
-          </li>
-          <li>
-            <Link href="/contact">Contact Us</Link>
-          </li>
-        </ul>
+            Our Project <span aria-hidden>▾</span>
+          </Link>
+
+          {/* Dropdown panel */}
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 rounded-2xl
+                        border border-black/10 bg-[#0B0D16] text-white shadow-2xl p-2
+                        transition-all duration-150
+                        ${open ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-1"}`}
+            onMouseEnter={keepOpen}
+            onMouseLeave={close}
+          >
+            <Link
+              href="/detector"
+              className="block px-4 py-2 rounded-xl font-semibold hover:bg-white/10"
+            >
+              Exoplanet Detector
+            </Link>
+            <Link
+              href="/our-project/our-challenge"
+              className="block px-4 py-2 rounded-xl hover:bg-white/10"
+            >
+              Our Challenge
+            </Link>
+            <Link
+              href="/our-project/our-resources"
+              className="block px-4 py-2 rounded-xl hover:bg-white/10"
+            >
+              Our Resources
+            </Link>
+          </div>
+        </div>
+
+        <Link href="/our-team" className="hover:opacity-80">Our Team</Link>
+        <Link href="/contact-us" className="hover:opacity-80">Contact Us</Link>
+        <Link href="/detector" className="hover:opacity-80">Detector</Link>
       </nav>
-    </header>
+    </div>
   );
 }
