@@ -14,17 +14,17 @@ export default function OurTeamPage() {
           {/* Γραμμή 1 - εικόνες */}
           <img
             src="/images/team-man-1.jpg" 
-            alt="Nikolaos Silvestros"
+            alt="Nikolaos Silvestros-Quality Assurance"
             className="w-full h-64 object-cover rounded-md shadow"
           />
           <img
             src="/images/team-woman-1.jpg"
-            alt="Andriani Christoforou"
+            alt="Andriani Christoforou-Advisor"
             className="w-full h-64 object-cover rounded-md shadow"
           />
           <img
             src="/images/team-man-2.jpg"
-            alt="Theodore Silvestros"
+            alt="Theodore Silvestros-Developer"
             className="w-full h-64 object-cover rounded-md shadow"
           />
 
@@ -34,7 +34,6 @@ export default function OurTeamPage() {
               Nikolaos Silvestros
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Quality Assurance
               Nikolaos is the founder and coordinator of the team. He oversees the 
               progress of the program, identifies errors and forwards them for 
               correction, while also contributing to the website’s design. 
@@ -47,7 +46,6 @@ export default function OurTeamPage() {
               Andriani Christoforou
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Advisor
               Andriani brings a fresh perspective to the team, offering creative ideas
               and honest feedback. Her presence adds balance and inspiration, 
               strengthening teamwork and fostering a positive atmosphere at every stage 
@@ -60,7 +58,6 @@ export default function OurTeamPage() {
               Theodore Silvestros
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Developer
               Theodore is the driving force behind the team’s technology. 
               He designs and implements the program, turning ideas into functional 
               applications. With his ability to solve every technical challenge, 
