@@ -53,51 +53,56 @@ export default function Page() {
             </p>
           </div>
 
-          {/* Image column wrapped in a 1×1 table with transparent border */}
-<div className="w-full flex justify-center">
-  {/* Κεντρικό wrapper για responsive έλεγχο */}
-  <div className="mx-auto">
-    <table
-      className="
-        border-8 border-transparent                  /* διάφανο border όπως ζήτησες */
-        mx-auto
-        w-[680px] md:w-[820px] lg:w-[900px]          /* ⬅️ έλεγχος μεγέθους GIF */
-      "
-    >
-      <tbody>
-        <tr>
-          <td className="relative p-0 align-middle">
-            {/* GIF: γεμίζει το πλάτος του κελιού */}
-            <img
-              src="/images/main.gif"
-              alt="Exoplanet Predictor"
-              className="block w-full h-auto rounded-xl"
-            />
+          {/* Image column wrapped in a 1×1 table (transparent border) */}
+          <div className="w-full flex justify-center">
+            <div className="mx-auto">
+              <table
+                className="
+                  border-8 border-transparent      /* transparent “frame” για εύκολο sizing */
+                  mx-auto
+                  w-[640px] md:w-[780px] lg:w-[880px]  /* ← προσαρμόζεις μέγεθος GIF εδώ */
+                "
+              >
+                <tbody>
+                  <tr>
+                    <td className="relative p-0 align-middle">
+                      {/* GIF γεμίζει το κελί */}
+                      <img
+                        src="/images/main.gif"
+                        alt="Exoplanet Predictor"
+                        className="block w-full h-auto rounded-xl"
+                      />
 
-            {/* Μεγάλο 3D κουμπί στο ΚΕΝΤΡΟ του GIF */}
-            <a
-              href="https://www.oramax.space/our-project/exoplanet-detector"
-              className="
-                absolute left-1/2 -translate-x-1/2
-                top-[62%] md:top-[60%]                 /* ρύθμισε ±2% αν το θες πιο πάνω/κάτω */
-                select-none
-                px-10 md:px-12 py-3.5 md:py-4
-                text-white text-lg md:text-xl font-semibold tracking-wider
-                rounded-2xl
-                bg-gradient-to-b from-blue-500 to-blue-700
-                shadow-[0_12px_28px_rgba(30,58,138,0.45)]
-                ring-1 ring-white/15
-                hover:from-blue-450 hover:to-blue-650
-                active:translate-y-[1px]               /* εφέ “πατάει” */
-                transition-transform transition-colors
-              "
-            >
-              GET STARTED
-            </a>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-
+                      {/* Μεγάλο 3D CTA στο κέντρο του GIF, λίγο κάτω από τον τίτλο */}
+                      <a
+                        href="https://www.oramax.space/our-project/exoplanet-detector"
+                        aria-label="Open Exoplanet Detector"
+                        className="
+                          absolute left-1/2 -translate-x-1/2
+                          top-[62%] md:top-[60%]           /* ↑ ρύθμισε % για πιο πάνω/κάτω */
+                          select-none
+                          px-12 md:px-14 py-4 md:py-4.5
+                          text-white text-lg md:text-xl font-semibold tracking-wider
+                          rounded-2xl
+                          bg-gradient-to-b from-blue-500 to-blue-700
+                          shadow-[0_14px_32px_rgba(30,58,138,0.5)]
+                          ring-1 ring-white/15
+                          hover:from-blue-450 hover:to-blue-650
+                          active:translate-y-[1px]
+                          transition-[transform,colors] duration-150
+                        "
+                      >
+                        GET STARTED
+                      </a>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {/* /Image column */}
+        </div>
+      </div>
+    </section>
+  );
+}
