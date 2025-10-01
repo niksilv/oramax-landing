@@ -34,7 +34,7 @@ export default function OurTeamPage() {
               Nikolaos Silvestros
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Nikolaos Silvestros – Quality Assurance
+              Quality Assurance
               Nikolaos is the founder and coordinator of the team. He oversees the 
               progress of the program, identifies errors and forwards them for 
               correction, while also contributing to the website’s design. 
@@ -47,7 +47,7 @@ export default function OurTeamPage() {
               Andriani Christoforou
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Andriani Christodorou – Advisor
+              Advisor
               Andriani brings a fresh perspective to the team, offering creative ideas
               and honest feedback. Her presence adds balance and inspiration, 
               strengthening teamwork and fostering a positive atmosphere at every stage 
@@ -60,7 +60,7 @@ export default function OurTeamPage() {
               Theodore Silvestros
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
-              Theodore Silvestros – Developer
+              Developer
               Theodore is the driving force behind the team’s technology. 
               He designs and implements the program, turning ideas into functional 
               applications. With his ability to solve every technical challenge, 
