@@ -1,24 +1,28 @@
 // app/layout.tsx
 import type { Metadata } from "next";
-import "./globals.css";
-import "./ox-nav.css";   // 👈 νέο import
-import Navbar from "@/components/Navbar";
+import "./globals.css"; // ΠΡΕΠΕΙ να υπάρχει αυτό το import
+
+import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Orama X — Exoplanet AI",
-  description: "Orama X: AI/ML for exoplanet discovery — NASA Challenge 2025",
-  icons: {
-    icon: "/logos/favicon-64.png",
-  },
+  title: "Orama X",
+  description: "Exoplanet Detector",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="scroll-smooth">
-      <body className="bg-[#0f1220] text-slate-100 antialiased">
-        <Navbar />
-        <main className="min-h-[70vh]">{children}</main>
+    <html lang="en" className="h-full">
+      <body className="min-h-screen flex flex-col bg-black text-slate-100">
+        {/* HEADER */}
+        <Header />
+
+        {/* MAIN */}
+        <main className="flex-1">
+          <div className="max-w-6xl mx-auto px-4">{children}</div>
+        </main>
+
+        {/* FOOTER */}
         <Footer />
       </body>
     </html>
