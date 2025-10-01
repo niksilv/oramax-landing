@@ -56,7 +56,7 @@
           {/* Image column (fully responsive, no overflow) */}
           <div className="w-full">
             <img
-  		src="/images/main.jpg"
+  		src="/images/main.gif"
   		alt="Space background"
   		className="block w-full max-w-full h-auto rounded-xl"
 	    />
