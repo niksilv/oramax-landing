@@ -1,11 +1,5 @@
 /* app/globals.css */
 @import "tailwindcss";
 
-:root { color-scheme: dark; }
-
-html, body {
-  margin: 0;
-  padding: 0;
-}
-
-.prose :where(h1,h2,h3) { color: #fff; }
+:root { color-scheme: light; }
+html,body { margin: 0; padding: 0; }
