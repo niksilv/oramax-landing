@@ -1,14 +1,27 @@
-// app/our-project/our-challenge/page.tsx
-export const dynamic = 'force-static';
-export const metadata = { title: "Our Challenge — Orama X" };
+import React from "react";
 
-export default function ChallengePage() {
+type BgHeroProps = {
+  image?: string;
+  title?: string;
+  subtitle?: string;
+  children?: React.ReactNode;
+};
+
+export default function BgHero({ image, title, subtitle, children }: BgHeroProps) {
   return (
-    <main className="min-h-[80vh] px-4 py-10">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-semibold">Our Challenge</h1>
-        <p className="mt-4 opacity-80">Temporary minimal page to isolate circular import.</p>
+    <section className="relative w-full min-h-[280px] flex items-center justify-center text-white overflow-hidden rounded-2xl">
+      {image && (
+        <div
+          className="absolute inset-0 bg-center bg-cover"
+          style={{ backgroundImage: `url(${image})` }}
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/60" />
+      <div className="relative z-10 px-6 py-14 text-center">
+        {subtitle && <p className="text-sm md:text-base opacity-90 uppercase">{subtitle}</p>}
+        {title && <h1 className="mt-2 text-3xl md:text-5xl font-semibold">{title}</h1>}
+        {children && <div className="mt-5">{children}</div>}
       </div>
-    </main>
+    </section>
   );
 }
