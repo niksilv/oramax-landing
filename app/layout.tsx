@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./ox-nav.css";   // 👈 νέο import
 import Navbar from "@/components/Navbar";
+import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
