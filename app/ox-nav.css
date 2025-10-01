@@ -13,10 +13,13 @@ body{ padding-top:56px; }  /* αφήνουμε χώρο για fixed nav */
   border-bottom:1px solid rgba(255,255,255,.1);
   font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter;
 }
+
+/* ΚΕΝΤΡΑΡΙΣΜΑ: το group (logo + menu) είναι στο κέντρο */
 #ox-nav .wrap{
   max-width:1100px; margin:0 auto; padding:10px 16px;
-  display:flex; align-items:center; justify-content:center; gap:18px; /* ⬅ κεντράρισμα */
+  display:flex; align-items:center; justify-content:center; gap:18px;
 }
+
 #ox-nav a{ color:inherit; text-decoration:none; }
 
 #ox-nav .brand{
@@ -27,7 +30,7 @@ body{ padding-top:56px; }  /* αφήνουμε χώρο για fixed nav */
 }
 
 #ox-nav .menu{
-  display:flex; align-items:center; gap:22px; margin-left:0;           /* ⬅ χωρίς offset αριστερά */
+  display:flex; align-items:center; gap:22px; margin-left:0;
 }
 #ox-nav .menu > a,
 #ox-nav .menu > .has-sub > a{
@@ -38,27 +41,42 @@ body{ padding-top:56px; }  /* αφήνουμε χώρο για fixed nav */
   background:rgba(255,255,255,.06);
 }
 
-/* dropdown */
+/* DROPDOWN */
 #ox-nav .has-sub{ position:relative; }
 #ox-nav .has-sub .caret{ margin-left:6px; }
+
+/* Hover bridge: κρατά ενεργό το hover όταν κατεβαίνεις στο submenu */
+#ox-nav .has-sub::after{
+  content:""; position:absolute; left:0; right:0; top:100%; height:8px;
+  background:transparent;
+}
+
+/* Submenu με fade/slide. Χωρίς κενό μεταξύ trigger και μενού. */
 #ox-nav .submenu{
-  position:absolute; top:100%; left:0; display:none;
-  margin-top:8px; min-width:260px; padding:6px;
+  position:absolute; top:100%; left:0;
+  margin-top:0; min-width:260px; padding:6px;
   background:var(--ox-card);
   border:1px solid rgba(255,255,255,.1);
   border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,.35);
+
+  opacity:0; visibility:hidden; transform:translateY(8px);
+  transition:opacity .12s ease, transform .12s ease, visibility .12s;
+  pointer-events:none; /* μη κλικαρίσιμο όταν κρυφό */
 }
 #ox-nav .submenu a{
   display:block; padding:8px 12px; border-radius:8px;
 }
 #ox-nav .submenu a:hover{ background:rgba(255,255,255,.06); }
 
-/* hover ανοίγει σε desktop */
+/* Hover + focus-within (keyboard) εμφανίζει το submenu, χωρίς “πτώση” */
 @media (hover:hover) and (pointer:fine){
-  #ox-nav .has-sub:hover .submenu{ display:block; }
+  #ox-nav .has-sub:hover .submenu,
+  #ox-nav .has-sub:focus-within .submenu{
+    opacity:1; visibility:visible; transform:translateY(0); pointer-events:auto;
+  }
 }
 
-/* basic mobile tweaks */
+/* Βασικά mobile tweaks */
 @media (max-width:720px){
   body{ padding-top:64px; }
   #ox-nav .wrap{ gap:12px; }
