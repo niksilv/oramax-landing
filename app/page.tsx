@@ -53,14 +53,24 @@
             </p>
           </div>
 
-          {/* Image column (fully responsive, no overflow) */}
-          <div className="w-full">
-            <img
-  		src="/images/main.gif"
-  		alt="Space background"
-  		className="block w-full max-w-full h-auto rounded-xl"
-	    />
-          </div>
+          {/* Image column with overlay button */}
+<div className="w-full flex justify-center">
+  <div className="relative w-full max-w-md">
+    <img
+      src="/images/main.gif"
+      alt="Space background"
+      className="block w-full h-auto rounded-xl"
+    />
+    <a
+      href="https://www.oramax.space/our-project/exoplanet-detector"
+      className="absolute inset-0 flex items-center justify-center"
+    >
+      <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg">
+        GET STARTED
+      </button>
+    </a>
+  </div>
+</div>
         </div>
       </div>
     </section>
