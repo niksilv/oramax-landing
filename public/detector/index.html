@@ -1,74 +1,25 @@
 <!doctype html>
 <html>
 <head>
-  <meta http-equiv="Cache-Control" content="no-store, max-age=0">
   <meta charset="utf-8"/>
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-<!-- moved inline JS below -->
-<script>
-// === Top-N suggestions on focus ===
-;window.showTopSuggestOnFocus = async function(){
-  const input = document.getElementById('ticInput');
-  if(!input) return;
-  try{
-    const mission = document.getElementById('missionSel')?.value || 'auto';
-    const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
-    const q = 'TIC '; // generic to get common targets
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`, { headers:{ 'Accept':'application/json' } });
-    if(!r.ok) return;
-    const list = normalizeSuggestData(await r.json());
-    if(list.length) showSuggest(list, input);
-  }catch{}
-}
-
-// === Browse modal ===
-let _browsePage = 0;
-let _browseLastQuery = '';
-function openBrowse(){
-  const m = document.getElementById('browseModal');
-  if(!m) return;
-  const q = (document.getElementById('ticInput')?.value || '').trim();
-  document.getElementById('browseQuery').value = q;
-  _browsePage = 0;
-  _browseLastQuery = q || 'TIC ';
-  m.style.display = 'flex';
-  searchBrowse();
-}
-function closeBrowse(){ const m=document.getElementById('browseModal'); if(m) m.style.display='none'; }
-function renderBrowse(list, totalGuess){
-  const el = document.getElementById('browseList');
-  el.innerHTML = (list||[]).map((s,i)=>`<div class="row" data-i="${i}">${(s.label||s.value)}</div>`).join('');
-  document.getElementById('browseStatus').textContent = `${list.length} results · page ${_browsePage+1}`;
-  Array.from(el.children).forEach(div=>{
-    div.addEventListener('click', (e)=>{
-      const i = +e.currentTarget.getAttribute('data-i');
-      const s = list[i]; const input=document.getElementById('ticInput');
-      applySuggestion(s, input);
-      closeBrowse();
-    });
-  });
-}
-;window.searchBrowse = async function(){
-  const q = (document.getElementById('browseQuery')?.value || _browseLastQuery || '').trim() || 'TIC ';
-  _browseLastQuery = q;
-  const limit = 20, offset = _browsePage * limit;
-  const mission = document.getElementById('missionSel')?.value || 'auto';
-  const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
-  try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`, { headers:{ 'Accept':'application/json' } });
-    if(!r.ok){ renderBrowse([],0); return; }
-    const list = normalizeSuggestData(await r.json());
-    renderBrowse(list, 0);
-  }catch{ renderBrowse([],0); }
-}
-function browseNext(){ _browsePage++; searchBrowse(); }
-function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse(); }
-
-
+  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js">updateMlBadge && updateMlBadge();
 </script>
   <style>
+/* ORAMAX nav */
+.ox-nav{ position:relative; z-index:1000; }
+.ox-nav-inner{ max-width:1100px; margin:0 auto; padding:10px 12px;
+               display:flex; align-items:center; justify-content:center; gap:18px; }
+.ox-nav a{ text-decoration:none; color:#0b0e1a; font-weight:600; padding:6px 10px; border-radius:10px; }
+.ox-nav a:hover{ background:#f2f2f2; }
+.ox-nav .ox-dropdown{ position:relative; }
+.ox-nav .ox-dd-btn{ cursor:pointer; }
+.ox-nav .ox-dd{ position:absolute; top:100%; left:50%; transform:translateX(-50%);
+                background:#0b0e1a; color:#fff; border-radius:10px; padding:8px 0; display:none; }
+.ox-nav .ox-dd a{ color:#fff; display:block; padding:8px 14px; }
+.ox-nav .ox-dropdown:hover .ox-dd{ display:block; }
+
     :root{ --card:#fff; --border:#e5e7eb; --muted:#666; }
     *{ box-sizing:border-box }
     body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin: 24px; background:#fafafa; color:#111;}
@@ -108,48 +59,22 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 #busyPct{font-size:12px;color:#666}
 @keyframes ind{to{transform:translateX(260px)}}
 .hidden{display:none}
-
-/* --- Browse modal --- */
-#browseModal{position:fixed;inset:0;display:none;background:rgba(0,0,0,.35);z-index:10000;align-items:center;justify-content:center}
-#browseCard{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.2);width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
-#browseHead{padding:10px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center}
-#browseBody{padding:8px 0;overflow:auto}
-#browseList .row{padding:8px 12px;border-bottom:1px solid #f2f2f2;cursor:pointer}
-#browseList .row:hover{background:#f7f7f7}
-#browseFoot{padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;justify-content:space-between}
-
-/* --- ORAMAX: centered navbar & footer (isolated styles) --- */
-.ox-nav{ position:relative; z-index:1000; }
-.ox-nav-inner{
-  max-width: 1100px; margin: 0 auto; padding: 10px 12px;
-  display:flex; align-items:center; justify-content:center; gap:18px;
-}
-.ox-nav a{
-  text-decoration:none; color:#0b0e1a; font-weight:600; padding:6px 10px; border-radius:10px;
-}
-.ox-nav a:hover{ background:#f2f2f2; }
-.ox-nav .ox-dropdown{ position:relative; }
-.ox-nav .ox-dd-btn{ cursor:pointer; }
-.ox-nav .ox-dd{ position:absolute; top:100%; left:50%; transform:translateX(-50%);
-  background:#0b0e1a; color:#fff; border-radius:10px; padding:8px 0;
-  box-shadow:0 12px 28px rgba(0,0,0,.25); min-width:220px; display:none;
-}
-.ox-nav .ox-dd a{ color:#fff; display:block; padding:8px 14px; }
-.ox-nav .ox-dd a:hover{ background:#1b1f2a; }
-.ox-nav .ox-dropdown:hover .ox-dd{ display:block; }
-.ox-footer{ margin:28px 0 10px; }
-.ox-footer-inner{ max-width:1100px; margin:0 auto; text-align:center; color:#333; font-size:12.5px; }
-@media (max-width:720px){
-  .ox-nav-inner{ flex-wrap:wrap; gap:10px; }
-}
-
 </style>
 
-      <!-- moved inline call below -->
-
+      <script defer src="/ormax-ml-toggle.js">updateMlBadge && updateMlBadge();
+</script>
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
 </head>
 <body>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/detector/sw-oramax.js?b=42', { scope: '/detector/' })
+    .then(() => console.log('OramaX SW proxy ready (reg)'))
+    .catch(err => console.error('SW register failed', err));
+}
+updateMlBadge && updateMlBadge();
+</script>
 
 <!-- ORAMAX centered navbar -->
 <nav class="ox-nav" aria-label="Main">
@@ -170,15 +95,6 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
     <a href="/contact-us">Contact Us</a>
   </div>
 </nav>
-
-<script>
-// Disable SW by default; enable only with ?sw=1
-if ('serviceWorker' in navigator && location.search.includes('sw=1')) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?b=48', { scope: '/detector/' })
-    .then(() => console.log('OramaX SW proxy ready (reg)'))
-    .catch(err => console.error('SW register failed', err));
-}
-</script>
 
 
   <h1>Orama X · Exoplanet Detector</h1>
@@ -245,7 +161,6 @@ if ('serviceWorker' in navigator && location.search.includes('sw=1')) {
       <input type="text" id="ticInput" list="targetList" placeholder='TIC 307210830 (for MAST)' autocomplete="off" />
       <input type="text" id="urlInput" placeholder="https://.../lightcurve.csv (time,flux)" style="display:none; min-width:400px;" />
       <button id="runFetch">Fetch & Detect</button>
-      <button id="browseBtn" type="button" title="Open target browser">Browse</button>
       <button id="exportCsv">Export CSV</button>
       <button id="exportVettedCsv" title="Export only candidates with P ≥ threshold">Export Vetted CSV</button>
       <span class="muted" id="status"></span>
@@ -305,42 +220,16 @@ if ('serviceWorker' in navigator && location.search.includes('sw=1')) {
     <h3>Neighbors (Gaia DR3)</h3>
     <div id="neighborsPlot" style="height:320px;"></div>
     <div class="muted" id="neighborsInfo"></div>
-    <table id="neighborsTbl" style="margin-top:8px;">
-  <thead>
-    <tr>
-      <th>sep [″]</th>
-      <th>dx [″]</th>
-      <th>dy [″]</th>
-      <th>Gmag</th>
-      <th>BP−RP</th>
-      <th>parallax [mas]</th>
-      <th>pmRA [mas/yr]</th>
-      <th>pmDec [mas/yr]</th>
-      <th>RUWE</th>
-      <th>source_id</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
+    <table id="neighborsTbl" style="margin-top:8px;"><thead>
+      <tr><th>sep ["]</th><th>Gmag</th><th>BPRP</th></tr>
+    </thead><tbody></tbody></table>
   </div>
 
 <script>
-// ===== API base (dynamic) =====
-window.API_BASE = (location.hostname.endsWith('oramax.space') || location.hostname.endsWith('vercel.app'))
-    ? '/api/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+/* ===== API base (δουλεύει για /detector ΚΑΙ /detector/index.html) ===== */
 const API_BASE = window.API_BASE;
 
 /* ---------- Helpers ---------- */
-window.makeRegex = function(pattern, flags){
-  try { return new RegExp(pattern, flags); }
-  catch(e){
-    var esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(esc, flags);
-  }
-};
-
 function parseTxt(text){
   const lines = text.trim().split(/\r?\n/);
   const T=[], F=[];
@@ -398,66 +287,23 @@ function renderNeighbors(nei){
   const items = nei.items || [];
   const rad = Number(nei.radius_arcsec || 60);
   info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
-
-  // Πίνακας (με ασφάλεια για κενά πεδία)
-  const safe = v => (Number.isFinite(v) ? v : '');
-  const fix = (v, n=2) => (Number.isFinite(v) ? v.toFixed(n) : '');
-  const txt = v => (v != null ? String(v) : '');
-
   tbl.innerHTML = '';
   items.slice(0,80).forEach(r=>{
     const tr = document.createElement('tr');
-    const sep = fix(r.sep_arcsec,1);
-    const dx  = fix(r.dx_arcsec,1);
-    const dy  = fix(r.dy_arcsec,1);
-    const g   = (Number.isFinite(r.Gmag) ? r.Gmag.toFixed(2)
-              : Number.isFinite(r.gmag)  ? r.gmag.toFixed(2) : '');
-    const bprp = (Number.isFinite(r.BP_RP) ? r.BP_RP.toFixed(2)
-                : Number.isFinite(r.bp_rp) ? r.bp_rp.toFixed(2) : '');
-    const par  = fix(r.parallax,2);
-    const pmra = fix(r.pmra,2);
-    const pmde = fix(r.pmdec,2);
-    const ruwe = fix(r.ruwe,2);
-    const sid  = txt(r.source_id);
-
-    tr.innerHTML = `<td>${sep}</td><td>${dx}</td><td>${dy}</td>
-                    <td>${g}</td><td>${bprp}</td>
-                    <td>${par}</td><td>${pmra}</td><td>${pmde}</td>
-                    <td>${ruwe}</td><td>${sid}</td>`;
+    tr.innerHTML = `<td>${r.sep_arcsec.toFixed(1)}</td><td>${(r.Gmag??'').toString()}</td><td>${(Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):'')}</td>`;
     tbl.appendChild(tr);
   });
-
-  // Plot
-  const x = items.map(r=>r.dx_arcsec);
-  const y = items.map(r=>r.dy_arcsec);
-  const s = items.map(r=>{
-    const mag = (Number.isFinite(r.Gmag) ? r.Gmag : (Number.isFinite(r.gmag) ? r.gmag : 15));
-    return Math.max(6, 12 - 0.8*(mag-10));
+  const x = items.map(r=>r.dx_arcsec), y = items.map(r=>r.dy_arcsec), s = items.map(r=>Math.max(6, 12 - 0.8*((r.Gmag??15)-10)));
+  Plotly.newPlot('neighborsPlot',[
+    {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
+    {x:x, y:y, mode:'markers', marker:{size:s}}
+  ],{
+    margin:{t:10}, xaxis:{title:'East ["]'}, yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
+    shapes:[
+      {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
+      {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad, line:{dash:'solid'}}
+    ]
   });
-
-  const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
-  if (hasXY) {
-    Plotly.newPlot('neighborsPlot',[
-      {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
-      {x:x, y:y, mode:'markers', marker:{size:s}}
-    ],{
-      margin:{t:10}, xaxis:{title:'East ["]'}, yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
-      shapes:[
-        {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
-        {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad, line:{dash:'solid'}}
-      ]
-    });
-  } else {
-    const sep = items.map(r=>r.sep_arcsec ?? 0);
-    Plotly.newPlot('neighborsPlot',[
-      {x:sep, y:sep.map(()=>0), mode:'markers', marker:{size:s}, name:'sources'}
-    ],{
-      margin:{t:10},
-      xaxis:{title:'Separation ["]'},
-      yaxis:{visible:false, range:[-1,1]},
-      shapes:[{type:'line', x0:21, x1:21, y0:-1, y1:1, line:{dash:'dot'}}]
-    });
-  }
 }
 
 // ---------- State ----------
@@ -581,59 +427,7 @@ function selectCandidate(i){
   document.getElementById('fitBox').style.display='none';
   lastFit = null;
 }
-
-// ===== NEW: helpers for probability fallback =====
-function znorm(arr){
-  const xs = arr.filter(Number.isFinite);
-  if (!xs.length) return arr.map(_=>0);
-  const mu = xs.reduce((a,b)=>a+b,0)/xs.length;
-  const sd = Math.sqrt(xs.reduce((a,b)=>a+(b-mu)**2,0)/xs.length) || 1;
-  return arr.map(x => Number.isFinite(x) ? (x - mu) / sd : 0);
-}
-function softmax(xs){
-  const m = Math.max(...xs.map(x=>Number.isFinite(x)?x:-Infinity));
-  const ex = xs.map(x => Number.isFinite(x) ? Math.exp(x - m) : 0);
-  const s  = ex.reduce((a,b)=>a+b,0) || 1;
-  return ex.map(e => e / s);
-}
-
-// ===== NEW: approx SNR if backend SNRs are all same/missing =====
-function phaseFoldForCand(T,F,c){
-  return phaseFold(T,F,c.period,c.t0);
-}
-function approxSNR(T, F, cand){
-  if (!Number.isFinite(cand.period) || !Number.isFinite(cand.duration) || !Number.isFinite(cand.t0)) return NaN;
-  const pf = phaseFoldForCand(T, F, cand);
-  const w = Math.max(1e-5, (cand.duration || 0) / cand.period);
-  const h = w/2;
-  const inFlux = [], outFlux = [];
-  for (const d of pf){
-    const x = d.x;
-    const inWin = (x <= h) || (x >= 1 - h);
-    (inWin ? inFlux : outFlux).push(d.y);
-  }
-  if (inFlux.length < 5 || outFlux.length < 20) return NaN;
-  const mean = a => a.reduce((p,q)=>p+q,0)/a.length;
-  const muIn = mean(inFlux), muOut = mean(outFlux);
-  const depth = muOut - muIn;
-  const sOut = Math.sqrt(outFlux.reduce((s,x)=>s+(x-muOut)*(x-muOut),0)/(outFlux.length-1)) || 0;
-  return sOut ? Math.abs(depth)*Math.sqrt(inFlux.length)/sOut : NaN;
-}
-function enrichWithApproxSNR(T, F, cands){
-  const seen = new Set(cands.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr.toFixed(1) : 'NaN'));
-  const allSame = seen.size <= 1; // όλα ίδια ή όλα NaN
-  if (!allSame) return;
-  cands.forEach(c=>{
-    const s = approxSNR(T,F,c);
-    if (!c.fit) c.fit = {};
-    if (Number.isFinite(s)) c.fit.snr = s;
-  });
-}
-
 function renderAll(T, F, candidates, neighbors){
-  // NEW: enrich SNRs if needed (before probabilities fallback uses SNR)
-  enrichWithApproxSNR(T, F, candidates||[]);
-
   lcTime=T; lcFlux=F; lastCands=candidates||[]; selectedIdx=0;
   lastNeighbors = neighbors || null;
   busySet(70,'Rendering light curve…');
@@ -650,7 +444,8 @@ function renderAll(T, F, candidates, neighbors){
 
 /* ---------- NEW: normalize backend candidates to UI shape ---------- */
 function normalizeCandidates(cands){
-  const out = (cands||[]).map(c=>{
+  return (cands||[]).map(c=>{
+    // 1) Προτίμησε centroid αντικείμενο από backend, αν υπάρχει
     let centroid = null;
     if (c && typeof c.centroid === 'object') {
       centroid = {
@@ -661,8 +456,21 @@ function normalizeCandidates(cands){
         rho_flux_centroid: Number.isFinite(c.centroid.rho_flux_centroid) ? Number(c.centroid.rho_flux_centroid) : undefined,
         suspect_beb: !!c.centroid.suspect_beb
       };
+    } else if (c && (c.centroid_sigma!=null || c.centroid_rho!=null || c.centroid_dr_pix!=null)) {
+      // 2) ή σκόρπια πεδία *αν* στέλνονται με flat schema
+      centroid = {
+        available: true,
+        dr_pix: Number(c.centroid_dr_pix),
+        sigma: Number(c.centroid_sigma),
+        rho_flux_centroid: Number(c.centroid_rho),
+        suspect_beb: !!c.centroid_suspect_beb
+      };
     } else {
-      centroid = { available:false, reason:'n/a' };
+      // 3) fallback σε centroid_ok (παλιό placeholder)
+      centroid =
+        (c.centroid_ok === true)  ? {available:true,  sigma:0,   rho_flux_centroid:0, suspect_beb:false} :
+        (c.centroid_ok === false) ? {available:true,  sigma:5.0, rho_flux_centroid:null, suspect_beb:true} :
+                                    {available:false, reason:'n/a'};
     }
 
     return {
@@ -670,8 +478,9 @@ function normalizeCandidates(cands){
       duration : Number(c.duration),
       depth    : Number(c.depth),
       power    : Number(c.power),
-      probability : Number(c.p_planet ?? c.probability ?? NaN),
+      probability : Number(c.p_planet ?? 0),
       t0       : Number(c.t0 ?? 0),
+      // --- ΠΕΡΑΣΕ αυτουσίως τα windows από backend (αν υπάρχουν) ---
       windows  : (c.windows && typeof c.windows === 'object') ? c.windows : null,
       fit      : { snr: (c.snr ?? null), delta_bic: (c.delta_bic ?? null) },
       vetting  : {
@@ -682,30 +491,6 @@ function normalizeCandidates(cands){
       centroid
     };
   });
-
-  // --- Improved fallback: softmax(power, SNR, -ΔBIC) όταν οι πιθανότητες είναι ίδιες/λείπουν ---
-  const probs = out.map(c=>c.probability).filter(p=>Number.isFinite(p));
-  const k = out.length;
-  const same = (probs.length===k) && new Set(probs.map(p=>p.toFixed(3))).size===1;
-  const invalid = probs.length===0;
-
-  if (k>0 && (same || invalid)) {
-    const pow = out.map(c => Number.isFinite(c.power) ? c.power : 0);
-    const snr = out.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr : NaN);
-    const db  = out.map(c => Number.isFinite(c?.fit?.delta_bic) ? -c.fit.delta_bic : NaN); // -ΔBIC (μικρότερο καλύτερο)
-
-    // βάρη: power 1.0, SNR 0.7, -ΔBIC 0.5
-    const z1 = znorm(pow), z2 = znorm(snr), z3 = znorm(db);
-    const logits = out.map((_,i) => 1.0*z1[i] + 0.7*z2[i] + 0.5*z3[i]);
-    let P = softmax(logits);
-
-    if (!P.some(p => p > 0)) {
-      const sum = pow.reduce((a,b)=>a+b,0);
-      P = sum>0 ? pow.map(x=>x/sum) : out.map((_,i)=> i===0 ? 0.7 : 0.3/(k-1));
-    }
-    out.forEach((c,i)=> c.probability = P[i]);
-  }
-  return out;
 }
 
 // ---------- Source toggle ----------
@@ -716,7 +501,7 @@ function toggleInputs(){
 }
 
 // ---------- Fetch & Detect ----------
-;window.runFetch = async function(){
+async function runFetch(){
   const status = document.getElementById('status');
   try{
     busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
@@ -752,7 +537,7 @@ function toggleInputs(){
 }
 
 // ---------- Upload TXT ----------
-;window.runUpload = async function(){
+async function runUpload(){
   const status = document.getElementById('statusUp');
   try{
     status.textContent = 'Running...';
@@ -867,7 +652,7 @@ const updateSuggest = debounce(async ()=>{
 
 
 // ---------- Transit Fit ----------
-;window.runFit = async function(){
+async function runFit(){
   const fitStatus = document.getElementById('fitStatus');
   const fitBox = document.getElementById('fitBox');
   try{
@@ -912,7 +697,7 @@ const updateSuggest = debounce(async ()=>{
 }
 
 // ---------- PDF report ----------
-;window.runPdf = async function(){
+async function runPdf(){
   try{
     if(!lastCands.length){ alert('Run detect first'); return; }
     const cand = lastCands[selectedIdx];
@@ -947,10 +732,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   const ticInp = document.getElementById('ticInput');
   ticInp.removeAttribute('list');         // απενεργοποιεί native datalist
   ticInp.addEventListener('input', updateSuggest);
-  ticInp.addEventListener('focus', ()=>{ showTopSuggestOnFocus(); });
+  ticInp.addEventListener('focus', ()=>{ if((ticInp.value||'').trim().length>=3) updateSuggest(); });
   ticInp.addEventListener('change', ()=>{ hideSuggest(); });
 
-  document.getElementById('runFetch').addEventListener('click', () => window.runFetch());
+  document.getElementById('runFetch').addEventListener('click', runFetch);
   document.getElementById('runUpload').addEventListener('click', runUpload);
 
   document.getElementById('exportCsv').addEventListener('click', ()=>{
@@ -974,282 +759,167 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('fitBtn').addEventListener('click', runFit);
   document.getElementById('pdfBtn').addEventListener('click', runPdf);
-
-// GAIA status + live fetch
-const gaia = document.getElementById('gaiaChk');
-
-gaia?.addEventListener('change', (e) => {
-  const s = document.getElementById('status');
-  if (e.target.checked) {
-    if (s) s.textContent = 'Neighbors';
-    window.fetchNeighborsOnly?.();
-  } else {
-    if (s) s.textContent = 'Done';
-    // καθάρισε view
-    document.querySelector('#neighborsTbl tbody')?.replaceChildren();
-    try { Plotly.purge('neighborsPlot'); } catch {}
-    const info = document.getElementById('neighborsInfo');
-    if (info) info.textContent = 'Gaia: n/a';
-  }
 });
-
-document.getElementById('neiRadius')?.addEventListener('input', () => {
-  if (gaia?.checked) {
-    const s = document.getElementById('status');
-    if (s) s.textContent = 'Neighbors';
-    window.fetchNeighborsOnly?.();
-  }
-});
-
-  // Browse modal bindings
-  document.getElementById('browseBtn')?.addEventListener('click', openBrowse);
-  document.getElementById('browseCloseBtn')?.addEventListener('click', closeBrowse);
-  document.getElementById('browseSearchBtn')?.addEventListener('click', ()=>{ _browsePage=0; searchBrowse(); });
-  document.getElementById('browseNextBtn')?.addEventListener('click', browseNext);
-  document.getElementById('browsePrevBtn')?.addEventListener('click', browsePrev);
-  document.getElementById('browseQuery')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ _browsePage=0; searchBrowse(); }});
-});
+updateMlBadge && updateMlBadge();
 </script>
 
 <script id="neighbors-addon">
-;(() => {
-  // ==== helpers & config ====
-  const byId = (id) => document.getElementById(id);
-  const setStatus = (t) => { const s = byId('status'); if (s) s.textContent = t; };
-  const BASE = window.API_BASE;
-  const log  = (...a)=>{ try{ console.log('[GAIA]',...a) }catch{} };
-
-  // ΠΡΟΣΟΧΗ για το async σφάλμα: βάζουμε leading ';' (το βλέπεις πάνω) ώστε να μην "κουμπώσει"
-  // το IIFE επάνω σε προηγούμενο <script> μπλοκ (ASI issue).
-
-  // ==== take RA/Dec from detect ====
-  function getCoordsFromState() {
-    // προσπάθησε από πρόσφατα αποτελέσματα detect
-    const p = (window.lastPreproc || window.preproc || window.detectResult || {});
-    const pick = (o,k) => (o && k in o && Number.isFinite(+o[k])) ? +o[k] : null;
-    const ra  = pick(p,'ra')  ?? pick(p,'RA')  ?? pick(p,'ra_deg')  ?? pick(p,'target_ra');
-    const dec = pick(p,'dec') ?? pick(p,'DEC') ?? pick(p,'dec_deg') ?? pick(p,'target_dec');
-    if (Number.isFinite(ra) && Number.isFinite(dec)) return { ra, dec };
-
-    // προσπάθησε από target info (αν υπάρχει)
-    const t = (window.currentTargetInfo || {});
-    const ra2  = pick(t,'ra')  ?? pick(t,'RA')  ?? pick(t,'ra_deg');
-    const dec2 = pick(t,'dec') ?? pick(t,'DEC') ?? pick(t,'dec_deg');
-    if (Number.isFinite(ra2) && Number.isFinite(dec2)) return { ra:ra2, dec:dec2 };
-
-    // DOM hints (αν έχεις data attributes)
-    const el = document.querySelector('[data-ra][data-dec]');
-    if (el) {
-      const r = +el.getAttribute('data-ra'); const d = +el.getAttribute('data-dec');
-      if (Number.isFinite(r) && Number.isFinite(d)) return { ra:r, dec:d };
-    }
-    return null;
-  }
-
-  // resolve ονόματος (ώστε να στείλουμε σωστή μορφή όταν χρειαστεί target)
-  ;window.resolveTargetRaw = async function(raw){
-    const q = /^\d{3,}$/.test(raw) ? `TIC ${raw}` : raw;
-    try{
-      const src = byId('sourceSel')?.value || 'mast_spoc';
-      const mission = byId('missionSel')?.value || 'auto';
-      const domParam =
-        (mission === 'TESS' || src.startsWith('mast_')) ? '&domain=TESS'
-        : (mission === 'Kepler' ? '&domain=Kepler' : '');
-      const r = await fetch(`${BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=5&contains=1`, { headers:{Accept:'application/json'} });
-      if(!r.ok) return q;
-      const data = await r.json();
-      const items = Array.isArray(data) ? data : (data.items || data.results || data.suggestions || data.data || []);
-      if(!items.length) return q;
-      const best = items.find(it => (it.value||it.label||'').toString().toUpperCase() === q.toUpperCase())
-                || items.find(it => (it.label||it.value||'').toString().toUpperCase().startsWith(q.toUpperCase()))
-                || items[0];
-      const val = (best.value || best.label || '').toString().trim();
-      return val || q;
-    }catch{ return q; }
-  }
-
-  // ==== normalize & render ====
+(() => {
+  // ---- Robust normalizer για διαφορετικά σχήματα neighbors ----
   function normalizeNeighbors(nei, defaultRadius) {
     if (!nei) return { available:false, reason:'n/a' };
+
+    // A) Ήδη στο "σωστό" σχήμα (έχουμε available)
     if (typeof nei.available === 'boolean') {
+      // Βεβαιώσου ότι έχουμε radius
       if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius;
       return nei;
     }
-    if (Array.isArray(nei)) return { available:true, radius_arcsec: defaultRadius, items: nei };
+
+    // B) Αν είναι κατευθείαν array αντικειμένων
+    if (Array.isArray(nei)) {
+      return { available:true, radius_arcsec: defaultRadius, items: nei };
+    }
+
+    // C) Άλλο σχήμα: προσπάθεια εξαγωγής items
     const items = nei.items || nei.sources || nei.data || [];
-    return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
+    return {
+      available: Array.isArray(items) && items.length > 0,
+      radius_arcsec: nei.radius_arcsec || defaultRadius,
+      items: items
+    };
   }
-  const fix=(v,n=2)=>Number.isFinite(v)?v.toFixed(n):'';
 
-  function renderNeighborsSafe(raw) {
-    const defR = Number(byId('neiRadius')?.value || 60);
-    const nei  = normalizeNeighbors(raw, defR);
-    const info = byId('neighborsInfo');
+  // ---- Rendering με graceful degradation (αν λείπουν dx/dy) ----
+  function renderNeighborsSafe(nei) {
+    const info = document.getElementById('neighborsInfo');
     const tbl  = document.querySelector('#neighborsTbl tbody');
-    if (!info || !tbl) return;
+    if(!info || !tbl) return;
 
-    if (!nei.available) {
-      info.textContent = 'Gaia: ' + (nei.reason || 'n/a');
-      try { Plotly.purge('neighborsPlot'); } catch {}
-      tbl.innerHTML = '';
+    // καθάρισε plot/table
+    tbl.innerHTML='';
+    try { Plotly.purge('neighborsPlot'); } catch{}
+
+    if(!nei || !nei.available){
+      info.textContent = nei?.reason ? ('Gaia: ' + nei.reason) : 'Gaia: n/a';
       return;
     }
 
     const items = nei.items || [];
-    const rad   = Number(nei.radius_arcsec || defR);
+    const rad   = Number(nei.radius_arcsec || 60);
     info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
 
-    // table
-    tbl.innerHTML = '';
+    // Table
     items.slice(0,100).forEach(r=>{
-      const tr=document.createElement('tr');
-      const sep=fix(Number.isFinite(r.sep_arcsec)?r.sep_arcsec:(Number.isFinite(r.dx_arcsec)&&Number.isFinite(r.dy_arcsec)?Math.hypot(r.dx_arcsec,r.dy_arcsec):NaN),1);
-      tr.innerHTML = `
-        <td>${sep}</td><td>${fix(r.dx_arcsec,1)}</td><td>${fix(r.dy_arcsec,1)}</td>
-        <td>${Number.isFinite(r.Gmag)?r.Gmag.toFixed(2):Number.isFinite(r.gmag)?r.gmag.toFixed(2):''}</td>
-        <td>${Number.isFinite(r.BP_RP)?r.BP_RP.toFixed(2):Number.isFinite(r.bp_rp)?r.bp_rp.toFixed(2):''}</td>
-        <td>${fix(r.parallax,2)}</td><td>${fix(r.pmra,2)}</td><td>${fix(r.pmdec,2)}</td>
-        <td>${fix(r.ruwe,2)}</td><td>${r.source_id??''}</td>`;
+      const tr = document.createElement('tr');
+      const sep = Number.isFinite(r.sep_arcsec) ? r.sep_arcsec.toFixed(1) : '';
+      const g   = (r.Gmag ?? r.gmag ?? r.G) ?? '';
+      const bprp = Number.isFinite(r.BP_RP) ? r.BP_RP.toFixed(2) : (Number.isFinite(r.bp_rp) ? r.bp_rp.toFixed(2) : '');
+      tr.innerHTML = `<td>${sep}</td><td>${g}</td><td>${bprp}</td>`;
       tbl.appendChild(tr);
     });
 
-    // plot
+    // Plot: προτίμησε dx/dy, αλλιώς μονόδιάστατο radial
     const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
     if (hasXY) {
-      const x=items.map(r=>r.dx_arcsec??0), y=items.map(r=>r.dy_arcsec??0);
-      const s=items.map(r=>{ const m=(Number.isFinite(r.Gmag)?r.Gmag:(Number.isFinite(r.gmag)?r.gmag:15)); return Math.max(6,12-0.8*(m-10)); });
+      const x = items.map(r=>r.dx_arcsec ?? 0);
+      const y = items.map(r=>r.dy_arcsec ?? 0);
+      const s = items.map(r=>Math.max(6, 12 - 0.8*(((r.Gmag ?? r.gmag ?? 15)-10))));
       Plotly.newPlot('neighborsPlot',[
-        {x:[0],y:[0],mode:'markers+text',text:['target'],textposition:'top center',marker:{size:10,symbol:'x'}},
-        {x,y,mode:'markers',marker:{size:s}}
+        {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
+        {x,y, mode:'markers', marker:{size:s}}
       ],{
-        margin:{t:10}, xaxis:{title:'East ["]'}, yaxis:{title:'North ["]',scaleanchor:'x',scaleratio:1},
+        margin:{t:10},
+        xaxis:{title:'East ["]'},
+        yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
         shapes:[
-          {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21,line:{dash:'dot'}},
-          {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad,line:{dash:'solid'}}
+          {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
+          {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad, line:{dash:'solid'}}
         ]
       });
     } else {
-      const sep=items.map(r=>r.sep_arcsec??0);
+      // Fallback: radial scatter στον άξονα x
+      const sep = items.map(r=>r.sep_arcsec ?? 0);
+      const s = items.map(r=>Math.max(6, 12 - 0.8*(((r.Gmag ?? r.gmag ?? 15)-10))));
       Plotly.newPlot('neighborsPlot',[
-        {x:sep,y:sep.map(()=>0),mode:'markers',name:'sources'}
-      ],{ margin:{t:10}, xaxis:{title:'Separation ["]'}, yaxis:{visible:false,range:[-1,1]},
-          shapes:[{type:'line',x0:21,x1:21,y0:-1,y1:1,line:{dash:'dot'}}] });
+        {x:sep, y:sep.map(()=>0), mode:'markers', marker:{size:s}, name:'sources'}
+      ],{
+        margin:{t:10},
+        xaxis:{title:'Separation ["]'},
+        yaxis:{visible:false, range:[-1,1]},
+        shapes:[{type:'line', x0:21, x1:21, y0:-1, y1:1, line:{dash:'dot'}}]
+      });
     }
   }
 
-  // ==== fetchers (coords first, then name) ====
-  ;window.fetchGaiaByCoords = async function(coords, radius){
-    const url = `${BASE}/gaia_neighbors?ra=${encodeURIComponent(coords.ra)}&dec=${encodeURIComponent(coords.dec)}&radius=${encodeURIComponent(radius)}`;
-    log('GET', url);
-    const r = await fetch(url, { headers:{accept:'application/json'} });
-    if (!r.ok) throw new Error(`gaia_neighbors(ra,dec) HTTP ${r.status}`);
-    return await r.json();
-  }
-  ;window.fetchGaiaByName = async function(target, radius){
-    const url = `${BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${encodeURIComponent(radius)}`;
-    log('GET', url);
-    const r = await fetch(url, { headers:{accept:'application/json'} });
-    if (!r.ok) throw new Error(`gaia_neighbors(name) HTTP ${r.status}`);
-    return await r.json();
-  }
-  ;window.fetchGaiaViaDetect = async function(target, radius) {
-    const body = JSON.stringify({
-      source:  byId('sourceSel')?.value || 'mast_spoc',
-      mission: byId('missionSel')?.value || 'TESS',
-      target, kpeaks: 0, detrend:'none', quality: false, remove_outliers: false,
-      neighbors: true, neighbors_radius: radius, centroid: false
-    });
-    log('POST', `${BASE}/fetch_detect`);
-    const r = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if (!r.ok) throw new Error(`fetch_detect HTTP ${r.status}`);
-    const d = await r.json();
-    return d.neighbors ?? d;
-  }
+  // ---- Fetch μόνο για neighbors (γρήγορο) ----
+  async function fetchNeighborsOnly() {
+    const status = document.getElementById('status');
+    const target = (document.getElementById('ticInput')?.value || '').trim() || (window.currentTarget || '');
+    const radius = Number(document.getElementById('neiRadius')?.value || 60);
+    if (!target) return;
 
-  // ==== main ====
-  ;window.fetchNeighborsOnly = async function() {
-  setStatus('Neighbors');
-  try {
-    const radius = Number(byId('neiRadius')?.value || 60);
+    try{
+      status.textContent = 'Neighbors…';
 
-    // 1) Διάβασε target & normalize
-    let targetRaw = (byId('ticInput')?.value || '').trim() || (window.currentTarget || '');
-    if (!targetRaw) { setStatus('Done'); return; }
-    if (/^\d{3,}$/.test(targetRaw)) targetRaw = `TIC ${targetRaw}`;
-    const target = await resolveTargetRaw(targetRaw);
+      // 1) Προσπάθησε dedicated endpoint
+      let res = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${radius}`, {
+        headers:{'Accept':'application/json'}
+      });
 
-    // 2) ΠΑΝΤΑ πρώτα fetch_detect (φέρνει preprocess με RA/Dec και ίσως neighbors)
-    const body = JSON.stringify({
-      source:  byId('sourceSel')?.value || 'mast_spoc',
-      mission: byId('missionSel')?.value || 'TESS',
-      target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
-      neighbors: true, neighbors_radius: radius, centroid: false
-    });
-    const r0 = await fetch(`${BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if (!r0.ok) throw new Error(`fetch_detect HTTP ${r0.status}`);
-    const d0 = await r0.json();
+      // 2) Fallback: αν δεν υπάρχει, ξανακάνε fetch_detect ΓΡΗΓΟΡΑ μόνο για neighbors
+      if (res.status === 404 || res.status === 405) {
+        const body = JSON.stringify({
+          source: document.getElementById('sourceSel')?.value || 'mast_spoc',
+          mission: document.getElementById('missionSel')?.value || 'TESS',
+          target, kpeaks: 0, detrend:'none', quality:false, remove_outliers:false,
+          neighbors: true, neighbors_radius: radius
+        });
+        res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+      }
 
-    // Αν ο server έδωσε ήδη neighbors, τελείωσες.
-    if (d0 && d0.neighbors && d0.neighbors.available) {
-      const nei = normalizeNeighbors(d0.neighbors, radius);
-      window.lastPreproc   = d0.preprocess || window.lastPreproc || null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+      const nei = normalizeNeighbors(data.neighbors || data, radius);
       window.lastNeighbors = nei;
       renderNeighborsSafe(nei);
-      setStatus('Done');
-      return;
+      busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+    } catch(e){
+      console.error(e);
+      status.textContent = 'Error';
     }
-
-    // 3) Πάρε RA/Dec από preprocess και ζήτα GAIA με coords (χωρίς MAST lookup)
-    const pp = d0.preprocess || {};
-    const ra  = (+pp.ra_deg)  || (+pp.ra)  || (+pp.RA)  || (+pp.target_ra);
-    const dec = (+pp.dec_deg) || (+pp.dec) || (+pp.DEC) || (+pp.target_dec);
-
-    let raw = null;
-    if (Number.isFinite(ra) && Number.isFinite(dec)) {
-      raw = await fetchGaiaByCoords({ ra, dec }, radius);
-    } else {
-      // 4) Έσχατο fallback: με όνομα (μπορεί να αποτύχει σε μεμονωμένα TIC → τότε reason 404)
-      raw = await fetchGaiaByName(target, radius);
-    }
-
-    const nei = normalizeNeighbors(raw, radius);
-    window.lastPreproc   = d0.preprocess || window.lastPreproc || null;
-    window.lastNeighbors = nei;
-    renderNeighborsSafe(nei);
-    setStatus('Done');
-  } catch (e) {
-    const msg = (e && e.message || '').toString();
-    const reason = /404/.test(msg) ? 'MAST: target not found' : msg || 'fetch failed';
-    renderNeighborsSafe({ available:false, reason });
-    setStatus('Error');
   }
-}
 
-
-  // === UI bindings (αν δεν τα έχεις ήδη αλλού) ===
-  byId('gaiaChk')?.addEventListener('change', (e) => {
-    if (e.target.checked) { setStatus('Neighbors'); fetchNeighborsOnly(); }
-    else { setStatus('Done'); renderNeighborsSafe(null); }
+  // ---- Συνδέσεις UI → αυτόματο refresh neighbors ----
+  document.getElementById('gaiaChk')?.addEventListener('change', (e)=>{
+    if (e.target.checked) fetchNeighborsOnly();
+    else renderNeighborsSafe(null);
   });
-  byId('neiRadius')?.addEventListener('input', () => {
-    if (byId('gaiaChk')?.checked) { setStatus('Neighbors'); fetchNeighborsOnly(); }
+  // όταν αλλάζει το radius και είναι ενεργό το checkbox, κάνε refresh
+  document.getElementById('neiRadius')?.addEventListener('change', ()=>{
+    const chk = document.getElementById('gaiaChk');
+    if (chk && chk.checked) fetchNeighborsOnly();
   });
 
-  // Τρέξε GAIA ΜΕΤΑ το βασικό detect (και φύλαξε το παλιό runFetch για να μπορούμε να το καλέσουμε σκέτο)
+  // ---- Hook μέσα στο runFetch: αν backend δεν επιστρέψει neighbors, ζήτα τα μετά ----
   const _runFetch = window.runFetch;
-  window._bareRunFetch = _runFetch;
-  window.runFetch = async function () {
-    const r = _runFetch ? await _runFetch() : undefined;  // το βασικό γράφει "Done"
-    if (byId('gaiaChk')?.checked) { setStatus('Neighbors'); await fetchNeighborsOnly(); }
-    return r;
+  window.runFetch = async function(){
+    await _runFetch();
+    const chk = document.getElementById('gaiaChk');
+    if (chk && chk.checked) {
+      // αν από το τελευταίο fetch λείπουν neighbors ή δεν είναι available, τράβηξέ τα τώρα
+      if (!window.lastNeighbors || window.lastNeighbors.available === false) {
+        fetchNeighborsOnly();
+      }
+    }
   };
 
-  // expose για debug
+  // Εξαγωγή για debug από console:
   window.fetchNeighborsOnly = fetchNeighborsOnly;
   window.renderNeighbors = renderNeighborsSafe;
 })();
+updateMlBadge && updateMlBadge();
 </script>
-
 
 <script>
 /* ===== Pro PDF + Vetted summary line ===== */
@@ -1455,6 +1125,7 @@ document.getElementById('neiRadius')?.addEventListener('input', () => {
     }
   };
 })();
+updateMlBadge && updateMlBadge();
 </script>
 
 <script>
@@ -1477,30 +1148,11 @@ document.addEventListener('DOMContentLoaded', () => {
     else alert('PDF generator function not found.');
   });
 });
+updateMlBadge && updateMlBadge();
 </script>
 
-    <script src="/detector/engine-toggle.js"></script>
-
-<!-- Browse Modal -->
-<div id="browseModal">
-  <div id="browseCard">
-    <div id="browseHead">
-      <input id="browseQuery" type="text" placeholder="Search TIC / name ..." style="flex:1;min-width:260px"/>
-      <button id="browseSearchBtn" type="button">Search</button>
-      <button id="browseCloseBtn" type="button">Close</button>
-    </div>
-    <div id="browseBody">
-      <div id="browseList"></div>
-    </div>
-    <div id="browseFoot">
-      <div class="muted" id="browseStatus">0 results</div>
-      <div>
-        <button id="browsePrevBtn" type="button">Prev</button>
-        <button id="browseNextBtn" type="button">Next</button>
-      </div>
-    </div>
-  </div>
-</div>
+    <script src="/detector/engine-toggle.js">updateMlBadge && updateMlBadge();
+</script>
 
 <!-- ORAMAX centered footer -->
 <footer class="ox-footer">
