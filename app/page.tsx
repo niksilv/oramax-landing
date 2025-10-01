@@ -3,7 +3,7 @@ export default function Page() {
     <section className="block w-full max-w-full h-auto rounded-xl">
       <div className="mx-auto max-w-6xl px-4 pt-10 pb-16 hero-gradient">
         <div className="grid md:grid-cols-2 gap-10 items-center">
-          {/* Text column (narrower for readability) */}
+          {/* Text column */}
           <div className="max-w-2xl">
             <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
               Orama X — AI/ML for Exoplanet Discovery
@@ -53,43 +53,36 @@ export default function Page() {
             </p>
           </div>
 
-          {/* Image column wrapped in a 1×1 table (transparent border) */}
+          {/* Image column with bigger GIF & menu-style button */}
           <div className="w-full flex justify-center">
             <div className="mx-auto">
               <table
                 className="
-                  border-8 border-transparent      /* transparent “frame” για εύκολο sizing */
+                  border-8 border-transparent
                   mx-auto
-                  w-[640px] md:w-[780px] lg:w-[880px]  /* ← προσαρμόζεις μέγεθος GIF εδώ */
+                  w-[700px] md:w-[860px] lg:w-[970px]   /* +10% μέγεθος */
                 "
               >
                 <tbody>
                   <tr>
                     <td className="relative p-0 align-middle">
-                      {/* GIF γεμίζει το κελί */}
                       <img
                         src="/images/main.gif"
                         alt="Exoplanet Predictor"
                         className="block w-full h-auto rounded-xl"
                       />
 
-                      {/* Μεγάλο 3D CTA στο κέντρο του GIF, λίγο κάτω από τον τίτλο */}
+                      {/* Menu-style button */}
                       <a
                         href="https://www.oramax.space/our-project/exoplanet-detector"
-                        aria-label="Open Exoplanet Detector"
                         className="
                           absolute left-1/2 -translate-x-1/2
-                          top-[62%] md:top-[60%]           /* ↑ ρύθμισε % για πιο πάνω/κάτω */
-                          select-none
-                          px-12 md:px-14 py-4 md:py-4.5
-                          text-white text-lg md:text-xl font-semibold tracking-wider
-                          rounded-2xl
-                          bg-gradient-to-b from-blue-500 to-blue-700
-                          shadow-[0_14px_32px_rgba(30,58,138,0.5)]
-                          ring-1 ring-white/15
-                          hover:from-blue-450 hover:to-blue-650
-                          active:translate-y-[1px]
-                          transition-[transform,colors] duration-150
+                          top-[62%] md:top-[60%]
+                          px-6 py-2
+                          text-white text-sm md:text-base font-medium
+                          bg-blue-600 hover:bg-blue-700
+                          rounded-md shadow
+                          transition-colors
                         "
                       >
                         GET STARTED
@@ -100,7 +93,6 @@ export default function Page() {
               </table>
             </div>
           </div>
-          {/* /Image column */}
         </div>
       </div>
     </section>
