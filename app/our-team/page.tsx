@@ -14,24 +14,24 @@ export default function OurTeamPage() {
           {/* Γραμμή 1 - εικόνες */}
           <img
             src="/images/team-man-1.jpg" 
-            alt="Nikolaos Silvestros-Quality Assurance"
+            alt="Nikolaos Silvestros"
             className="w-full h-64 object-cover rounded-md shadow"
           />
           <img
             src="/images/team-woman-1.jpg"
-            alt="Andriani Christoforou-Advisor"
+            alt="Andriani Christoforou"
             className="w-full h-64 object-cover rounded-md shadow"
           />
           <img
             src="/images/team-man-2.jpg"
-            alt="Theodore Silvestros-Developer"
+            alt="Theodore Silvestros"
             className="w-full h-64 object-cover rounded-md shadow"
           />
 
           {/* Γραμμή 2 - κείμενα */}
           <div className="text-center">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Nikolaos Silvestros
+              Nikolaos Silvestros-Quality Assurance
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
               Nikolaos is the founder and coordinator of the team. He oversees the 
@@ -43,7 +43,7 @@ export default function OurTeamPage() {
 
           <div className="text-center">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Andriani Christoforou
+              Andriani Christoforou-Advisor
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
               Andriani brings a fresh perspective to the team, offering creative ideas
@@ -55,7 +55,7 @@ export default function OurTeamPage() {
 
           <div className="text-center">
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Theodore Silvestros
+              Theodore Silvestros-Developer
             </h3>
             <p className="mt-2 text-sm text-slate-700 dark:text-slate-300 leading-6">
               Theodore is the driving force behind the team’s technology. 
