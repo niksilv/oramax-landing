@@ -1,3 +1,4 @@
+// components/BgHero.tsx
 import React from "react";
 
 type BgHeroProps = {
