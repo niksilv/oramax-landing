@@ -53,36 +53,51 @@ export default function Page() {
             </p>
           </div>
 
-          {/* Image column with prominent centered CTA */}
-          <div className="w-full flex justify-center">
-            <div className="relative w-full max-w-3xl md:max-w-4xl mx-auto">
-              <img
-                src="/images/main.gif"
-                alt="Exoplanet Predictor"
-                className="block w-full h-auto rounded-xl"
-              />
-              {/* Centered CTA just below the big title inside the GIF */}
-              <a
-                href="https://www.oramax.space/our-project/exoplanet-detector"
-                className="
-                  absolute left-1/2 -translate-x-1/2
-                  top-[62%] md:top-[60%]
-                  px-8 md:px-10 py-3 md:py-3.5
-                  text-white text-base md:text-lg font-semibold tracking-wider
-                  rounded-xl
-                  bg-gradient-to-b from-blue-600 to-blue-700
-                  shadow-lg shadow-blue-900/40
-                  ring-1 ring-white/10
-                  hover:from-blue-500 hover:to-blue-600
-                  transition-colors
-                "
-              >
-                GET STARTED
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+          {/* Image column wrapped in a 1×1 table with transparent border */}
+<div className="w-full flex justify-center">
+  {/* Κεντρικό wrapper για responsive έλεγχο */}
+  <div className="mx-auto">
+    <table
+      className="
+        border-8 border-transparent                  /* διάφανο border όπως ζήτησες */
+        mx-auto
+        w-[680px] md:w-[820px] lg:w-[900px]          /* ⬅️ έλεγχος μεγέθους GIF */
+      "
+    >
+      <tbody>
+        <tr>
+          <td className="relative p-0 align-middle">
+            {/* GIF: γεμίζει το πλάτος του κελιού */}
+            <img
+              src="/images/main.gif"
+              alt="Exoplanet Predictor"
+              className="block w-full h-auto rounded-xl"
+            />
+
+            {/* Μεγάλο 3D κουμπί στο ΚΕΝΤΡΟ του GIF */}
+            <a
+              href="https://www.oramax.space/our-project/exoplanet-detector"
+              className="
+                absolute left-1/2 -translate-x-1/2
+                top-[62%] md:top-[60%]                 /* ρύθμισε ±2% αν το θες πιο πάνω/κάτω */
+                select-none
+                px-10 md:px-12 py-3.5 md:py-4
+                text-white text-lg md:text-xl font-semibold tracking-wider
+                rounded-2xl
+                bg-gradient-to-b from-blue-500 to-blue-700
+                shadow-[0_12px_28px_rgba(30,58,138,0.45)]
+                ring-1 ring-white/15
+                hover:from-blue-450 hover:to-blue-650
+                active:translate-y-[1px]               /* εφέ “πατάει” */
+                transition-transform transition-colors
+              "
+            >
+              GET STARTED
+            </a>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
