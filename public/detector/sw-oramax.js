@@ -9,28 +9,38 @@ const BACKENDS = [
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith('/detector/')) return;
+ self.addEventListener('fetch', (event) => {
+   const url = new URL(event.request.url);
+   if (url.origin !== self.location.origin) return;
+   if (!url.pathname.startsWith('/detector/')) return;
 
-  // 1) PDF: πάντα client-side
-  if (url.pathname === '/detector/api/report_pdf') {
-    event.respondWith(handlePdfDirect(event.request));
-    return;
-  }
+-  // 1) PDF: πάντα client-side
++  // 1) PDF: πάντα client-side
+   if (url.pathname === '/detector/api/report_pdf') {
+     event.respondWith(handlePdfDirect(event.request));
+     return;
+   }
 
-  // 2) Gaia neighbors (JSON μέσω GET→fallback POST)
-  if (url.pathname === '/detector/api/gaia_neighbors') {
-    event.respondWith(handleGaiaNeighbors(event.request));
-    return;
-  }
+-  // 2) Gaia neighbors (JSON μέσω GET→fallback POST)
+-  if (url.pathname === '/detector/api/gaia_neighbors') {
++  // 2) Gaia neighbors: πιάσε ΚΑΘΕ παραλλαγή (π.χ. /detector/detector/api/gaia_neighbors)
++  if (
++      url.pathname === '/detector/api/gaia_neighbors' ||
++      url.pathname.endsWith('/api/gaia_neighbors') ||
++      url.pathname.includes('/api/gaia_neighbors')
++    ) {
+     event.respondWith(handleGaiaNeighbors(event.request));
+     return;
+   }
 
-  // 3) Άλλα /detector/api/* → απλό proxy με fallbacks
-  if (url.pathname.startsWith('/detector/api/')) {
-    event.respondWith(proxyGeneric(event.request));
-  }
-});
+-  // 3) Άλλα /detector/api/* → απλό proxy με fallbacks
+-  if (url.pathname.startsWith('/detector/api/')) {
++  // 3) Άλλα /detector/api/* → απλό proxy με fallbacks
++  if (url.pathname.includes('/detector/api/')) {
+     event.respondWith(proxyGeneric(event.request));
+   }
+ });
+
 
 // ---------- PDF (always client-side) ----------
 async function handlePdfDirect(req){
