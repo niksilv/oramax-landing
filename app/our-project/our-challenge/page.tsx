@@ -12,7 +12,7 @@ export default function OurChallengePage() {
       <section className="relative isolate">
         <div
           className="absolute inset-0 -z-10 bg-center bg-cover"
-          style={{ backgroundImage: "url('/challenge.jpg')" }}
+          style={{ backgroundImage: "url('/images/challenge.jpg')" }}
           aria-hidden
         />
         <div className="absolute inset-0 -z-0 bg-gradient-to-b from-slate-900/70 via-slate-900/60 to-slate-950/95" />
