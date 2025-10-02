@@ -1,5 +1,5 @@
-﻿// OramaX SW proxy v42 — PDF always client-side, Gaia robust fallbacks
-const VERSION = 'v42';
+// OramaX SW proxy v43 — Gaia via fetch_detect JSON (no CORS issues), PDF client-side
+const VERSION = 'v43';
 const BACKENDS = [
   self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
@@ -14,13 +14,13 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.startsWith('/detector/')) return;
 
-  // 1) PDF: πάντα client-side (κόβουμε δρόμο)
+  // 1) PDF: πάντα client-side
   if (url.pathname === '/detector/api/report_pdf') {
     event.respondWith(handlePdfDirect(event.request));
     return;
   }
 
-  // 2) Gaia neighbors με fallbacks
+  // 2) Gaia neighbors (JSON μέσω fetch_detect → no CORS)
   if (url.pathname === '/detector/api/gaia_neighbors') {
     event.respondWith(handleGaiaNeighbors(event.request));
     return;
@@ -60,37 +60,50 @@ async function handlePdfDirect(req){
   }
 }
 
-// ---------- Gaia neighbors (robust) ----------
+// ---------- Gaia neighbors (robust via fetch_detect JSON) ----------
 async function handleGaiaNeighbors(req){
   const url = new URL(req.url);
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
-  const radius = parseFloat(url.searchParams.get('radius') || '60');
+  const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
-  // 1) POST /fetch_detect (neighbors only)
+  // Προσπαθούμε ΣΕΙΡΙΑΚΑ τα backends με POST /fetch_detect (neighbors only)
   const body = JSON.stringify({
     source: 'mast_spoc', mission: 'TESS', target: targetName,
     kpeaks: 0, detrend:'none', quality:false, remove_outliers:false, sigma:5,
-    neighbors: true, neighbors_radius: Number.isFinite(radius) ? radius : 60
+    neighbors: true, neighbors_radius: radius, centroid: false
   });
   const initPost = { method:'POST', headers: {'Content-Type':'application/json'}, body, redirect:'follow' };
-  const tries = [];
-  for (const base of BACKENDS) tries.push(fetch(join(base, 'fetch_detect'), initPost).catch(e=>e));
 
-  // 2) GET /exoplanet/gaia_neighbors?...
-  for (const base of BACKENDS) tries.push(fetch(join(base, 'gaia_neighbors') + url.search, {redirect:'follow'}).catch(e=>e));
-
-  // εκτέλεσε σειριακά με early success
-  let last = null;
-  for (const p of tries){
-    try{
-      const r = await p;
-      if (r && r.ok) return r; // πέρασε ένας
-      last = r;
-    }catch(e){ last = e; }
+  let lastErr = null;
+  for (const base of BACKENDS) {
+    try {
+      const resp = await fetch(join(base, 'fetch_detect'), initPost);
+      if (!resp.ok) { lastErr = `HTTP ${resp.status}`; continue; }
+      const j = await resp.json();
+      // Εξάγουμε neighbors με normalize
+      const nei = normalizeNeighbors(j.neighbors || j, radius);
+      return new Response(JSON.stringify(nei), {
+        status: 200,
+        headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `gaia-fd-json-${VERSION}` }
+      });
+    } catch (e) {
+      lastErr = e?.message || String(e);
+    }
   }
-  const detail = (last && typeof last.text === 'function')
-    ? await last.text().catch(()=>String(last)) : String(last);
-  return jsonError(502, `Gaia neighbors failed on all backends. ${detail}`);
+
+  // Αν όλα αποτύχουν, γύρνα καθαρό JSON σφάλματος (χωρίς CORS issues)
+  return jsonError(502, `Gaia neighbors failed on all backends. ${lastErr || ''}`.trim());
+}
+
+function normalizeNeighbors(nei, defaultRadius){
+  if (!nei) return { available:false, reason:'n/a' };
+  if (typeof nei.available === 'boolean') {
+    if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius;
+    return nei;
+  }
+  if (Array.isArray(nei)) return { available:true, radius_arcsec: defaultRadius, items: nei };
+  const items = nei.items || nei.sources || nei.data || [];
+  return { available: Array.isArray(items) && items.length>0, radius_arcsec: nei.radius_arcsec || defaultRadius, items };
 }
 
 // ---------- Generic proxy for other /detector/api/* ----------
@@ -211,11 +224,3 @@ function makePdf({ title, lines }) {
 }
 
 console.log(`OramaX SW proxy ready (${VERSION})`);
-
-
-
-
-
-
-
-
