@@ -1,91 +1,72 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
 
 export default function Navbar() {
-  const router = useRouter();
-
-  // Click στο Our Project -> πηγαίνει στη σελίδα /our-project
-  const goOurProject = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    // Αν το submenu είναι κλειστό σε touch, θα ανοιχτεί με CSS/JS – στο desktop αφήνουμε το click να πλοηγεί
-    e.preventDefault();
-    router.push("/our-project");
-  };
-
-  // Προαιρετικό: μικρό helper ώστε σε touch συσκευές ένα πρώτο tap να ανοίγει το submenu και δεύτερο tap να πλοηγεί
-  useEffect(() => {
-    const holder = document.querySelector<HTMLDivElement>("#ox-nav .has-sub");
-    if (!holder) return;
-
-    const btn = holder.querySelector<HTMLAnchorElement>("a.our-project");
-    const menu = holder.querySelector<HTMLDivElement>(".submenu");
-    if (!btn || !menu) return;
-
-    let open = false;
-    const isTouch = matchMedia("(pointer: coarse)").matches;
-
-    const onClick = (ev: MouseEvent) => {
-      if (!isTouch) return; // στο desktop δεν κάνουμε override
-      if (!open) {
-        ev.preventDefault();
-        menu.style.display = "block";
-        open = true;
-      } else {
-        // δεύτερο tap: αφήνουμε να πλοηγεί
-      }
-    };
-
-    const onDoc = (ev: MouseEvent) => {
-      if (!isTouch || !open) return;
-      if (!holder.contains(ev.target as Node)) {
-        (menu as HTMLElement).style.display = "none";
-        open = false;
-      }
-    };
-
-    btn.addEventListener("click", onClick);
-    document.addEventListener("click", onDoc);
-    return () => {
-      btn.removeEventListener("click", onClick);
-      document.removeEventListener("click", onDoc);
-    };
-  }, []);
+  const [open, setOpen] = React.useState(false);
+  const keepOpen = () => setOpen(true);
+  const close = () => setOpen(false);
 
   return (
-    <div id="ox-nav">
-      <div className="wrap">
-        <Link href="/" className="brand" aria-label="Orama X home">
-          {/* Βεβαιώσου ότι υπάρχει στο /public/logos/oramax-logo.png */}
-          <img src="/logos/oramax-logo.png" alt="" />
-          <strong>ORAMA X</strong>
-        </Link>
+    <div className="flex items-center justify-between">
+      {/* Brand */}
+      <Link href="/" className="font-semibold tracking-wide text-slate-900">
+        ORAMA X
+      </Link>
 
-        <nav className="menu" aria-label="Main">
-          <Link href="/">Home</Link>
+      {/* Main menu */}
+      <nav className="relative hidden md:flex items-center gap-10 text-[15px] text-slate-900">
+        <Link href="/" className="hover:opacity-80">Home</Link>
 
-          <div className="has-sub">
-            <a href="/our-project" className="our-project" onClick={goOurProject}>
-              Our Project <span className="caret">▾</span>
-            </a>
-            <div className="submenu" role="menu">
-              <Link href="/our-project/exoplanet-detector" role="menuitem">
-                Exoplanet Detector
-              </Link>
-              <Link href="/our-project/our-challenge" role="menuitem">
-                Our Challenge
-              </Link>
-              <Link href="/our-project/our-resources" role="menuitem">
-                Our Resources
-              </Link>
-            </div>
+        {/* Our Project (clickable + dropdown on hover) */}
+        <div
+          className="relative"
+          onMouseEnter={keepOpen}
+          onMouseLeave={close}
+        >
+          <Link
+            href="/our-project"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-black/[0.04]"
+            onFocus={keepOpen}
+            onBlur={close}
+          >
+            Our Project <span aria-hidden>▾</span>
+          </Link>
+
+          {/* Dropdown panel */}
+          <div
+            className={`absolute left-1/2 -translate-x-1/2 mt-2 w-64 rounded-2xl
+                        border border-black/10 bg-[#0B0D16] text-white shadow-2xl p-2
+                        transition-all duration-150
+                        ${open ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-1"}`}
+            onMouseEnter={keepOpen}
+            onMouseLeave={close}
+          >
+            <Link
+              href="/detector"
+              className="block px-4 py-2 rounded-xl font-semibold hover:bg-white/10"
+            >
+              Exoplanet Detector
+            </Link>
+            <Link
+              href="/our-project/our-challenge"
+              className="block px-4 py-2 rounded-xl hover:bg-white/10"
+            >
+              Our Challenge
+            </Link>
+            <Link
+              href="/our-project/our-resources"
+              className="block px-4 py-2 rounded-xl hover:bg-white/10"
+            >
+              Our Resources
+            </Link>
           </div>
+        </div>
 
-          <Link href="/our-team">Our Team</Link>
-          <Link href="/contact-us">Contact Us</Link>
-        </nav>
-      </div>
+        <Link href="/our-team" className="hover:opacity-80">Our Team</Link>
+        <Link href="/detector" className="hover:opacity-80">Detector</Link>
+      </nav>
     </div>
   );
 }
