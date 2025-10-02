@@ -651,7 +651,6 @@ function toggleInputs(){
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
 
-<script>
 // --- Fallback fetch για Gaia neighbors (αν το fetch_detect δεν δώσει usable neighbors)
 async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
@@ -1215,6 +1214,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
