@@ -1,5 +1,4 @@
 // app/our-project/page.tsx
-import BgHero from "@/components/BgHero";
 
 export const metadata = {
   title: "Our Project — Orama X",
@@ -8,83 +7,82 @@ export const metadata = {
 
 export default function ProjectPage() {
   return (
-    <main className="min-h-[80vh]">
-      {/* FULL-BLEED HERO (σπάει το container του layout για να πιάσει όλο το πλάτος) */}
-      <div className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen">
-        <BgHero
-          image="/images/project.jpg"   // public/images/project.jpg (lowercase, exact name!)
-          title="Orama X — AI/ML for Exoplanet Discovery"
-          subtitle="Our Project"
-          fullscreen
-        >
-          <p className="mx-auto max-w-2xl text-base md:text-lg leading-7">
-            We build a research-grade pipeline that turns TESS/Kepler light curves and
-            Gaia context into <b>reliable exoplanet candidates</b> — faster vetting,
-            transparent decisions, and exportable reports for scientific review.
-          </p>
-        </BgHero>
-      </div>
+    <main
+      className="relative min-h-screen bg-cover bg-center text-white"
+      style={{ backgroundImage: "url('/images/project.jpg')" }}
+    >
+      {/* Overlay για καλύτερη αναγνωσιμότητα */}
+      <div className="absolute inset-0 bg-black/60" />
 
-      {/* CONTENT */}
-      <section className="px-4 py-16">
-        <div className="mx-auto max-w-6xl space-y-14">
-          {/* Value props */}
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl md:text-4xl font-semibold">What we’re building</h2>
-            <p className="mx-auto max-w-3xl text-slate-300">
-              A cohesive, auditable system that <b>fetches</b>, <b>denoises</b>, <b>detects</b>,
-              and <b>vets</b> exoplanet signals — combining classical BLS, modern CNN models,
-              centroid checks, and Gaia neighbors.
+      {/* Περιεχόμενο */}
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 space-y-16">
+        {/* Hero section */}
+        <div className="text-center space-y-6">
+          <h1 className="text-4xl md:text-6xl font-bold">
+            Orama X — AI/ML for Exoplanet Discovery
+          </h1>
+          <p className="mx-auto max-w-3xl text-lg leading-relaxed text-slate-200">
+            We build a research-grade pipeline that transforms TESS/Kepler light
+            curves and Gaia context into <b>reliable exoplanet candidates</b> —
+            faster vetting, transparent decisions, and exportable reports for
+            scientific review.
+          </p>
+        </div>
+
+        {/* Τρία βασικά pillars */}
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
+            <h3 className="text-xl font-semibold mb-2">Accuracy</h3>
+            <p className="text-sm text-slate-200">
+              Cross-checks (odd-even, depth stability) and Gaia-based neighbor
+              analysis reduce false positives.
             </p>
           </div>
-
-          {/* 3 features */}
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="rounded-2xl border border-white/10 bg-neutral-900/40 p-6">
-              <h3 className="text-lg font-semibold mb-2">Accuracy</h3>
-              <p className="text-sm text-slate-300">
-                Statistical rigor, cross-checks (odd-even, depth stability), and Gaia-based
-                contamination analysis reduce false positives.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-neutral-900/40 p-6">
-              <h3 className="text-lg font-semibold mb-2">Speed</h3>
-              <p className="text-sm text-slate-300">
-                Efficient processing for thousands of light curves, streaming fetch, and
-                responsive UI for interactive vetting.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-neutral-900/40 p-6">
-              <h3 className="text-lg font-semibold mb-2">Reproducibility</h3>
-              <p className="text-sm text-slate-300">
-                Deterministic configs, versioned models, and one-click exports (CSV/PDF)
-                for transparent reviews and follow-ups.
-              </p>
-            </div>
+          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
+            <h3 className="text-xl font-semibold mb-2">Speed</h3>
+            <p className="text-sm text-slate-200">
+              Efficient processing of thousands of light curves with streaming
+              fetch and responsive UI.
+            </p>
           </div>
-
-          {/* Pipeline bullets */}
-          <div className="prose prose-invert max-w-3xl mx-auto">
-            <h3>Pipeline</h3>
-            <ul>
-              <li><b>Fetch &amp; Preprocess:</b> quality masks, outlier removal, detrending.</li>
-              <li><b>Detection:</b> BLS &amp; CNN scoring to rank candidate periods.</li>
-              <li><b>Vetting:</b> phase-folded plots, centroid consistency, Gaia neighbors.</li>
-              <li><b>Reporting:</b> structured summaries &amp; artifacts for archiving.</li>
-            </ul>
-          </div>
-
-          {/* CTA */}
-          <div className="text-center">
-            <a
-              href="/detector"
-              className="inline-block rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700 active:translate-y-[1px]"
-            >
-              Try the Detector
-            </a>
+          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
+            <h3 className="text-xl font-semibold mb-2">Reproducibility</h3>
+            <p className="text-sm text-slate-200">
+              Deterministic configs, versioned models, and one-click exports
+              (CSV/PDF) for transparent reviews.
+            </p>
           </div>
         </div>
-      </section>
+
+        {/* Pipeline bullets */}
+        <div className="prose prose-invert max-w-3xl mx-auto">
+          <h2>Pipeline</h2>
+          <ul>
+            <li>
+              <b>Fetch &amp; Preprocess:</b> masks, outlier removal, detrending.
+            </li>
+            <li>
+              <b>Detection:</b> BLS &amp; CNN scoring to rank candidate periods.
+            </li>
+            <li>
+              <b>Vetting:</b> phase-folded plots, centroid consistency, Gaia neighbors.
+            </li>
+            <li>
+              <b>Reporting:</b> structured summaries &amp; artifacts for archiving.
+            </li>
+          </ul>
+        </div>
+
+        {/* CTA */}
+        <div className="text-center">
+          <a
+            href="/detector"
+            className="inline-block rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700 active:translate-y-[1px]"
+          >
+            Try the Detector
+          </a>
+        </div>
+      </div>
     </main>
   );
 }
