@@ -25,7 +25,6 @@ export default function Navbar() {
           onMouseEnter={keepOpen}
           onMouseLeave={close}
         >
-          {/* το label είναι και link */}
           <Link
             href="/our-project"
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg hover:bg-black/[0.04]"
@@ -66,7 +65,6 @@ export default function Navbar() {
         </div>
 
         <Link href="/our-team" className="hover:opacity-80">Our Team</Link>
-        <Link href="/contact-us" className="hover:opacity-80">Contact Us</Link>
         <Link href="/detector" className="hover:opacity-80">Detector</Link>
       </nav>
     </div>
