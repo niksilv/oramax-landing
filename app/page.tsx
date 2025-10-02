@@ -7,7 +7,7 @@ export default function HomePage() {
         <img
           src="/images/main.gif"
           alt="Exoplanet Predictor"
-          width={960}
+          width={1200}
           height={640}
           className="rounded-xl shadow-2xl object-contain"
         />
