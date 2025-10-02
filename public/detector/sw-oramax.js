@@ -1,5 +1,5 @@
-// OramaX SW proxy v43 — Gaia via fetch_detect JSON (no CORS issues), PDF client-side
-const VERSION = 'v43';
+// OramaX SW proxy v44 — Gaia GET-first + POST fallback (no CORS), PDF client-side
+const VERSION = 'v44';
 const BACKENDS = [
   self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
@@ -20,7 +20,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2) Gaia neighbors (JSON μέσω fetch_detect → no CORS)
+  // 2) Gaia neighbors (JSON μέσω GET→fallback POST)
   if (url.pathname === '/detector/api/gaia_neighbors') {
     event.respondWith(handleGaiaNeighbors(event.request));
     return;
@@ -60,13 +60,28 @@ async function handlePdfDirect(req){
   }
 }
 
-// ---------- Gaia neighbors (robust via fetch_detect JSON) ----------
+// ---------- Gaia neighbors (GET-first, POST fallback) ----------
 async function handleGaiaNeighbors(req){
   const url = new URL(req.url);
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
   const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
-  // Προσπαθούμε ΣΕΙΡΙΑΚΑ τα backends με POST /fetch_detect (neighbors only)
+  // 1) Δοκίμασε πρώτα GET /gaia_neighbors στο upstream
+  for (const base of BACKENDS) {
+    try {
+      const upGet = join(base, 'gaia_neighbors') + `?target=${encodeURIComponent(targetName)}&radius=${radius}`;
+      const r1 = await fetch(upGet, { method:'GET', headers:{ 'Accept':'application/json' } });
+      if (r1.ok) {
+        const buf = await r1.arrayBuffer();
+        return new Response(buf, {
+          status: 200,
+          headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `gaia-get-${VERSION}` }
+        });
+      }
+    } catch(_) {}
+  }
+
+  // 2) Fallback: POST /fetch_detect (neighbors only)
   const body = JSON.stringify({
     source: 'mast_spoc', mission: 'TESS', target: targetName,
     kpeaks: 0, detrend:'none', quality:false, remove_outliers:false, sigma:5,
@@ -74,29 +89,27 @@ async function handleGaiaNeighbors(req){
   });
   const initPost = { method:'POST', headers: {'Content-Type':'application/json'}, body, redirect:'follow' };
 
-  let lastErr = null;
   for (const base of BACKENDS) {
     try {
       const resp = await fetch(join(base, 'fetch_detect'), initPost);
-      if (!resp.ok) { lastErr = `HTTP ${resp.status}`; continue; }
+      if (!resp.ok) continue;
       const j = await resp.json();
-      // Εξάγουμε neighbors με normalize
       const nei = normalizeNeighbors(j.neighbors || j, radius);
       return new Response(JSON.stringify(nei), {
         status: 200,
-        headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `gaia-fd-json-${VERSION}` }
+        headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `gaia-fd-${VERSION}` }
       });
-    } catch (e) {
-      lastErr = e?.message || String(e);
-    }
+    } catch(_) {}
   }
 
-  // Αν όλα αποτύχουν, γύρνα καθαρό JSON σφάλματος (χωρίς CORS issues)
-  return jsonError(502, `Gaia neighbors failed on all backends. ${lastErr || ''}`.trim());
+  return new Response(JSON.stringify({ available:false, reason:'Gaia neighbors failed on all backends.', radius_arcsec: radius }), {
+    status: 502,
+    headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `gaia-fail-${VERSION}` }
+  });
 }
 
 function normalizeNeighbors(nei, defaultRadius){
-  if (!nei) return { available:false, reason:'n/a' };
+  if (!nei) return { available:false, reason:'n/a', radius_arcsec: defaultRadius };
   if (typeof nei.available === 'boolean') {
     if (!('radius_arcsec' in nei) && defaultRadius) nei.radius_arcsec = defaultRadius;
     return nei;
