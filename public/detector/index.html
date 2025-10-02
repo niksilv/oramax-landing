@@ -671,8 +671,6 @@ async function fetchGaiaNeighbors(target, radius) {
     return { available: false, reason: e?.message || 'gaia fetch failed' };
   }
 }
-</script>
-
   
 // ---------- Fetch & Detect ----------
 async function runFetch(){
@@ -723,7 +721,7 @@ busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()
 
   } catch(e){ status.textContent = 'Error'; console.error(e); }
 }
-
+  
 // ---------- Upload TXT ----------
 async function runUpload(){
   const status = document.getElementById('statusUp');
@@ -1217,6 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
