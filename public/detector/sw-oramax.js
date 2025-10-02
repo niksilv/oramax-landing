@@ -1,8 +1,9 @@
 ﻿// OramaX SW proxy v42 — PDF always client-side, Gaia robust fallbacks
 const VERSION = 'v42';
 const BACKENDS = [
-  self.API_BASE, // new-style
-  'http://127.0.0.1:8000'            // legacy root
+  self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
+  'https://oramax-exoplanet-api.fly.dev/exoplanet',
+  'http://127.0.0.1:8000/exoplanet'
 ];
 
 self.addEventListener('install', e => self.skipWaiting());
