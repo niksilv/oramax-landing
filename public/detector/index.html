@@ -651,33 +651,23 @@ function toggleInputs(){
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
 
-// --- Fallback fetch για Gaia neighbors μέσω SW proxy (same-origin) ---
+// --- Always absolute, within SW scope ---
 async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
   const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
 
-  // => Κρίσιμο: Χρησιμοποιούμε same-origin URL μέσα στο scope του SW
-  //     ώστε να αποφύγουμε CORS στο fly.dev.
-  //     Το SW κάνει το proxy προς το πραγματικό backend.
-  const base = (location.pathname.startsWith('/detector')) ? '/detector' : '';
-  const url  = `${base}/api/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`;
+  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  u.search = new URLSearchParams({ target, radius: String(rad) }).toString();
 
   try {
-    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const r = await fetch(u.toString(), { headers: { 'Accept': 'application/json' } });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const j = await r.json();
-
-    // το endpoint μπορεί να γυρίσει array ή {neighbors:{items:[...]}}
-    if (Array.isArray(j)) return { available: true, radius_arcsec: rad, items: j };
-    const nei = j.neighbors || j;
-    if (nei && Array.isArray(nei.items)) {
-      return { available: true, radius_arcsec: (nei.radius_arcsec || rad), items: nei.items };
-    }
-    return { available: false, reason: 'empty' };
+    return await r.json();
   } catch (e) {
-    return { available: false, reason: e?.message || 'gaia fetch failed' };
+    return { available:false, reason: e?.message || 'gaia fetch failed' };
   }
 }
+
 
   
 // ---------- Fetch & Detect ----------
@@ -1223,6 +1213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
