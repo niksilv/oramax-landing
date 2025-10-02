@@ -7,11 +7,19 @@ export default function ResourcesPage() {
   return (
     <main className="min-h-[80vh] px-4 py-10">
       <div className="max-w-6xl mx-auto space-y-12">
-        <BgHero image="/images/resources.jpg" title="Our" subtitle="Resources">
-          <p className="max-w-3xl mx-auto">
-            APIs, datasets, reports, and tooling to reproduce results and integrate Orama X in your workflow.
-          </p>
-        </BgHero>
+        {/* Hero section with background image */}
+        <div
+          className="relative rounded-2xl overflow-hidden bg-cover bg-center px-6 py-24 text-center"
+          style={{ backgroundImage: "url('/images/resources.jpg')" }}
+        >
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 space-y-4">
+            <h1 className="text-4xl md:text-6xl font-bold">Our Resources</h1>
+            <p className="max-w-3xl mx-auto text-lg text-slate-200">
+              APIs, datasets, reports, and tooling to reproduce results and integrate Orama X in your workflow.
+            </p>
+          </div>
+        </div>
 
         {/* Overview */}
         <section className="space-y-3">
@@ -108,18 +116,6 @@ export default function ResourcesPage() {
               <li>Post-processing candidates (thresholds, ΔBIC filters)</li>
               <li>Scheduling follow-up using CSV exports</li>
             </ul>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="rounded-xl p-6 bg-white/5">
-          <h3 className="text-xl font-semibold mb-2">Collaborate with Us</h3>
-          <p className="text-slate-300 leading-relaxed">
-            Building for openness and repeatability is a team effort. If you need a custom export,
-            an additional endpoint, or guidance on large-scale scans, reach out—we’ll help you ship.
-          </p>
-          <div className="mt-4">
-            <a className="underline" href="/contact-us">Contact the team →</a>
           </div>
         </section>
       </div>
