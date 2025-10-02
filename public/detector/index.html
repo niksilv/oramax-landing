@@ -651,6 +651,29 @@ function toggleInputs(){
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
 
+<script>
+// --- Fallback fetch για Gaia neighbors (αν το fetch_detect δεν δώσει usable neighbors)
+async function fetchGaiaNeighbors(target, radius) {
+  if (!target) return { available: false, reason: 'no target' };
+  const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
+  try {
+    const r = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    // Το endpoint μπορεί να επιστρέψει είτε array είτε {neighbors:{...}}
+    if (Array.isArray(j)) return { available: true, radius_arcsec: rad, items: j };
+    const nei = j.neighbors || j;
+    if (nei && Array.isArray(nei.items)) return { available: true, radius_arcsec: nei.radius_arcsec || rad, items: nei.items };
+    return { available: false, reason: 'empty' };
+  } catch (e) {
+    return { available: false, reason: e?.message || 'gaia fetch failed' };
+  }
+}
+</script>
+
+  
 // ---------- Fetch & Detect ----------
 async function runFetch(){
   const status = document.getElementById('status');
@@ -675,15 +698,29 @@ async function runFetch(){
     const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ status.textContent='Error'; return; }
     const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
-    if(data.error){ alert(data.error); status.textContent='Error'; return; }
+if (data.error){ alert(data.error); status.textContent='Error'; return; }
 
-    currentTarget = data.target || target || url;
-    lastPreproc   = data.preprocess || null;
+currentTarget = data.target || target || url;
+lastPreproc   = data.preprocess || null;
 
-    const candNorm = normalizeCandidates(data.candidates || []);
-    renderAll(data.time, data.flux, candNorm, data.neighbors);
+const candNorm = normalizeCandidates(data.candidates || []);
 
-    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+// --- NEW: robust Gaia fallback ---
+let nei = data.neighbors || null;
+const wantNei = document.getElementById('gaiaChk')?.checked;
+const rad = Number(document.getElementById('neiRadius')?.value || 60);
+
+// Αν ζητήθηκαν neighbors αλλά ο server δεν έδωσε usable (ή έχει reason π.χ. "I/O operation on closed file.")
+if (wantNei && (!nei || !nei.available)) {
+  nei = await fetchGaiaNeighbors(currentTarget, rad);
+}
+lastNeighbors = nei;
+
+// Πέρνα στο renderAll ό,τι έχουμε (backend ή fallback)
+renderAll(data.time, data.flux, candNorm, lastNeighbors);
+
+busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+
   } catch(e){ status.textContent = 'Error'; console.error(e); }
 }
 
@@ -1180,6 +1217,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
