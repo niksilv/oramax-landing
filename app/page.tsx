@@ -3,29 +3,27 @@ export default function Page() {
     <section className="block w-full max-w-full h-auto rounded-xl">
       <div className="mx-auto max-w-6xl px-4 pt-10 pb-16 hero-gradient flex flex-col items-center gap-12">
         
-        {/* GIF πολύ μεγάλο με overlay κουμπί */}
-        <div className="relative w-full max-w-6xl mx-auto">
+        {/* GIF στο μισό μέγεθος με overlay κουμπί */}
+        <div className="relative w-full max-w-3xl mx-auto">
           <img
             src="/images/main.gif"
             alt="Exoplanet Predictor"
             className="block w-full h-auto rounded-xl"
           />
 
-          {/* Μεγάλο 3D κουμπί στο κέντρο */}
+          {/* Μεγάλο 3D κουμπί */}
           <a
             href="https://www.oramax.space/our-project/exoplanet-detector"
             className="
               absolute left-1/2 -translate-x-1/2
               top-[65%]
-              px-16 md:px-20 py-6 md:py-7
-              text-white text-2xl md:text-3xl font-bold tracking-wide
-              rounded-2xl
-              bg-gradient-to-b from-blue-500 to-blue-700
-              shadow-[0_20px_40px_rgba(30,58,138,0.6)]
-              ring-2 ring-white/20
-              hover:from-blue-400 hover:to-blue-600
-              active:translate-y-[2px]
+              px-12 md:px-16 py-5 md:py-6
+              text-white text-xl md:text-2xl font-bold tracking-wide
+              rounded-md
+              bg-blue-600 hover:bg-blue-700
+              shadow-lg
               transition-transform transition-colors
+              active:translate-y-[2px]
             "
           >
             GET STARTED
