@@ -83,7 +83,7 @@ export default function Navbar() {
           </div>
 
           <Link href="/our-team">Our Team</Link>
-          <Link href="/contact-us">Contact Us</Link>
+          
         </nav>
       </div>
     </div>
