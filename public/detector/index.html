@@ -660,7 +660,7 @@ async function fetchGaiaNeighbors(target, radius) {
   //     ώστε να αποφύγουμε CORS στο fly.dev.
   //     Το SW κάνει το proxy προς το πραγματικό backend.
   const base = (location.pathname.startsWith('/detector')) ? '/detector' : '';
-  const url  = `${base}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`;
+  const url  = `${base}/api/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`;
 
   try {
     const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
@@ -1223,6 +1223,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
