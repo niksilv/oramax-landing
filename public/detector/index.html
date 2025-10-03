@@ -1251,18 +1251,35 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
-  // σωστό API endpoint για το fallback
+  // Χρησιμοποιούμε το σωστό backend για το fallback
   window.API_BASE = "https://oramax-app.fly.dev/exoplanet";
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
-      .then(() => {
-        if (!navigator.serviceWorker.controller) {
-          navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
+    navigator.serviceWorker.getRegistration('/detector/').then(reg => {
+      if (!reg) {
+        navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
+          .catch(err => console.error('SW register failed', err));
+      } else {
+        // προαιρετικό: πες του να τσεκάρει για update στο background
+        reg.update().catch(()=>{});
+      }
+    });
+
+    // Κάνε reload ΜΙΑ φορά όταν γίνει controller για πρώτη φορά (όχι αμέσως)
+    if (!navigator.serviceWorker.controller) {
+      const onCtrl = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+        if (!sessionStorage.getItem('sw-refreshed')) {
+          sessionStorage.setItem('sw-refreshed', '1');
           location.reload();
         }
-      })
-      .catch(err => console.error('SW register failed', err));
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+    } else {
+      // Μόλις έχουμε controller, καθάρισε το flag
+      sessionStorage.removeItem('sw-refreshed');
+    }
   }
 </script>
 
@@ -1299,6 +1316,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
