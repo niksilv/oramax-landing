@@ -1,5 +1,5 @@
 // OramaX SW proxy v51 — Gaia GET-first + POST fallback, CORS-safe
-const VERSION = 'v51';
+const VERSION = 'v52';
 const BACKENDS = [
   self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
