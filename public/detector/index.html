@@ -6,32 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <script>
-// register early + take control + reload once the SW becomes controller
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=45', { scope: '/detector/' })
-    .then(() => {
-      // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
-      if (navigator.serviceWorker.controller) return;
-
-      // Αλλιώς, μόλις γίνει controller, κάνε ένα γρήγορο reload
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        location.reload();
-      });
-    })
-    .catch(err => console.error('SW register failed', err));
-}
-</script>
-
-  <script>
-async function waitForSWControl(timeoutMs = 1200) {
+async function waitForSWControl(timeoutMs = 2000) {
   if (!('serviceWorker' in navigator)) return;
   if (navigator.serviceWorker.controller) return;
-  await new Promise((resolve)=> {
+  return new Promise((resolve) => {
     const t = setTimeout(resolve, timeoutMs);
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       clearTimeout(t); resolve();
     });
   });
+}
+
+// register νωρίς και κάνε fast takeover
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=45', { scope: '/detector/' })
+    .then(() => { /* ok */ })
+    .catch(err => console.error('SW register failed', err));
 }
 </script>
 
@@ -678,31 +668,27 @@ function toggleInputs(){
 
 // ΠΑΝΤΑ με απόλυτο path για το SW route
 function gaiaUrl(target, radius) {
-  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  const u = new URL('/detector/api/gaia_neighbors', location.origin); // ΠΑΝΤΑ absolute
   u.search = new URLSearchParams({ target, radius: String(radius || 60) }).toString();
   return u.toString();
 }
 
-async function fetchGaiaNeighbors(target, radius) {
-  if (!target) return { available: false, reason: 'no target' };
-  const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
+// usable? έχει items
+const isUsableNei = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
 
-  // 1) Πρώτη προσπάθεια στο SW route
+// μία και καλή: πρώτα SW route, κι αν 404/empty -> POST /fetch_detect
+async function getNeighborsRobust(target, radius, API_BASE) {
+  const rad = Number(radius || 60);
+
+  // 1) Προσπάθησε SW route (όταν η σελίδα είναι controlled)
   try {
     const r = await fetch(gaiaUrl(target, rad), { headers: { 'Accept': 'application/json' } });
     if (r.ok) {
       const j = await r.json().catch(() => null);
-      // ΑΝ το σώμα δηλώνει αποτυχία/κενό, προχώρα σε fallback
-      if (j && ((j.available === false) || (Array.isArray(j.items) && j.items.length === 0))) {
-        // continue to fallback
-      } else if (j) {
-        return j; // usable
-      }
+      if (j && isUsableNei(j)) return j;
+      // αν έδωσε available:false ή άδειο -> πέφτουμε σε fallback
     }
-    // αν δεν είναι ok ή δεν διαβάζεται JSON, προχώρα σε fallback
-  } catch (_) {
-    // network error -> fallback
-  }
+  } catch { /* πέφτουμε σε fallback */ }
 
   // 2) Fallback: POST /fetch_detect (neighbors only) — CORS OK
   try {
@@ -730,37 +716,50 @@ async function fetchGaiaNeighbors(target, radius) {
 
   
 // ---------- Fetch & Detect ----------
-async function runFetch(){
-  await waitForSWControl(1200);
-  const status = document.getElementById('status');
-  try{
-    busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
-    const source = document.getElementById('sourceSel').value;
-    const mission = document.getElementById('missionSel').value;
-    const target = document.getElementById('ticInput').value.trim();
-    const url    = document.getElementById('urlInput').value.trim();
+async function runFetch() {
+  const status = document.getElementById('statusTxt');
+  try {
+    busyStart('Fetching…'); status.textContent = 'Fetching…';
 
-    const kpeaks = Number(document.getElementById('kpeaks').value || 3);
-    const detrend = document.getElementById('detrendSel').value;
-    const quality = document.getElementById('qualityChk').checked;
-    const remove_outliers = document.getElementById('outlierChk').checked;
-    const sigma = Number(document.getElementById('sigmaVal').value || 5);
-    const centroid = document.getElementById('centroidChk').checked;
+    // 0) Περίμενε λίγο να γίνει controlled από SW (για να μην έχουμε 404 στο SW route)
+    await waitForSWControl(1200);
 
-    const neighbors = document.getElementById('gaiaChk').checked;
-    const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
+    // 1) φτιάξε τα inputs (target/source κ.λπ.) όπως τα έχεις ήδη
+    const wantNei = document.getElementById('gaiaChk')?.checked;
+    const rad     = Number(document.getElementById('neiRadius')?.value || 60);
+    const target  = (document.getElementById('inpTarget')?.value || '').trim();
+    //το API_BASE το έχεις ήδη ορισμένο πιο πάνω στο αρχείο σου
 
-    const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
-    const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if(!res.ok){ status.textContent='Error'; return; }
+    // 2) κάλεσε το κύριο detect
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(/* <- ΕΔΩ βάλε το ήδη υπάρχον payload σου */ window.buildDetectPayload())
+    });
+
     const data = await res.json();
-busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
-if (data.error){ alert(data.error); status.textContent='Error'; return; }
+    if (data.error) { alert(data.error); status.textContent = 'Error'; busyStop(); return; }
 
-currentTarget = data.target || target || url;
-lastPreproc   = data.preprocess || null;
+    currentTarget = data.target || target;
+    lastPreproc   = data.preprocess || null;
+    const candNorm = normalizeCandidates(data.candidates || []);
 
-const candNorm = normalizeCandidates(data.candidates || []);
+    // 3) ΠΡΙΝ τα plots: βρες τελικό neighbors (SW→fallback)
+    let nei = data.neighbors || null;
+    if (wantNei && !isUsableNei(nei)) {
+      nei = await getNeighborsRobust(currentTarget, rad, API_BASE);
+    }
+    lastNeighbors = nei;
+
+    // 4) και τώρα κάνε render ΜΕ το τελικό nei
+    renderAll(data.time, data.flux, candNorm, lastNeighbors);
+
+    status.textContent = 'Done'; busyAdvance(98,'Rendering…'); setTimeout(() => busyStop(), 500);
+  } catch (e) {
+    console.error(e);
+    status.textContent = 'Error'; busyStop();
+  }
+}
 
 // ---------- NEW: robust GAIA selection ----------
 const wantNei = document.getElementById('gaiaChk')?.checked;
@@ -1296,6 +1295,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
