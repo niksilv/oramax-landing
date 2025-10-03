@@ -1,4 +1,5 @@
-﻿(function(){
+/* OramaX engine toggle + GAIA safe fetch */
+(function(){
   function ensureEngineUI(){
     if (document.getElementById("engineSelect")) return;
     var box = document.createElement("div");
@@ -15,7 +16,10 @@
     var optC = document.createElement("option"); optC.value = "cnn"; optC.textContent = "CNN";
     sel.appendChild(optB); sel.appendChild(optC);
     var KEY = "oramax_engine"; var init = localStorage.getItem(KEY) || "bls"; sel.value = init;
-    sel.addEventListener("change", function __fix__(){ localStorage.setItem(KEY, sel.value); window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } })); });
+    sel.addEventListener("change", function __fix__(){
+      localStorage.setItem(KEY, sel.value);
+      window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } }));
+    });
     box.appendChild(label); box.appendChild(sel); document.body.appendChild(box);
   }
 
@@ -24,11 +28,50 @@
   window.lastPreprocess = window.lastPreprocess || {}; window.lastCandidates = window.lastCandidates || [];
   window.lastNeighbors = window.lastNeighbors || {};
 
-  function _isML(url){
-    return /\/ml\/score_lightcurve\b/.test(url);       // πιάνει και /exoplanet/ και /detector/api/
+  function _isML(url){ return /\/ml\/score_lightcurve\b/.test(url); }
+  function _isPDF(url){ return /\/report_pdf\b|\/report\/pdf\b/.test(url); }
+  function _isGaia(url){ return /\/gaia_neighbors\b/.test(url); }
+
+  function normalizeGaiaUrl(uStr){
+    // 1) φτιάξε absolute URL για το SW scope
+    if (/^detector\/api\/gaia_neighbors\b/.test(uStr)) uStr = "/" + uStr;
+    var u = new URL(uStr, location.origin);
+
+    // 2) Αν δείχνει απευθείας στο fly.dev -> ξαναστείλ’ το στο SW route
+    if (/oramax-exoplanet-api\.fly\.dev\/exoplanet\/gaia_neighbors\b/.test(u.href)) {
+      var repl = new URL("/detector/api/gaia_neighbors", location.origin);
+      u.searchParams.forEach((v,k)=>repl.searchParams.set(k,v));
+      u = repl;
+    }
+
+    // 3) Αν κατά λάθος έγινε /detector/detector/api/... καθάρισέ το
+    u.pathname = u.pathname.replace(/\/detector\/(?:detector\/)+/g, "/detector/");
+    return u.toString();
   }
-  function _isPDF(url){
-    return /\/report_pdf\b|\/report\/pdf\b/.test(url); // πιάνει /report_pdf (frontend) ή /report/pdf (backend)
+
+  function extractGaiaParams(uStr){
+    var u = new URL(uStr, location.origin);
+    return {
+      target: u.searchParams.get("target") || u.searchParams.get("tic") || "",
+      radius: Number(u.searchParams.get("radius") || "60") || 60
+    };
+  }
+
+  async function gaiaFallbackViaDetect(target, radius){
+    var API = (window.API_BASE || "https://oramax-exoplanet-api.fly.dev/exoplanet");
+    var body = JSON.stringify({
+      source: 'mast_spoc', mission: 'TESS', target,
+      kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+      neighbors: true, neighbors_radius: radius, centroid: false
+    });
+    var r = await origFetch(API + "/fetch_detect", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var j = await r.json();
+    var nei = j.neighbors || j;
+    var items = Array.isArray(nei) ? nei : (nei && Array.isArray(nei.items) ? nei.items : []);
+    return { available: items.length > 0, radius_arcsec: (nei.radius_arcsec || radius), items, reason: items.length?undefined:"empty" };
   }
 
   window.fetch = async function(url, options){
@@ -38,6 +81,7 @@
 
       var isML = _isML(url);
       var isPDF = _isPDF(url);
+      var isGaia = _isGaia(url);
 
       // inject engine στο ML
       if (isML && options && typeof options.body === "string") {
@@ -50,7 +94,25 @@
         }catch(e){}
       }
 
+      // --- GAIA: canonicalize URL ώστε να περνάει από τον SW ---
+      if (isGaia) {
+        url = normalizeGaiaUrl(url);
+      }
+
       var resp = await origFetch(url, options);
+
+      // --- GAIA: αν 404 ή άλλο σφάλμα, κάνε Fallback μέσω /fetch_detect ---
+      if (isGaia && (!resp || !resp.ok)) {
+        try{
+          var p = extractGaiaParams(url);
+          var safe = await gaiaFallbackViaDetect(p.target, p.radius);
+          // ενημέρωσε και τα "τελευταία" για PDF enrichment
+          window.lastNeighbors = safe;
+          return new Response(JSON.stringify(safe), {
+            status: 200, headers: { "Content-Type": "application/json", "X-Oramax-Client": "gaia-fallback" }
+          });
+        }catch(e){}
+      }
 
       // αποθήκευση ML αποτελεσμάτων
       if (isML) {
@@ -86,11 +148,3 @@
   document.addEventListener("DOMContentLoaded", ensureEngineUI);
 })();
 console.log("engine-toggle (paths+top-right) loaded");
-
-
-
-
-
-
-
-
