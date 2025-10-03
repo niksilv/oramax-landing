@@ -4,16 +4,20 @@
   <meta charset="utf-8"/>
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
+<script>
+  if (location.pathname === '/detector') {
+    location.replace('/detector/?sw=48');
+  }
+</script>
   <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=48', { scope: '/detector' })
-    .then(() => {
-      if (!navigator.serviceWorker.controller) {
-        navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-      }
-    })
-    .catch(err => console.error('SW register failed', err));
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=48', { scope: '/detector/' })
+  .then(() => {
+    if (!navigator.serviceWorker.controller) {
+      navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+    }
+  })
+  .catch(err => console.error('SW register failed', err));
 }
 </script>
 
@@ -1271,6 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
