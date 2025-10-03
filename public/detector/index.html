@@ -14,16 +14,16 @@
     location.replace('/detector/' + location.search);
   }
 
-  // ΜΙΑ εγγραφή SW, στο σωστό scope, με auto-reload όταν πάρει control
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/detector/sw-oramax.js?v=51', { scope: '/detector/' })
-      .then(() => {
-        if (!navigator.serviceWorker.controller) {
-          navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
-        }
-      })
-      .catch(err => console.error('SW register failed', err));
-  }
+  // ΜΙΑ εγγραφή SW, στο root, με scope '/detector' (πιάνει ΚΑΙ /detector ΚΑΙ /detector/)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw-oramax-detector.js?v=52', { scope: '/detector' })
+    .then(() => {
+      if (!navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+      }
+    })
+    .catch(err => console.error('SW register failed', err));
+}
 </script>
 
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
@@ -1280,6 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
