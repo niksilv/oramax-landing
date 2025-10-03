@@ -651,22 +651,59 @@ function toggleInputs(){
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
 
+// ΠΑΝΤΑ με απόλυτο path για το SW route
+function gaiaUrl(target, radius) {
+  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  u.search = new URLSearchParams({ target, radius: String(radius || 60) }).toString();
+  return u.toString();
+}
+
+// ΔΙΠΛΟ fallback: SW route -> POST /fetch_detect (neighbors only)
 async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
   const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
 
-  // Always absolute path inside SW scope (avoid relative 404)
-  const u = new URL('/detector/api/gaia_neighbors', location.origin);
-  u.search = new URLSearchParams({ target, radius: String(rad) }).toString();
-
+  // 1) προσπάθησε SW route (όταν ο SW ελέγχει τη σελίδα, παίζει άμεσα)
   try {
-    const r = await fetch(u.toString(), { headers: { 'Accept': 'application/json' } });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.json();
+    const r = await fetch(gaiaUrl(target, rad), { headers: { 'Accept': 'application/json' } });
+    if (r.ok) return await r.json();
+    // αν ο server γύρισε 404 (σελίδα δεν ελέγχεται από SW), πέσε στο 2)
+  } catch (_) {
+    // network/TypeError -> πέφτουμε στο 2)
+  }
+
+  // 2) Fallback: POST στο backend /fetch_detect (neighbors only) — CORS OK
+  try {
+    const body = JSON.stringify({
+      source: 'mast_spoc',
+      mission: 'TESS',
+      target,
+      kpeaks: 0,
+      detrend: 'none',
+      quality: false,
+      remove_outliers: false,
+      neighbors: true,
+      neighbors_radius: rad,
+      centroid: false
+    });
+
+    const r2 = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+    const j = await r2.json();
+    // εξομάλυνση απάντησης
+    const nei = j.neighbors || j;
+    if (Array.isArray(nei)) return { available: true, radius_arcsec: rad, items: nei };
+    if (nei && Array.isArray(nei.items)) return { available: true, radius_arcsec: (nei.radius_arcsec || rad), items: nei.items };
+    return { available: false, reason: 'empty', radius_arcsec: rad };
   } catch (e) {
-    return { available:false, reason: e?.message || 'gaia fetch failed' };
+    return { available: false, reason: e?.message || 'gaia fetch failed', radius_arcsec: rad };
   }
 }
+
 
   
 // ---------- Fetch & Detect ----------
@@ -701,15 +738,15 @@ lastPreproc   = data.preprocess || null;
 const candNorm = normalizeCandidates(data.candidates || []);
 
 // --- NEW: robust Gaia fallback ---
-let nei = data.neighbors || null;
 const wantNei = document.getElementById('gaiaChk')?.checked;
 const rad = Number(document.getElementById('neiRadius')?.value || 60);
 
-// Αν ζητήθηκαν neighbors αλλά ο server δεν έδωσε usable (ή έχει reason π.χ. "I/O operation on closed file.")
+let nei = data.neighbors || null;
 if (wantNei && (!nei || !nei.available)) {
   nei = await fetchGaiaNeighbors(currentTarget, rad);
 }
 lastNeighbors = nei;
+renderNeighbors(nei);
 
 // Πέρνα στο renderAll ό,τι έχουμε (backend ή fallback)
 renderAll(data.time, data.flux, candNorm, lastNeighbors);
@@ -1212,3 +1249,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
