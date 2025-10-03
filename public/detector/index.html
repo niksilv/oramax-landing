@@ -8,7 +8,7 @@
   <script>
 // register early + take control + reload once the SW becomes controller
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=45', { scope: '/detector/' })
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=46', { scope: '/detector/' })
     .then(() => {
       // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
       if (navigator.serviceWorker.controller) return;
@@ -1250,7 +1250,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-    <script src="/detector/engine-toggle.js"></script>
+    <script src="/detector/engine-toggle.js?v=7"></script>
 
 <!-- Browse Modal -->
 <div id="browseModal">
@@ -1282,3 +1282,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
