@@ -1251,8 +1251,21 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
+  // σωστό API endpoint για το fallback
   window.API_BASE = "https://oramax-app.fly.dev/exoplanet";
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
+      .then(() => {
+        if (!navigator.serviceWorker.controller) {
+          navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+          location.reload();
+        }
+      })
+      .catch(err => console.error('SW register failed', err));
+  }
 </script>
+
   
 <script src="/detector/engine-toggle.js?v=7"></script>
 
@@ -1286,5 +1299,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
