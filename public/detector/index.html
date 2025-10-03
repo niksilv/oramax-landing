@@ -508,14 +508,19 @@ function busyStop(){
   busyDone();
 }
 
-// ML badge
+// ML badge — δείχνει μόνο όταν το Method = CNN
 function updateMlBadge(){
-  const b=document.getElementById('mlBadge');
-  const sel = document.getElementById('fitMethod');
-  if(!b || !sel) return;
-  const m = (window.OramaxML && window.OramaxML.method) ? String(window.OramaxML.method).toLowerCase() : 'none';
-  b.style.display = (m==='cnn') ? 'inline-block' : 'none';
+  const b = document.getElementById('mlBadge');
+  if (!b) return;
+  const m = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+  b.style.display = (m === 'cnn') ? 'inline-block' : 'none';
 }
+
+// Συγχρονισμός badge όταν αλλάζει το Method από το engine-toggle
+window.addEventListener('oramax-engine-change', () => updateMlBadge());
+
+// και στην εκκίνηση
+document.addEventListener('DOMContentLoaded', () => { updateMlBadge(); });
 
 let lcTime=[], lcFlux=[], lastCands=[], currentTarget='(Uploaded TXT)';
 let selectedIdx = 0;
@@ -721,6 +726,8 @@ async function runFetch(){
   const status = document.getElementById('status');
   try{
     busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
+    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    
     const source = document.getElementById('sourceSel').value;
     const mission = document.getElementById('missionSel').value;
     const target = document.getElementById('ticInput').value.trim();
@@ -736,7 +743,7 @@ async function runFetch(){
     const neighbors = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
+    const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius, engine });
     const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ status.textContent='Error'; return; }
     const data = await res.json();
@@ -1316,6 +1323,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
