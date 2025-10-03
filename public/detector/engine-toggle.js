@@ -101,18 +101,28 @@
 
       var resp = await origFetch(url, options);
 
-      // --- GAIA: αν 404 ή άλλο σφάλμα, κάνε Fallback μέσω /fetch_detect ---
-      if (isGaia && (!resp || !resp.ok)) {
-        try{
-          var p = extractGaiaParams(url);
-          var safe = await gaiaFallbackViaDetect(p.target, p.radius);
-          // ενημέρωσε και τα "τελευταία" για PDF enrichment
-          window.lastNeighbors = safe;
-          return new Response(JSON.stringify(safe), {
-            status: 200, headers: { "Content-Type": "application/json", "X-Oramax-Client": "gaia-fallback" }
-          });
-        }catch(e){}
+if (isGaia) {
+  let needFallback = !resp || !resp.ok;
+  if (!needFallback) {
+    try {
+      const peek = await resp.clone().json();
+      if (peek && (peek.available === false || (Array.isArray(peek.items) && peek.items.length === 0))) {
+        needFallback = true;
       }
+    } catch { needFallback = true; }
+  }
+  if (needFallback) {
+    try {
+      const p = extractGaiaParams(url);
+      const safe = await gaiaFallbackViaDetect(p.target, p.radius);
+      window.lastNeighbors = safe;
+      return new Response(JSON.stringify(safe), {
+        status: 200, headers: { 'Content-Type': 'application/json', 'X-Oramax-Client': 'gaia-fallback' }
+      });
+    } catch {}
+  }
+}
+
 
       // αποθήκευση ML αποτελεσμάτων
       if (isML) {
