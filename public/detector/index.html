@@ -745,7 +745,8 @@ async function runFetch(){
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius });
     const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    const data = await res.json();
+busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
 if (data.error){ alert(data.error); status.textContent='Error'; return; }
 
 currentTarget = data.target || target || url;
@@ -753,24 +754,41 @@ lastPreproc   = data.preprocess || null;
 
 const candNorm = normalizeCandidates(data.candidates || []);
 
-// --- NEW: robust Gaia fallback ---
+// ---------- NEW: robust GAIA selection ----------
 const wantNei = document.getElementById('gaiaChk')?.checked;
-const rad = Number(document.getElementById('neiRadius')?.value || 60);
+const rad     = Number(document.getElementById('neiRadius')?.value || 60);
 
+// οτιδήποτε γύρισε ο server αρχικά
 let nei = data.neighbors || null;
-if (wantNei && (!nei || !nei.available)) {
-  nei = await fetchGaiaNeighbors(currentTarget, rad);
-}
-lastNeighbors = nei;
-renderNeighbors(nei);
 
-// Πέρνα στο renderAll ό,τι έχουμε (backend ή fallback)
+// helper: usable = έχει items[]
+const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
+
+// αν ζητήθηκαν neighbors αλλά το αρχικό δεν είναι usable, κάνε fallback
+if (wantNei && !usable(nei)) {
+  try {
+    const n2 = await fetchGaiaNeighbors(currentTarget, rad);
+    if (usable(n2)) {
+      nei = n2;  // ΠΕΡΝΑΜΕ ΤΟ ΚΑΛΟ
+    } else {
+      // κράτα καθαρό reason για να φανεί στο UI
+      nei = n2 || { available:false, reason:'empty', radius_arcsec: rad };
+    }
+  } catch (e) {
+    nei = { available:false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
+  }
+}
+
+// αποθήκευση και RENDER μόνο με το τελικό nei
+lastNeighbors = nei;
+
+// ΣΗΜΑΝΤΙΚΟ: renderAll να παίρνει το 'nei' που μόλις ορίσαμε
 renderAll(data.time, data.flux, candNorm, lastNeighbors);
 
-busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+busyAdvance(98,'Rendering plots…'); status.textContent='Done';
+setTimeout(()=>busyStop(), 600);
+updateMlBadge();
 
-  } catch(e){ status.textContent = 'Error'; console.error(e); }
-}
   
 // ---------- Upload TXT ----------
 async function runUpload(){
@@ -1265,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
