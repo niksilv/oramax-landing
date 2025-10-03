@@ -1,5 +1,5 @@
-// OramaX SW proxy v51 — Gaia GET-first + POST fallback, CORS-safe
-const VERSION = 'v52';
+// OramaX SW proxy v45 — Gaia GET-first + POST fallback, CORS-safe
+const VERSION = 'v45';
 const BACKENDS = [
   self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
@@ -55,11 +55,28 @@ async function handlePdfDirect(req) {
 
 // --------- GAIA neighbors (GET-first, POST-fallback) ---------
 async function handleGaiaNeighbors(req) {
+  // normalise μονοπάτι (π.χ. /detector/detector/api → /detector/api)
   const url0 = new URL(req.url);
   const url = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
   const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
+  // 1) Δοκίμασε GET /gaia_neighbors σε κάθε backend
+  for (const base of BACKENDS) {
+    try {
+      const up = join(base, 'gaia_neighbors') + `?target=${encodeURIComponent(targetName)}&radius=${radius}`;
+      const r = await fetch(up, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (r.ok) {
+        const buf = await r.arrayBuffer();
+        return new Response(buf, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-get-${VERSION}` }
+        });
+      }
+    } catch { /* try next */ }
+  }
+
+  // 2) Fallback: POST /fetch_detect (neighbors only)
   const body = JSON.stringify({
     source: 'mast_spoc', mission: 'TESS', target: targetName,
     kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
@@ -67,34 +84,22 @@ async function handleGaiaNeighbors(req) {
   });
   const initPost = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body };
 
-  // 2 προσπάθειες POST (με μικρή καθυστέρηση μετά την 1η)
-  let last = null;
-  for (let attempt=0; attempt<2; attempt++){
-    for (const base of BACKENDS) {
-      try {
-        const r = await fetch(join(base, 'fetch_detect'), initPost);
-        if (!r.ok) { last = `HTTP ${r.status}`; continue; }
-        const j = await r.json();
-        const nei = normalizeNeighbors(j.neighbors || j, radius);
-        // αν δεν είναι το γνωστό IO error -> επέστρεψε
-        if (!(nei && nei.available === false && /I\/O operation on closed file/i.test(nei.reason||''))) {
-          return new Response(JSON.stringify(nei), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fd-${VERSION}` }
-          });
-        }
-        last = 'io-closed';
-      } catch (e) { last = e?.message || String(e); }
-    }
-    // μικρό sleep πριν retry
-    await new Promise(r=>setTimeout(r, 180));
+  for (const base of BACKENDS) {
+    try {
+      const r = await fetch(join(base, 'fetch_detect'), initPost);
+      if (!r.ok) continue;
+      const j = await r.json();
+      const nei = normalizeNeighbors(j.neighbors || j, radius);
+      return new Response(JSON.stringify(nei), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fd-${VERSION}` }
+      });
+    } catch { /* try next */ }
   }
 
   return new Response(JSON.stringify({
-    available: false,
-    reason: (last==='io-closed') ? 'backend IO error (retry exhausted)' : (last || 'unknown'),
-    radius_arcsec: radius
-  }), { status: 200, headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-retry-fail-${VERSION}` } });
+    available: false, reason: 'Gaia neighbors failed on all backends.', radius_arcsec: radius
+  }), { status: 502, headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fail-${VERSION}` } });
 }
 
 // --------- Generic proxy (/detector/api/*) ---------
