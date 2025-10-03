@@ -651,21 +651,20 @@ function toggleInputs(){
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
 
-// Always absolute URL inside SW scope (αποφεύγει 404 από relative μονοπάτια)
-function gaiaUrl(target, radius) {
-  const u = new URL('/detector/api/gaia_neighbors', location.origin);
-  u.search = new URLSearchParams({ target, radius: String(radius || 60) }).toString();
-  return u.toString();
-}
-
 async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
+  const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
+
+  // Always absolute path inside SW scope (avoid relative 404)
+  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  u.search = new URLSearchParams({ target, radius: String(rad) }).toString();
+
   try {
-    const r = await fetch(gaiaUrl(target, radius), { headers: { 'Accept': 'application/json' } });
+    const r = await fetch(u.toString(), { headers: { 'Accept': 'application/json' } });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return await r.json();
   } catch (e) {
-    return { available: false, reason: e?.message || 'gaia fetch failed' };
+    return { available:false, reason: e?.message || 'gaia fetch failed' };
   }
 }
 
@@ -705,12 +704,12 @@ const candNorm = normalizeCandidates(data.candidates || []);
 let nei = data.neighbors || null;
 const wantNei = document.getElementById('gaiaChk')?.checked;
 const rad = Number(document.getElementById('neiRadius')?.value || 60);
-let nei = data.neighbors || null;
+
+// Αν ζητήθηκαν neighbors αλλά ο server δεν έδωσε usable (ή έχει reason π.χ. "I/O operation on closed file.")
 if (wantNei && (!nei || !nei.available)) {
   nei = await fetchGaiaNeighbors(currentTarget, rad);
 }
 lastNeighbors = nei;
-renderNeighbors(nei);
 
 // Πέρνα στο renderAll ό,τι έχουμε (backend ή fallback)
 renderAll(data.time, data.flux, candNorm, lastNeighbors);
@@ -1213,15 +1212,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
