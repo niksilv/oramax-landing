@@ -6,17 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <script>
-// register early + take control + reload once the SW becomes controller
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=46', { scope: '/detector/' })
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=48', { scope: '/detector' })
     .then(() => {
-      // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
-      if (navigator.serviceWorker.controller) return;
-
-      // Αλλιώς, μόλις γίνει controller, κάνε ένα γρήγορο reload
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        location.reload();
-      });
+      if (!navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
+      }
     })
     .catch(err => console.error('SW register failed', err));
 }
@@ -1276,5 +1271,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
