@@ -404,6 +404,9 @@ function renderCentroidInfo(cent, sigmaThr, rhoThr){
   el.innerHTML = `Centroid: ${txt} ${badge ? '  ' + badge : ''}`;
 }
 function renderNeighbors(nei){
+  if (Array.isArray(nei)) {
+    nei = { available: nei.length > 0, radius_arcsec: Number(document.getElementById('neiRadius')?.value || 60), items: nei };
+  }
   const info = document.getElementById('neighborsInfo');
   const tbl = document.querySelector('#neighborsTbl tbody');
   if(!nei || !nei.available){
@@ -1283,6 +1286,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
