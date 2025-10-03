@@ -805,18 +805,41 @@ async function runUpload(){
     if(!file){ alert('Choose a .txt or .csv first'); status.textContent=''; return; }
     const txt = await file.text();
     const [T,F] = parseTxt(txt);
-    const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
-    const res = await fetch(`${API_BASE}/predict-file?kpeaks=3`, {method:'POST', body: form});
+
+    // Στείλε JSON στο fetch_detect
+    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks = Number(document.getElementById('kpeaks').value || 3);
+
+    const body = JSON.stringify({
+      engine: engine,
+      kpeaks: kpeaks,
+      text: txt,            // εδώ περνάμε το περιεχόμενο του αρχείου
+      neighbors: false
+    });
+
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body
+    });
+
     if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    const data = await res.json();
     if(data.error){ alert(data.error); status.textContent='Error'; return; }
+
     currentTarget='(Uploaded TXT)';
     lastPreproc = {source:'upload'};
     lastNeighbors = null;
     const candNorm = normalizeCandidates(data.candidates || []);
     renderAll(T,F,candNorm, null);
-    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
-  } catch(e){ status.textContent = 'Error'; console.error(e); }
+
+    status.textContent = 'Done';
+    setTimeout(()=>busyStop(), 600);
+    updateMlBadge();
+  } catch(e){
+    status.textContent = 'Error';
+    console.error(e);
+  }
 }
 
 // ---------- Export CSV ----------
@@ -1323,6 +1346,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
