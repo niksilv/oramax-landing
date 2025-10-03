@@ -714,7 +714,28 @@ async function getNeighborsRobust(target, radius, API_BASE) {
   }
 }
 
-  
+ function buildDetectPayload(){
+  const source  = document.getElementById('sourceSel').value || 'mast_spoc';
+  const mission = document.getElementById('missionSel').value || 'TESS';
+  const target  = (document.getElementById('ticInput')?.value || '').trim();
+  const url     = (document.getElementById('urlInput')?.value || '').trim();
+
+  return {
+    source,
+    mission,
+    target,
+    url,
+    kpeaks: Number(document.getElementById('kpeaks').value || 3),
+    detrend: document.getElementById('detrendSel').value || 'flatten',
+    quality: document.getElementById('qualityChk').checked,
+    remove_outliers: document.getElementById('outlierChk').checked,
+    sigma: Number(document.getElementById('sigmaVal').value || 5),
+    centroid: document.getElementById('centroidChk').checked,
+    neighbors: document.getElementById('gaiaChk').checked,
+    neighbors_radius: Number(document.getElementById('neiRadius').value || 60)
+  };
+}
+ 
 // ---------- Fetch & Detect ----------
 async function runFetch() {
   const status = document.getElementById('statusTxt');
@@ -727,14 +748,14 @@ async function runFetch() {
     // 1) φτιάξε τα inputs (target/source κ.λπ.) όπως τα έχεις ήδη
     const wantNei = document.getElementById('gaiaChk')?.checked;
     const rad     = Number(document.getElementById('neiRadius')?.value || 60);
-    const target  = (document.getElementById('inpTarget')?.value || '').trim();
+    const target  = (document.getElementById('ticInput')?.value || '').trim();
     //το API_BASE το έχεις ήδη ορισμένο πιο πάνω στο αρχείο σου
 
     // 2) κάλεσε το κύριο detect
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(/* <- ΕΔΩ βάλε το ήδη υπάρχον payload σου */ window.buildDetectPayload())
+      body: JSON.stringify(buildDetectPayload())
     });
 
     const data = await res.json();
@@ -761,47 +782,7 @@ async function runFetch() {
   }
 }
 
-// ---------- NEW: robust GAIA selection ----------
-const wantNei = document.getElementById('gaiaChk')?.checked;
-const rad     = Number(document.getElementById('neiRadius')?.value || 60);
-
-// οτιδήποτε γύρισε ο server αρχικά
-let nei = data.neighbors || null;
-
-// helper: usable = έχει items[]
-const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
-
-// αν ζητήθηκαν neighbors αλλά το αρχικό δεν είναι usable, κάνε fallback
-if (wantNei && !usable(nei)) {
-  try {
-    const n2 = await fetchGaiaNeighbors(currentTarget, rad);
-    if (usable(n2)) {
-      nei = n2;  // ΠΕΡΝΑΜΕ ΤΟ ΚΑΛΟ
-    } else {
-      // κράτα καθαρό reason για να φανεί στο UI
-      nei = n2 || { available:false, reason:'empty', radius_arcsec: rad };
-    }
-  } catch (e) {
-    nei = { available:false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
-  }
-}
-
-// αποθήκευση και RENDER μόνο με το τελικό nei
-lastNeighbors = nei;
-
-// ΣΗΜΑΝΤΙΚΟ: renderAll να παίρνει το 'nei' που μόλις ορίσαμε
-renderAll(data.time, data.flux, candNorm, lastNeighbors);
-
-busyAdvance(98,'Rendering plots…'); status.textContent='Done';
-setTimeout(()=>busyStop(), 600);
-updateMlBadge();
-} catch(e) {
-    console.error(e);
-    status.textContent = 'Error';
-    busyStop();
-  }
-}
-  
+ 
 // ---------- Upload TXT ----------
 async function runUpload(){
   const status = document.getElementById('statusUp');
@@ -1295,6 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
