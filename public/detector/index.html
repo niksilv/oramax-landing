@@ -22,6 +22,19 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
+  <script>
+async function waitForSWControl(timeoutMs = 1200) {
+  if (!('serviceWorker' in navigator)) return;
+  if (navigator.serviceWorker.controller) return;
+  await new Promise((resolve)=> {
+    const t = setTimeout(resolve, timeoutMs);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      clearTimeout(t); resolve();
+    });
+  });
+}
+</script>
+
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
 <script>
@@ -718,6 +731,7 @@ async function fetchGaiaNeighbors(target, radius) {
   
 // ---------- Fetch & Detect ----------
 async function runFetch(){
+  await waitForSWControl(1200);
   const status = document.getElementById('status');
   try{
     busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
@@ -1282,6 +1296,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
