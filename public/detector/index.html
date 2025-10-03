@@ -676,33 +676,33 @@ function gaiaUrl(target, radius) {
   return u.toString();
 }
 
-// ΔΙΠΛΟ fallback: SW route -> POST /fetch_detect (neighbors only)
 async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
   const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
 
-  // 1) προσπάθησε SW route (όταν ο SW ελέγχει τη σελίδα, παίζει άμεσα)
+  // 1) Πρώτη προσπάθεια στο SW route
   try {
     const r = await fetch(gaiaUrl(target, rad), { headers: { 'Accept': 'application/json' } });
-    if (r.ok) return await r.json();
-    // αν ο server γύρισε 404 (σελίδα δεν ελέγχεται από SW), πέσε στο 2)
+    if (r.ok) {
+      const j = await r.json().catch(() => null);
+      // ΑΝ το σώμα δηλώνει αποτυχία/κενό, προχώρα σε fallback
+      if (j && ((j.available === false) || (Array.isArray(j.items) && j.items.length === 0))) {
+        // continue to fallback
+      } else if (j) {
+        return j; // usable
+      }
+    }
+    // αν δεν είναι ok ή δεν διαβάζεται JSON, προχώρα σε fallback
   } catch (_) {
-    // network/TypeError -> πέφτουμε στο 2)
+    // network error -> fallback
   }
 
-  // 2) Fallback: POST στο backend /fetch_detect (neighbors only) — CORS OK
+  // 2) Fallback: POST /fetch_detect (neighbors only) — CORS OK
   try {
     const body = JSON.stringify({
-      source: 'mast_spoc',
-      mission: 'TESS',
-      target,
-      kpeaks: 0,
-      detrend: 'none',
-      quality: false,
-      remove_outliers: false,
-      neighbors: true,
-      neighbors_radius: rad,
-      centroid: false
+      source: 'mast_spoc', mission: 'TESS', target,
+      kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+      neighbors: true, neighbors_radius: rad, centroid: false
     });
 
     const r2 = await fetch(`${API_BASE}/fetch_detect`, {
@@ -711,17 +711,15 @@ async function fetchGaiaNeighbors(target, radius) {
       body
     });
     if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
-    const j = await r2.json();
-    // εξομάλυνση απάντησης
-    const nei = j.neighbors || j;
+    const j2 = await r2.json();
+    const nei = j2.neighbors || j2;
     if (Array.isArray(nei)) return { available: true, radius_arcsec: rad, items: nei };
-    if (nei && Array.isArray(nei.items)) return { available: true, radius_arcsec: (nei.radius_arcsec || rad), items: nei.items };
+    if (nei && Array.isArray(nei.items)) return { available: true, radius_arcsec: nei.radius_arcsec || rad, items: nei.items };
     return { available: false, reason: 'empty', radius_arcsec: rad };
   } catch (e) {
     return { available: false, reason: e?.message || 'gaia fetch failed', radius_arcsec: rad };
   }
 }
-
 
   
 // ---------- Fetch & Detect ----------
@@ -1267,5 +1265,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
