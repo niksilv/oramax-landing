@@ -6,6 +6,14 @@ const BACKENDS = [
   'http://127.0.0.1:8000/exoplanet'
 ];
 
+// --- make the SW take control immediately ---
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(self.clients.claim());
+});
+
 self.addEventListener('install', (evt) => {
   self.skipWaiting();
 });
