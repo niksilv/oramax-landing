@@ -738,7 +738,7 @@ async function getNeighborsRobust(target, radius, API_BASE) {
  
 // ---------- Fetch & Detect ----------
 async function runFetch() {
-  const status = document.getElementById('statusTxt');
+  const status = document.getElementById('status');
   try {
     busyStart('Fetching…'); status.textContent = 'Fetching…';
 
@@ -777,9 +777,9 @@ async function runFetch() {
 
     status.textContent = 'Done'; busyAdvance(98,'Rendering…'); setTimeout(() => busyStop(), 500);
   } catch (e) {
-    console.error(e);
-    status.textContent = 'Error'; busyStop();
-  }
+  console.error(e);
+  if (status) status.textContent = 'Error';   // <= προφυλακτικό check
+  busyStop();
 }
 
  
@@ -1276,6 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
