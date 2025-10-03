@@ -187,15 +187,6 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
     </div>
 </nav>
 
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?b=46&v=44', { scope: '/detector/' })
-    .then(() => console.log('OramaX SW proxy ready (reg)'))
-    .catch(err => console.error('SW register failed', err));
-}
-</script>
-
-
   <h1>Orama X · Exoplanet Detector</h1>
 <div id="busy" class="hidden"><div class="bar" id="busyBar"></div><span id="busyTxt">Working…</span><span id="busyPct"></span></div>
 
@@ -791,7 +782,12 @@ renderAll(data.time, data.flux, candNorm, lastNeighbors);
 busyAdvance(98,'Rendering plots…'); status.textContent='Done';
 setTimeout(()=>busyStop(), 600);
 updateMlBadge();
-
+} catch(e) {
+    console.error(e);
+    status.textContent = 'Error';
+    busyStop();
+  }
+}
   
 // ---------- Upload TXT ----------
 async function runUpload(){
@@ -1286,6 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
