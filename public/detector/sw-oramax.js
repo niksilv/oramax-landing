@@ -1,17 +1,15 @@
-// OramaX SW proxy v52 — Gaia GET-first + POST fallback, CORS-safe
+// OramaX SW proxy v52 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
 const VERSION = 'v52';
 
 const BACKENDS = [
-  'https://oramax-app.fly.dev/exoplanet',                           // production ΠΡΩΤΟ
-  (self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet'),
-  'https://oramax-exoplanet-api.fly.dev/exoplanet',
-  'http://127.0.0.1:8000/exoplanet'
+  'https://oramax-app.fly.dev/exoplanet',           // production (πρώτο)
+  'https://oramax-exoplanet-api.fly.dev/exoplanet', // εναλλακτικό
+  'http://127.0.0.1:8000/exoplanet'                 // τοπικό dev
 ];
 
-// --- take control immediately (single install/activate) ---
-self.addEventListener('install', (e) => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-
+// --- take control immediately (single handlers) ---
+self.addEventListener('install', e => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
 // --------- Helpers ---------
 function join(base, path) {
@@ -52,7 +50,7 @@ async function handlePdfDirect(req) {
   }
 }
 
-// --------- GAIA neighbors (GET-first, POST-fallback) ---------
+// --------- GAIA neighbors (GET-first, smart POST-fallback) ---------
 async function handleGaiaNeighbors(req) {
   // normalise μονοπάτι (π.χ. /detector/detector/api → /detector/api)
   const url0 = new URL(req.url);
@@ -60,7 +58,7 @@ async function handleGaiaNeighbors(req) {
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
   const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
-  // 1) Δοκίμασε GET /gaia_neighbors σε κάθε backend
+  // 1) Προσπάθησε GET /gaia_neighbors σε κάθε backend
   for (const base of BACKENDS) {
     try {
       const up = join(base, 'gaia_neighbors') + `?target=${encodeURIComponent(targetName)}&radius=${radius}`;
@@ -75,9 +73,16 @@ async function handleGaiaNeighbors(req) {
     } catch { /* try next */ }
   }
 
-  // 2) Fallback: POST /fetch_detect (neighbors only)
+  // 2) Fallback: POST /fetch_detect (neighbors only) με σωστή αποστολή (TIC/KIC/EPIC)
+  const tgt = (targetName || '').trim().toUpperCase();
+  const guess =
+    tgt.startsWith('TIC')  ? { source:'mast_spoc', mission:'TESS' } :
+    tgt.startsWith('KIC')  ? { source:'kepler',    mission:'Kepler' } :
+    tgt.startsWith('EPIC') ? { source:'k2',        mission:'K2' } :
+                             { source:'mast_spoc', mission:'TESS' };
+
   const body = JSON.stringify({
-    source: 'mast_spoc', mission: 'TESS', target: targetName,
+    source: guess.source, mission: guess.mission, target: targetName,
     kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
     neighbors: true, neighbors_radius: radius, centroid: false
   });
