@@ -802,35 +802,38 @@ async function runUpload(){
   try{
     status.textContent = 'Running...';
 
-    const file = document.getElementById('file').files?.[0];
-    if (!file) { alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
+    const file = document.getElementById('file')?.files?.[0];
+    if(!file){ alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
 
     const txt = await file.text();
-    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
 
-    // ΜΗΝ ζητήσεις neighbors για upload (flag)
+    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks = Number(document.getElementById('kpeaks')?.value || 3);
+
+    // μην ζητήσεις neighbors σε upload (δεν έχουμε πραγματικό TIC)
     window._skipNeighborsOnce = true;
 
+    // POST στο /fetch_detect (ΟΧΙ /predict-file)
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         engine,
         kpeaks,
-        text: txt,                // περιεχόμενο αρχείου
+        text: txt,               // περιεχόμενο του αρχείου
         neighbors: false,
-        source: 'upload',         // απαιτείται από το oramax-app
-        target: 'TIC 00000000'    // placeholder (δεν θα ζητήσουμε neighbors)
+        source: 'upload',
+        target: 'TIC 00000000'   // placeholder με σωστό prefix που ζητά το backend
       })
     });
 
-    if (!res.ok) {
+    if(!res.ok){
       const t = await res.text().catch(()=> '');
       status.textContent = 'Error';
       throw new Error(`HTTP ${res.status} ${t}`);
     }
 
+    // --- render όπως στο runFetch (ΟΛΑ μέσα στην async function) ---
     const data = await res.json();
     const [T, F] = parseTxt(txt);
     const candNorm = normalizeCandidates(data.candidates || []);
@@ -855,6 +858,10 @@ async function runUpload(){
   }
 }
 
+// bind μετά το DOM
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('runUpload')?.addEventListener('click', runUpload);
+});
 
 
     // render όπως στο runFetch
@@ -1386,6 +1393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
