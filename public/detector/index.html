@@ -335,17 +335,18 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 
 <script>
 // ===== API bases (split) =====
-// Detect/predict/report → API service (υποστηρίζει TIC/KIC/EPIC)
-// Gaia neighbors        → APP service (εκθέτει /gaia_neighbors)
+// Detect/predict/report → APP service (τρέχει το δικό σου main.py με KIC/EPIC support)
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+    : 'https://oramax-app.fly.dev/exoplanet';   // ← ΑΛΛΑΞΕ σε app
 
+// Gaia neighbors → APP (έτσι κι αλλιώς)
 const NEI_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
     : 'https://oramax-app.fly.dev/exoplanet';
+
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -1386,6 +1387,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
