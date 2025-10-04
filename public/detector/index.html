@@ -351,7 +351,14 @@ function shadedShapes(intervals){
   return intervals.map(iv => ({type:'rect', xref:'x', yref:'paper', x0:iv[0], x1:iv[1], y0:0, y1:1, fillcolor:'rgba(0,0,0,0.08)', line:{width:0}}));
 }
 function renderLC(T, F, intervals){
-  Plotly.newPlot('lc',[{x:T, y:F, mode:'markers', marker:{size:3}}], {margin:{t:10}, shapes: shadedShapes(intervals)});
+  Plotly.newPlot('lc', [
+  { x: T, y: F, mode: 'markers', marker: { size: 3 } }
+], {
+  margin: { t: 10 },
+  shapes: shadedShapes(intervals),
+  xaxis: { title: 'Time [BJD - 2457000]' },
+  yaxis: { title: 'Normalized Flux' }
+});
 }
 function centroidBadge(cent, sigmaThr, rhoThr){
   if(!cent) return '';
@@ -1355,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
