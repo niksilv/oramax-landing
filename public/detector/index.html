@@ -8,7 +8,7 @@
   <script>
 // register early + take control + reload once the SW becomes controller
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=46', { scope: '/detector/' })
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
     .then(() => {
       // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
       if (navigator.serviceWorker.controller) return;
@@ -1340,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
