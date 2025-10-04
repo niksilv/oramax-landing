@@ -5,6 +5,12 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+<script>
+  if (location.pathname === '/detector') {
+    location.replace('/detector/');  // προσθέτει το / και ξαναφορτώνει
+  }
+</script>
+
   <!-- 1) ΟΡΙΣΜΟΣ ΒΑΣΕΩΝ ΠΡΙΝ ΑΠΟ Ο,ΤΙΔΗΠΟΤΕ ΤΙΣ ΧΡΗΣΙΜΟΠΟΙΕΙ -->
   <script>
     window.API_BASE = 'https://oramax-app.fly.dev/exoplanet';   // detect/predict/report
@@ -1440,3 +1446,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
