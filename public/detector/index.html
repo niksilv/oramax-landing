@@ -854,7 +854,7 @@ if (wantNei && !usable(nei)) {
 lastNeighbors = nei;
 
 // ΣΗΜΑΝΤΙΚΟ: renderAll να παίρνει το 'nei' που μόλις ορίσαμε
-renderAll(data.time, data.flux, candNorm, lastNeighbors);
+renderAll(data.time, data.flux, candFinal, lastNeighbors);
 
 busyAdvance(98,'Rendering plots…'); status.textContent='Done';
 setTimeout(()=>busyStop(), 600);
@@ -917,7 +917,7 @@ async function runUpload(){
 
     busySet(55,'Processing & BLS…');
     busyAdvance(90,'Processing & BLS…');
-    renderAll(T, F, candNorm, null);
+    renderAll(T, F, candFinal, null);
     busyAdvance(98,'Rendering plots…');
 
     status.textContent = 'Done';
@@ -1445,6 +1445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
