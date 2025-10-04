@@ -1,27 +1,17 @@
-// OramaX SW proxy v45 — Gaia GET-first + POST fallback, CORS-safe
-const VERSION = 'v45';
+// OramaX SW proxy v52 — Gaia GET-first + POST fallback, CORS-safe
+const VERSION = 'v52';
+
 const BACKENDS = [
-  https://oramax-app.fly.dev/exoplanet',         // ← production app ΠΡΩΤΟ
-  self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
+  'https://oramax-app.fly.dev/exoplanet',                           // production ΠΡΩΤΟ
+  (self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet'),
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'http://127.0.0.1:8000/exoplanet'
 ];
 
-// --- make the SW take control immediately ---
-self.addEventListener('install', (e) => {
-  self.skipWaiting();
-});
-self.addEventListener('activate', (e) => {
-  e.waitUntil(self.clients.claim());
-});
+// --- take control immediately (single install/activate) ---
+self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
-self.addEventListener('install', (evt) => {
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (evt) => {
-  evt.waitUntil(self.clients.claim());
-});
 
 // --------- Helpers ---------
 function join(base, path) {
