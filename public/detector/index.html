@@ -803,25 +803,25 @@ async function runUpload(){
     status.textContent = 'Running...';
 
     const file = document.getElementById('file').files?.[0];
-    if(!file){ alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
+    if (!file) { alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
+
     const txt = await file.text();
+    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
 
-    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    const kpeaks = Number(document.getElementById('kpeaks')?.value || 3);
-
-    // μην ζητήσεις neighbors για αυτό το render (δεν έχουμε πραγματικό TIC)
+    // ΜΗΝ ζητήσεις neighbors για upload (flag)
     window._skipNeighborsOnce = true;
 
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         engine,
         kpeaks,
-        text: txt,               // περιεχόμενο αρχείου
+        text: txt,                // περιεχόμενο αρχείου
         neighbors: false,
-        source: 'upload',        // απαιτείται από το oramax-app
-        target: 'TIC 00000000'   // placeholder με σωστό prefix
+        source: 'upload',         // απαιτείται από το oramax-app
+        target: 'TIC 00000000'    // placeholder (δεν θα ζητήσουμε neighbors)
       })
     });
 
@@ -832,21 +832,29 @@ async function runUpload(){
     }
 
     const data = await res.json();
-    const [T,F] = parseTxt(txt);
+    const [T, F] = parseTxt(txt);
     const candNorm = normalizeCandidates(data.candidates || []);
 
-    currentTarget='(Uploaded TXT)';
-    lastPreproc = {source:'upload'};
+    currentTarget = '(Uploaded TXT)';
+    lastPreproc   = { source:'upload' };
     lastNeighbors = null;
 
+    busySet(55,'Processing & BLS…');
+    busyAdvance(90,'Processing & BLS…');
     renderAll(T, F, candNorm, null);
+    busyAdvance(98,'Rendering plots…');
+
     status.textContent = 'Done';
+    setTimeout(()=>busyStop(), 600);
+    updateMlBadge?.();
+
   } catch(e){
-    status.textContent = 'Error';
     console.error(e);
+    status.textContent = 'Error';
     alert(e.message || e);
   }
 }
+
 
 
     // render όπως στο runFetch
@@ -1378,6 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
