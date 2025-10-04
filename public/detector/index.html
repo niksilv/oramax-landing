@@ -6,14 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script>
-// Redirect σε /detector/ ΜΟΝΟ μία φορά και μόνο αν χρειάζεται
+// Redirect σε /detector/ ΜΟΝΟ μία φορά, ανεξάρτητα αν το path έχει/δεν έχει leading slash
 (function () {
   try {
     if (sessionStorage.getItem('redir_done') === '1') return;
 
-    var p = location.pathname;
-    // Αν είμαστε ακριβώς /detector ή /detector/index.html → κάνε replace σε /detector/
-    if (p === '/detector' || p === '/detector/index.html') {
+    var p = String(location.pathname || '').trim();
+    // κανονικοποίηση: πρόσθεσε leading slash αν λείπει
+    if (p[0] !== '/') p = '/' + p;
+    // βγάλε τυχόν τελικά slashes για έλεγχο ισότητας
+    var pNoTrail = p.replace(/\/+$/, '');
+
+    if (pNoTrail === '/detector') {
       sessionStorage.setItem('redir_done', '1');
       location.replace('/detector/'); // no history entry
     }
@@ -46,31 +50,16 @@
   }
 </script>
 
-  
   <script>
-// register early + take control + reload ΜΟΝΟ μία φορά όταν γίνει controller
+// Μόνο εγγραφή – θα κάνεις εσύ ένα χειροκίνητο reload μετά
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', {
-    scope: '/detector/', updateViaCache: 'none'
-  }).then(() => {
-    // Αν ήδη ελεγχόμαστε, καθάρισε το flag και τέλος
-    if (navigator.serviceWorker.controller) {
-      sessionStorage.removeItem('sw-refreshed');
-      return;
-    }
-    const onCtrl = () => {
-      navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
-      // Κάνε ένα reload ΜΟΝΟ την πρώτη φορά που έγινε controller
-      if (!sessionStorage.getItem('sw-refreshed')) {
-        sessionStorage.setItem('sw-refreshed', '1');
-        location.reload();
-      }
-    };
-    navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
-  }).catch(err => console.error('SW register failed', err));
+    scope: '/detector'   // χωρίς τελικό slash, καλύπτει και /detector ΚΑΙ /detector/
+  }).then(reg => {
+    console.log('SW registered at scope:', reg.scope);
+  }).catch(err => console.error('SW register failed:', err));
 }
 </script>
-
 
 
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
@@ -1464,5 +1453,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
