@@ -826,10 +826,13 @@ async function runFetch() {
     // (αν έχεις δώσει URL, ο server τιμά το URL έτσι κι αλλιώς)
 
     // --- Επιλογή backend με βάση το prefix του target
+    // --- SW route (same-origin) για να αποφύγουμε CORS ---
+         // KIC/EPIC → backend=api, αλλιώς default (app)
     const useApi = (target.startsWith('KIC ') || target.startsWith('EPIC '));
     const DETECT_URL = useApi
-    ? '/detector/api/fetch_detect?__backend=api'
-    : '/detector/api/fetch_detect';
+          ? '/detector/api/fetch_detect?__backend=api'
+          : '/detector/api/fetch_detect';
+
 
     const body = JSON.stringify({
       source, mission, target, url,
@@ -841,10 +844,10 @@ async function runFetch() {
     });
 
     const res = await fetch(DETECT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body
-    });
+  	method: 'POST',
+ 	 headers: { 'Content-Type': 'application/json' },
+  	body
+     });
 
     if (!res.ok) {
       status.textContent = 'Error';
@@ -907,9 +910,12 @@ async function runFetch() {
             kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
             neighbors: true, neighbors_radius: rad, centroid: false
           });
-          const r2 = await fetch(DETECT_URL, {
-            method:'POST', headers:{'Content-Type':'application/json'}, body: body2
-          });
+          
+	  const r2 = await fetch(DETECT_URL, {
+  		method:'POST', headers:{'Content-Type':'application/json'}, body: body2
+	  });
+
+
           if (r2.ok) {
             const j2 = await r2.json();
             const maybe = j2.neighbors || j2;
@@ -1434,24 +1440,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
