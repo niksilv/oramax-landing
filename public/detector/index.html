@@ -845,29 +845,7 @@ async function runUpload(){
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('runUpload')?.addEventListener('click', runUpload);
 });
-
-
-    // render όπως στο runFetch
-    const data = await res.json();
-    const [T, F] = parseTxt(txt);
-    const candNorm = normalizeCandidates(data.candidates || []);
-    currentTarget = '(Uploaded TXT)';
-    lastPreproc   = { source:'upload' };
-    lastNeighbors = null;
-    busySet(55,'Processing & BLS…');
-    busyAdvance(90,'Processing & BLS…');
-    renderAll(T, F, candNorm, null);
-    busyAdvance(98,'Rendering plots…');
-    status.textContent = 'Done';
-    setTimeout(()=>busyStop(), 600);
-    updateMlBadge?.();
-
-  } catch(e){
-    console.error(e);
-    status.textContent = 'Error';
-    alert(e.message || e);
-  }
-}
+  
 
 
 // ---------- Export CSV ----------
@@ -1376,4 +1354,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
