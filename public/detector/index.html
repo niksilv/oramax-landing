@@ -802,26 +802,26 @@ async function runUpload(){
   try{
     status.textContent = 'Running...';
 
-    // αρχείο -> text
     const file = document.getElementById('file').files?.[0];
-    if (!file) { alert('Choose a .txt or .csv first'); status.textContent=''; return; }
+    if(!file){ alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
     const txt = await file.text();
 
-    // ίδιες ρυθμίσεις με το πάνω κουμπί
-    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
+    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks = Number(document.getElementById('kpeaks')?.value || 3);
 
-    // POST JSON στο /fetch_detect (ΟΧΙ /predict-file)
+    // μην ζητήσεις neighbors για αυτό το render (δεν έχουμε πραγματικό TIC)
+    window._skipNeighborsOnce = true;
+
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         engine,
         kpeaks,
-        text: txt,           // περιεχόμενο αρχείου (2 στήλες: time, flux)
+        text: txt,               // περιεχόμενο αρχείου
         neighbors: false,
-        source: 'upload',    // απαιτείται από το oramax-app
-        target: 'TIC 00000000' // placeholder με σωστό prefix που ζητά το backend
+        source: 'upload',        // απαιτείται από το oramax-app
+        target: 'TIC 00000000'   // placeholder με σωστό prefix
       })
     });
 
@@ -830,6 +830,24 @@ async function runUpload(){
       status.textContent = 'Error';
       throw new Error(`HTTP ${res.status} ${t}`);
     }
+
+    const data = await res.json();
+    const [T,F] = parseTxt(txt);
+    const candNorm = normalizeCandidates(data.candidates || []);
+
+    currentTarget='(Uploaded TXT)';
+    lastPreproc = {source:'upload'};
+    lastNeighbors = null;
+
+    renderAll(T, F, candNorm, null);
+    status.textContent = 'Done';
+  } catch(e){
+    status.textContent = 'Error';
+    console.error(e);
+    alert(e.message || e);
+  }
+}
+
 
     // render όπως στο runFetch
     const data = await res.json();
@@ -1360,6 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
