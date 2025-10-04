@@ -74,7 +74,7 @@ export default function Navbar() {
                 Exoplanet Detector
               </Link>
               <Link href="/our-project/our-challenge" role="menuitem">
-                Our Challenge
+                How it works?
               </Link>
               <Link href="/our-project/our-resources" role="menuitem">
                 Our Resources
