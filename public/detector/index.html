@@ -5,22 +5,35 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+  <!-- 1) ΟΡΙΣΜΟΣ ΒΑΣΕΩΝ ΠΡΙΝ ΑΠΟ Ο,ΤΙΔΗΠΟΤΕ ΤΙΣ ΧΡΗΣΙΜΟΠΟΙΕΙ -->
   <script>
-// register early + take control + reload once the SW becomes controller
+    window.API_BASE = 'https://oramax-app.fly.dev/exoplanet';   // detect/predict/report
+    window.NEI_BASE = 'https://oramax-app.fly.dev/exoplanet';   // gaia_neighbors
+  </script>
+  
+  <script>
+// register early + take control + reload **μία φορά** όταν γίνει controller
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
     .then(() => {
-      // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
-      if (navigator.serviceWorker.controller) return;
-
-      // Αλλιώς, μόλις γίνει controller, κάνε ένα γρήγορο reload
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        location.reload();
-      });
+      if (navigator.serviceWorker.controller) {
+        // έχουμε ήδη controller, καθάρισε πιθανό flag
+        sessionStorage.removeItem('sw-refreshed');
+        return;
+      }
+      const onCtrl = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+        if (!sessionStorage.getItem('sw-refreshed')) {
+          sessionStorage.setItem('sw-refreshed', '1');
+          location.reload();
+        }
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
     })
     .catch(err => console.error('SW register failed', err));
 }
 </script>
+
 
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
@@ -1387,6 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
