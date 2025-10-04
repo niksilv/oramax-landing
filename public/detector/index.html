@@ -780,13 +780,13 @@ async function runFetch() {
     else if (source === 'mast_spoc' || source === 'mast_qlp') mission = 'TESS';
 
     const body = JSON.stringify({
-      source, mission, target, url,
-      kpeaks,
-      detrend: detrendStr,     // 👈 κρατάμε string
-      quality, remove_outliers, sigma,
-      centroid, neighbors, neighbors_radius,
-      engine
-    });
+  source, mission, target, url,
+  kpeaks,
+  detrend,               // <-- να είναι το string από πάνω
+  quality, remove_outliers, sigma,
+  centroid, neighbors, neighbors_radius,
+  engine
+});
 
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
@@ -1340,18 +1340,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
   
-  if ('serviceWorker' in navigator) {
-    // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
-    navigator.serviceWorker.getRegistration('/detector/').then(reg => {
-      if (!reg) {
-        navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
-          .catch(err => console.error('SW register failed', err));
-      } else {
-        // προαιρετικό: πες του να τσεκάρει για update στο background
-        reg.update().catch(()=>{});
-      }
-    });
-
     // Κάνε reload ΜΙΑ φορά όταν γίνει controller για πρώτη φορά (όχι αμέσως)
     if (!navigator.serviceWorker.controller) {
       const onCtrl = () => {
@@ -1402,6 +1390,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
