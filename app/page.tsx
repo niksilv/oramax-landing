@@ -11,7 +11,7 @@ export default function HomePage() {
         />
 
         {/* Φράση πάνω από το gif, κεντραρισμένη και λίγο πιο κάτω από τη μέση */}
-        <div className="absolute top-[65%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
+        <div className="absolute top-[72%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
           <h2 className="text-white text-4xl md:text-5xl font-bold text-center drop-shadow-2xl">
             A World Away: Hunting for Exoplanets with AI
           </h2>
