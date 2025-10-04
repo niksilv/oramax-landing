@@ -815,18 +815,18 @@ async function runUpload(){
 
     // POST στο /fetch_detect (ΟΧΙ /predict-file)
     const res = await fetch(`${API_BASE}/fetch_detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engine,
-        kpeaks,
-        text: txt,               // περιεχόμενο του αρχείου
-        neighbors: false,
-        source: 'upload',
-        target: 'TIC 00000000'   // placeholder με σωστό prefix που ζητά το backend
-      })
-    });
-
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    engine,
+    kpeaks,
+    text: txt,           // περιεχόμενο αρχείου
+    neighbors: false,
+    source: 'upload',    // κρατάμε "upload"
+    mission: 'CUSTOM',   // <— ΚΛΕΙΔΙ: όχι TESS
+    target: '(upload)'   // <— ΟΧΙ "TIC …", δώσε placeholder χωρίς TIC
+  })
+});
     if(!res.ok){
       const t = await res.text().catch(()=> '');
       status.textContent = 'Error';
@@ -1374,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
