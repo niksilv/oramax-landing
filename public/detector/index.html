@@ -750,7 +750,6 @@ async function fetchGaiaNeighbors(target, radius) {
 async function runFetch() {
   const status = document.getElementById('status');
   try {
-    // progress ui
     busyStart('Fetching light curve…');
     busySet(10);
     status.textContent = 'Fetching...';
@@ -764,9 +763,8 @@ async function runFetch() {
 
     const kpeaks  = Number(document.getElementById('kpeaks').value || 3);
 
-    // detrend ως boolean (για να μη χτυπά 422)
-    const detrendChoice   = document.getElementById('detrendSel').value; // 'flatten' | 'none'
-    const detrend         = (detrendChoice === 'flatten');               // true | false
+    // 👇 Στείλ' το ως string (όχι boolean)
+    const detrendStr      = document.getElementById('detrendSel').value; // 'flatten' | 'none'
 
     const quality         = document.getElementById('qualityChk').checked;
     const remove_outliers = document.getElementById('outlierChk').checked;
@@ -776,14 +774,16 @@ async function runFetch() {
     const neighbors        = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    // ευθυγράμμιση mission με source
+    // Ευθυγράμμιση mission με source
     if (source === 'kepler') mission = 'Kepler';
     else if (source === 'k2') mission = 'K2';
     else if (source === 'mast_spoc' || source === 'mast_qlp') mission = 'TESS';
 
     const body = JSON.stringify({
       source, mission, target, url,
-      kpeaks, detrend, quality, remove_outliers, sigma,
+      kpeaks,
+      detrend: detrendStr,     // 👈 κρατάμε string
+      quality, remove_outliers, sigma,
       centroid, neighbors, neighbors_radius,
       engine
     });
@@ -812,58 +812,42 @@ async function runFetch() {
       return;
     }
 
-    // meta για UI
     currentTarget = data.target || target || url;
     lastPreproc   = data.preprocess || null;
 
-    // candidates
     const candNorm = normalizeCandidates(data.candidates || []);
 
-    // ---------- GAIA neighbors fallback ΜΕΣΑ στη runFetch ----------
+    // neighbors fallback (όπως ήδη είχες)
     const wantNei = neighbors;
     const rad     = neighbors_radius;
-
-    // usable(): έχει items[]
-    const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
-
-    // ό,τι γύρισε ο server αρχικά
+    const usable  = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
     let nei = data.neighbors || null;
 
-    // αν ζητήθηκαν neighbors αλλά το αρχικό δεν είναι usable, κάνε fallback
     if (wantNei && !usable(nei)) {
       try {
-        // 1) άμεσο GET στο backend
-        const r0 = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(currentTarget)}&radius=${rad}`, {
-          headers: { 'Accept': 'application/json' }
-        });
+        const r0 = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(currentTarget)}&radius=${rad}`, { headers:{ 'Accept':'application/json' } });
         if (r0.ok) {
           const j0 = await r0.json().catch(()=>null);
-          if (j0 && ( (j0.available && Array.isArray(j0.items) && j0.items.length) || (Array.isArray(j0) && j0.length) )) {
+          if (j0 && ((j0.available && Array.isArray(j0.items) && j0.items.length) || (Array.isArray(j0) && j0.length))) {
             nei = j0.items ? j0 : { available:true, radius_arcsec:rad, items:j0 };
           }
         }
-
-        // 2) αν ακόμα όχι, δοκίμασε SW route
         if (!usable(nei)) {
-          const r = await fetch(gaiaUrl(currentTarget, rad), { headers: { 'Accept': 'application/json' } });
+          const r = await fetch(gaiaUrl(currentTarget, rad), { headers:{ 'Accept':'application/json' } });
           if (r.ok) {
             const j = await r.json().catch(()=>null);
-            if (j && ( (j.available && Array.isArray(j.items) && j.items.length) || (Array.isArray(j) && j.length) )) {
+            if (j && ((j.available && Array.isArray(j.items) && j.items.length) || (Array.isArray(j) && j.length))) {
               nei = j.items ? j : { available:true, radius_arcsec:rad, items:j };
             }
           }
         }
-
-        // 3) τελευταίο: POST /fetch_detect ως καθαρό neighbors-only
         if (!usable(nei)) {
           const body2 = JSON.stringify({
             source: 'mast_spoc', mission: 'TESS', target: currentTarget,
             kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
             neighbors: true, neighbors_radius: rad, centroid: false
           });
-          const r2 = await fetch(`${API_BASE}/fetch_detect`, {
-            method:'POST', headers:{'Content-Type':'application/json'}, body: body2
-          });
+          const r2 = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body: body2 });
           if (r2.ok) {
             const j2 = await r2.json();
             const maybe = j2.neighbors || j2;
@@ -871,7 +855,6 @@ async function runFetch() {
             else if (maybe && Array.isArray(maybe.items)) nei = { available:true, radius_arcsec:(maybe.radius_arcsec||rad), items: maybe.items };
           }
         }
-
         if (!nei) nei = { available:false, reason:'empty', radius_arcsec: rad };
       } catch (e) {
         nei = { available:false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
@@ -879,8 +862,6 @@ async function runFetch() {
     }
 
     lastNeighbors = nei || null;
-
-    // render όλα μαζί
     renderAll(data.time, data.flux, candNorm, lastNeighbors);
 
     busyAdvance(98,'Rendering plots…');
@@ -895,7 +876,6 @@ async function runFetch() {
     busyStop();
   }
 }
-
  
 // ---------- Upload TXT ----------
 async function runUpload(){
@@ -1422,6 +1402,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
