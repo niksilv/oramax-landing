@@ -6,6 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script>
+// Redirect σε /detector/ ΜΟΝΟ μία φορά και μόνο αν χρειάζεται
+(function () {
+  try {
+    if (sessionStorage.getItem('redir_done') === '1') return;
+
+    var p = location.pathname;
+    // Αν είμαστε ακριβώς /detector ή /detector/index.html → κάνε replace σε /detector/
+    if (p === '/detector' || p === '/detector/index.html') {
+      sessionStorage.setItem('redir_done', '1');
+      location.replace('/detector/'); // no history entry
+    }
+  } catch (_) {}
+})();
+</script>
+
+<script>
   if (location.pathname === '/detector') {
     location.replace('/detector/');  // προσθέτει το / και ξαναφορτώνει
   }
@@ -32,27 +48,29 @@
 
   
   <script>
-// register early + take control + reload **μία φορά** όταν γίνει controller
+// register early + take control + reload ΜΟΝΟ μία φορά όταν γίνει controller
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
-    .then(() => {
-      if (navigator.serviceWorker.controller) {
-        // έχουμε ήδη controller, καθάρισε πιθανό flag
-        sessionStorage.removeItem('sw-refreshed');
-        return;
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', {
+    scope: '/detector/', updateViaCache: 'none'
+  }).then(() => {
+    // Αν ήδη ελεγχόμαστε, καθάρισε το flag και τέλος
+    if (navigator.serviceWorker.controller) {
+      sessionStorage.removeItem('sw-refreshed');
+      return;
+    }
+    const onCtrl = () => {
+      navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+      // Κάνε ένα reload ΜΟΝΟ την πρώτη φορά που έγινε controller
+      if (!sessionStorage.getItem('sw-refreshed')) {
+        sessionStorage.setItem('sw-refreshed', '1');
+        location.reload();
       }
-      const onCtrl = () => {
-        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
-        if (!sessionStorage.getItem('sw-refreshed')) {
-          sessionStorage.setItem('sw-refreshed', '1');
-          location.reload();
-        }
-      };
-      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
-    })
-    .catch(err => console.error('SW register failed', err));
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+  }).catch(err => console.error('SW register failed', err));
 }
 </script>
+
 
 
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
@@ -1446,4 +1464,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
