@@ -334,12 +334,18 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
   </div>
 
 <script>
-// ===== API base (dynamic) =====
-// ===== API base (dynamic) =====
+// ===== API bases (split) =====
+// Detect/predict/report → API service (υποστηρίζει TIC/KIC/EPIC)
+// Gaia neighbors        → APP service (εκθέτει /gaia_neighbors)
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-app.fly.dev/exoplanet';   // ← production app with /gaia_neighbors
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+
+const NEI_BASE =
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/exoplanet'
+    : 'https://oramax-app.fly.dev/exoplanet';
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -700,18 +706,18 @@ async function fetchGaiaNeighbors(target, radius) {
   const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
 
   // 1) ΠΡΩΤΑ: άμεσο GET στο backend (χωρίς SW)
-  try {
-    const r0 = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (r0.ok) {
-      const j0 = await r0.json().catch(() => null);
-      if (j0 && ((j0.available && Array.isArray(j0.items) && j0.items.length) ||
-                 (Array.isArray(j0) && j0.length))) {
-        return j0.items ? j0 : { available:true, radius_arcsec:rad, items:j0 };
-      }
+try {
+  const r0 = await fetch(`${NEI_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+  if (r0.ok) {
+    const j0 = await r0.json().catch(() => null);
+    if (j0 && ((j0.available && Array.isArray(j0.items) && j0.items.length) ||
+               (Array.isArray(j0) && j0.length))) {
+      return j0.items ? j0 : { available:true, radius_arcsec:rad, items:j0 };
     }
-  } catch (_) {}
+  }
+} catch (_) {}
 
   // 2) Αν όχι, δοκίμασε SW route (αν δουλεύει στον browser)
   try {
@@ -1380,6 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
