@@ -803,60 +803,50 @@ async function runUpload(){
     status.textContent = 'Running...';
 
     const file = document.getElementById('file')?.files?.[0];
-    if(!file){ alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
-
+    if (!file) { alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
     const txt = await file.text();
 
     const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
     const kpeaks = Number(document.getElementById('kpeaks')?.value || 3);
 
-    // μην ζητήσεις neighbors σε upload (δεν έχουμε πραγματικό TIC)
+    // μην ζητήσεις neighbors για upload
     window._skipNeighborsOnce = true;
 
-    // POST στο /fetch_detect (ΟΧΙ /predict-file)
     const res = await fetch(`${API_BASE}/fetch_detect`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    engine,
-    kpeaks,
-    text: txt,           // περιεχόμενο αρχείου
-    neighbors: false,
-    source: 'upload',    // κρατάμε "upload"
-    mission: 'CUSTOM',   // <— ΚΛΕΙΔΙ: όχι TESS
-    target: '(upload)'   // <— ΟΧΙ "TIC …", δώσε placeholder χωρίς TIC
-  })
-});
-    if(!res.ok){
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        engine,
+        kpeaks,
+        text: txt,            // περιεχόμενο αρχείου
+        neighbors: false,
+        source: 'upload',
+        mission: 'CUSTOM',    // ΚΛΕΙΔΙ: να μη δοκιμάσει MAST
+        target: 'TIC 1'       // ΚΛΕΙΔΙ: περνάει το validator "TIC <id>"
+      })
+    });
+
+    if (!res.ok) {
       const t = await res.text().catch(()=> '');
       status.textContent = 'Error';
       throw new Error(`HTTP ${res.status} ${t}`);
     }
 
-    // --- render όπως στο runFetch (ΟΛΑ μέσα στην async function) ---
     const data = await res.json();
     const [T, F] = parseTxt(txt);
     const candNorm = normalizeCandidates(data.candidates || []);
-
     currentTarget = '(Uploaded TXT)';
     lastPreproc   = { source:'upload' };
     lastNeighbors = null;
-
-    busySet(55,'Processing & BLS…');
-    busyAdvance(90,'Processing & BLS…');
     renderAll(T, F, candNorm, null);
-    busyAdvance(98,'Rendering plots…');
-
     status.textContent = 'Done';
-    setTimeout(()=>busyStop(), 600);
-    updateMlBadge?.();
-
-  } catch(e){
+  } catch (e){
     console.error(e);
     status.textContent = 'Error';
     alert(e.message || e);
   }
 }
+
 
 // bind μετά το DOM
   document.addEventListener('DOMContentLoaded', () => {
@@ -1374,6 +1364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
