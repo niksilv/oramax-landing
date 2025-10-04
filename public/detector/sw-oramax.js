@@ -160,9 +160,22 @@ async function handleGaiaNeighbors(req) {
 // --------- Generic proxy (/detector/api/*) ---------
 async function proxyGeneric(req) {
   const url0 = new URL(req.url);
-  // normalise /detector/detector/api → /detector/api
-  const url = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
+  // κανονικοποίηση /detector/detector/api -> /detector/api
+  const url  = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
+
+  // path μετά το /detector/api/
   const rest = url.pathname.replace(/^\/detector\/api\//, '');
+
+  // διάβασε & αφαίρεσε το flag __backend
+  const forceApi = url.searchParams.get('__backend') === 'api';
+  url.searchParams.delete('__backend');
+  const query = url.searchParams.toString();
+
+  // προτεραιότητα upstreams: API πρώτα για KIC/EPIC, αλλιώς APP
+  const upstreams = forceApi
+    ? [API_BASE, APP_BASE, 'http://127.0.0.1:8000/exoplanet']
+    : [APP_BASE, API_BASE, 'http://127.0.0.1:8000/exoplanet'];
+
   const init = {
     method: req.method,
     headers: new Headers(req.headers),
@@ -171,12 +184,15 @@ async function proxyGeneric(req) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     init.body = await req.clone().arrayBuffer();
   }
+  // αφαίρεσε headers που προκαλούν CORS upstream
+  init.headers.delete('Origin');
+  init.headers.delete('Referer');
 
   let lastErr = null;
-  for (const base of BACKENDS) {
+  for (const base of upstreams) {
     try {
-      const r = await fetch(join(base, rest) + url.search, init);
-      if (r.status !== 404 && r.status !== 405) return r;
+      const r = await fetch(join(base, rest) + (query ? '?' + query : ''), init);
+      if (r.status !== 404 && r.status !== 405) return r;  // δέξου το πρώτο «ουσιαστικό» response
       lastErr = `HTTP ${r.status}`;
     } catch (e) {
       lastErr = e?.message || String(e);
