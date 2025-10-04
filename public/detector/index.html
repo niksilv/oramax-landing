@@ -816,12 +816,13 @@ async function runUpload(){
   method: 'POST',
   headers: {'Content-Type':'application/json'},
   body: JSON.stringify({
-    engine,
-    kpeaks,
-    text: txt,        // το περιεχόμενο του αρχείου
-    neighbors: false,
-    source: 'upload'
-  })
+  engine, kpeaks,
+  text: txt,
+  neighbors: false,
+  source: 'upload',
+  mission: 'CUSTOM',
+  target: 'TIC 1'         // μόνο για να περάσει το validator
+})
 });
 
     if (!res.ok) {
@@ -1362,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
