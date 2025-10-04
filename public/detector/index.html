@@ -826,7 +826,10 @@ async function runFetch() {
     // (αν έχεις δώσει URL, ο server τιμά το URL έτσι κι αλλιώς)
 
     // --- Επιλογή backend με βάση το prefix του target
-    const DETECT_BASE = detectBaseFor(target);
+    const useApi = (target.startsWith('KIC ') || target.startsWith('EPIC '));
+    const DETECT_URL = useApi
+    ? '/detector/api/fetch_detect?__backend=api'
+    : '/detector/api/fetch_detect';
 
     const body = JSON.stringify({
       source, mission, target, url,
@@ -837,7 +840,7 @@ async function runFetch() {
       engine
     });
 
-    const res = await fetch(`${DETECT_BASE}/fetch_detect`, {
+    const res = await fetch(DETECT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body
@@ -904,7 +907,7 @@ async function runFetch() {
             kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
             neighbors: true, neighbors_radius: rad, centroid: false
           });
-          const r2 = await fetch(`${DETECT_BASE}/fetch_detect`, {
+          const r2 = await fetch(DETECT_URL, {
             method:'POST', headers:{'Content-Type':'application/json'}, body: body2
           });
           if (r2.ok) {
@@ -1431,6 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
