@@ -801,23 +801,58 @@ async function runUpload(){
   const status = document.getElementById('statusUp');
   try{
     status.textContent = 'Running...';
-    const file = document.getElementById('file').files[0];
-    if(!file){ alert('Choose a .txt or .csv first'); status.textContent=''; return; }
+
+    // αρχείο -> text
+    const file = document.getElementById('file').files?.[0];
+    if (!file) { alert('Choose a .txt or .csv first'); status.textContent=''; return; }
     const txt = await file.text();
-    const [T,F] = parseTxt(txt);
-    const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
-    const res = await fetch(`${API_BASE}/predict-file?kpeaks=3`, {method:'POST', body: form});
-    if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
-    if(data.error){ alert(data.error); status.textContent='Error'; return; }
-    currentTarget='(Uploaded TXT)';
-    lastPreproc = {source:'upload'};
-    lastNeighbors = null;
+
+    // ίδιες ρυθμίσεις με το πάνω κουμπί
+    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
+
+    // POST JSON στο /fetch_detect (ΟΧΙ /predict-file)
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        engine,
+        kpeaks,
+        text: txt,           // περιεχόμενο αρχείου (2 στήλες: time, flux)
+        neighbors: false,
+        source: 'upload',    // απαιτείται από το oramax-app
+        target: 'TIC 00000000' // placeholder με σωστό prefix που ζητά το backend
+      })
+    });
+
+    if (!res.ok) {
+      const t = await res.text().catch(()=> '');
+      status.textContent = 'Error';
+      throw new Error(`HTTP ${res.status} ${t}`);
+    }
+
+    // render όπως στο runFetch
+    const data = await res.json();
+    const [T, F] = parseTxt(txt);
     const candNorm = normalizeCandidates(data.candidates || []);
-    renderAll(T,F,candNorm, null);
-    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
-  } catch(e){ status.textContent = 'Error'; console.error(e); }
+    currentTarget = '(Uploaded TXT)';
+    lastPreproc   = { source:'upload' };
+    lastNeighbors = null;
+    busySet(55,'Processing & BLS…');
+    busyAdvance(90,'Processing & BLS…');
+    renderAll(T, F, candNorm, null);
+    busyAdvance(98,'Rendering plots…');
+    status.textContent = 'Done';
+    setTimeout(()=>busyStop(), 600);
+    updateMlBadge?.();
+
+  } catch(e){
+    console.error(e);
+    status.textContent = 'Error';
+    alert(e.message || e);
+  }
 }
+
 
 // ---------- Export CSV ----------
 function buildCsvRows(cands){
@@ -1259,7 +1294,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
   // Χρησιμοποιούμε το σωστό backend για το fallback
-  window.API_BASE = "https://oramax-app.fly.dev/exoplanet";
+  window.API_BASE = (typeof window.API_BASE !== 'undefined' && window.API_BASE)
+  ? window.API_BASE
+  : 'https://oramax-app.fly.dev/exoplanet';
 
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
@@ -1323,6 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
