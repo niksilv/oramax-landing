@@ -698,35 +698,41 @@ async function fetchGaiaNeighbors(target, radius) {
   if (!target) return { available: false, reason: 'no target' };
   const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
 
-  // 1) Πρώτη προσπάθεια στο SW route
+  // 1) ΠΡΩΤΑ: άμεσο GET στο backend (χωρίς SW)
+  try {
+    const r0 = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(target)}&radius=${rad}`, {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (r0.ok) {
+      const j0 = await r0.json().catch(() => null);
+      if (j0 && ((j0.available && Array.isArray(j0.items) && j0.items.length) ||
+                 (Array.isArray(j0) && j0.length))) {
+        return j0.items ? j0 : { available:true, radius_arcsec:rad, items:j0 };
+      }
+    }
+  } catch (_) {}
+
+  // 2) Αν όχι, δοκίμασε SW route (αν δουλεύει στον browser)
   try {
     const r = await fetch(gaiaUrl(target, rad), { headers: { 'Accept': 'application/json' } });
     if (r.ok) {
-      const j = await r.json().catch(() => null);
-      // ΑΝ το σώμα δηλώνει αποτυχία/κενό, προχώρα σε fallback
-      if (j && ((j.available === false) || (Array.isArray(j.items) && j.items.length === 0))) {
-        // continue to fallback
-      } else if (j) {
-        return j; // usable
+      const j = await r.json().catch(()=>null);
+      if (j && ((j.available && Array.isArray(j.items) && j.items.length) ||
+                (Array.isArray(j) && j.length))) {
+        return j.items ? j : { available:true, radius_arcsec:rad, items:j };
       }
     }
-    // αν δεν είναι ok ή δεν διαβάζεται JSON, προχώρα σε fallback
-  } catch (_) {
-    // network error -> fallback
-  }
+  } catch (_) {}
 
-  // 2) Fallback: POST /fetch_detect (neighbors only) — CORS OK
+  // 3) Τέλος: fallback POST /fetch_detect (όπως ήδη έκανες)
   try {
     const body = JSON.stringify({
       source: 'mast_spoc', mission: 'TESS', target,
       kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
       neighbors: true, neighbors_radius: rad, centroid: false
     });
-
     const r2 = await fetch(`${API_BASE}/fetch_detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body
     });
     if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
     const j2 = await r2.json();
@@ -741,38 +747,98 @@ async function fetchGaiaNeighbors(target, radius) {
 
   
 // ---------- Fetch & Detect ----------
-async function runFetch(){
+async function runFetch() {
   const status = document.getElementById('status');
-  try{
-    busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
-    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    
-    const source = document.getElementById('sourceSel').value;
-    const mission = document.getElementById('missionSel').value;
-    const target = document.getElementById('ticInput').value.trim();
-    const url    = document.getElementById('urlInput').value.trim();
+  try {
+    // progress ui
+    busyStart('Fetching light curve…');
+    busySet(10);
+    status.textContent = 'Fetching...';
 
-    const kpeaks = Number(document.getElementById('kpeaks').value || 3);
-    const detrend = document.getElementById('detrendSel').value;
-    const quality = document.getElementById('qualityChk').checked;
+    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+
+    const source  = document.getElementById('sourceSel').value;     // mast_spoc | mast_qlp | kepler | k2 | url
+    let   mission = document.getElementById('missionSel').value;     // auto | TESS | Kepler | K2
+    const target  = document.getElementById('ticInput').value.trim();
+    const url     = document.getElementById('urlInput').value.trim();
+
+    const kpeaks  = Number(document.getElementById('kpeaks').value || 3);
+
+    // --- detrend: στείλε boolean για να μην χτυπά 422 σε αυστηρά schemas
+    const detrendChoice   = document.getElementById('detrendSel').value; // 'flatten' | 'none'
+    const detrend         = (detrendChoice === 'flatten');               // true | false
+
+    const quality         = document.getElementById('qualityChk').checked;
     const remove_outliers = document.getElementById('outlierChk').checked;
-    const sigma = Number(document.getElementById('sigmaVal').value || 5);
-    const centroid = document.getElementById('centroidChk').checked;
+    const sigma           = Number(document.getElementById('sigmaVal').value || 5);
+    const centroid        = document.getElementById('centroidChk').checked;
 
-    const neighbors = document.getElementById('gaiaChk').checked;
+    const neighbors        = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius, engine });
-    const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if(!res.ok){ status.textContent='Error'; return; }
+    // --- ευθυγράμμιση mission με source (ώστε Kepler/K2 να περνάνε σίγουρα)
+    if (source === 'kepler') mission = 'Kepler';
+    else if (source === 'k2') mission = 'K2';
+    else if (source === 'mast_spoc' || source === 'mast_qlp') mission = 'TESS';
+
+    // NOTE: αν δίνεται URL, ο server θα το τιμήσει όπως πριν (αγνοεί target/source/mission)
+    const body = JSON.stringify({
+      source, mission, target, url,
+      kpeaks, detrend, quality, remove_outliers, sigma,
+      centroid, neighbors, neighbors_radius,
+      engine
+    });
+
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+
+    if (!res.ok) {
+      status.textContent = 'Error';
+      console.error('fetch_detect failed:', res.status, await res.text().catch(()=>''));
+      alert(`Error: fetch_detect HTTP ${res.status}`);
+      return;
+    }
+
     const data = await res.json();
-busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
-if (data.error){ alert(data.error); status.textContent='Error'; return; }
 
-currentTarget = data.target || target || url;
-lastPreproc   = data.preprocess || null;
+    busySet(55, 'Processing…');
+    busyAdvance(90, engine === 'bls' ? 'Processing & BLS…' : 'Processing & CNN…');
 
-const candNorm = normalizeCandidates(data.candidates || []);
+    if (data.error) {
+      alert(data.error);
+      status.textContent = 'Error';
+      return;
+    }
+
+    // --- keep meta for UI
+    currentTarget = data.target || target || url;
+    lastPreproc   = data.preprocess || null;
+
+    // --- candidates normalized (όπως πριν)
+    const candNorm = normalizeCandidates(data.candidates || []);
+
+    // --- neighbors (αν επέστρεψαν μέσα στο ίδιο payload)
+    if (neighbors && (data.neighbors || data.items)) {
+      const nei = data.neighbors || { items: data.items, radius_arcsec: neighbors_radius };
+      window.lastNeighbors = normalizeNeighbors(nei, neighbors_radius);
+      window.dispatchEvent(new CustomEvent('oramax-neighbors', { detail: window.lastNeighbors }));
+    }
+
+    // TODO: κάλεσε εδώ τα δικά σου renders/updates όπως ήδη είχες
+    // renderCandidates(candNorm); renderPhase(...); renderCurve(...); κ.λπ.
+
+    busySet(100, 'Done');
+    status.textContent = 'Done';
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Error';
+    alert(`Error: ${err?.message || err}`);
+  }
+}
+
 
 // ---------- NEW: robust GAIA selection ----------
 const wantNei = document.getElementById('gaiaChk')?.checked;
@@ -1340,6 +1406,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
