@@ -758,13 +758,13 @@ async function runFetch() {
     const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
 
     const source  = document.getElementById('sourceSel').value;     // mast_spoc | mast_qlp | kepler | k2 | url
-    let   mission = document.getElementById('missionSel').value;     // auto | TESS | Kepler | K2
+    let   mission = document.getElementById('missionSel').value;    // auto | TESS | Kepler | K2
     const target  = document.getElementById('ticInput').value.trim();
     const url     = document.getElementById('urlInput').value.trim();
 
     const kpeaks  = Number(document.getElementById('kpeaks').value || 3);
 
-    // detrend σαν boolean (για να μη χτυπά 422)
+    // detrend ως boolean (για να μη χτυπά 422)
     const detrendChoice   = document.getElementById('detrendSel').value; // 'flatten' | 'none'
     const detrend         = (detrendChoice === 'flatten');               // true | false
 
@@ -893,18 +893,6 @@ async function runFetch() {
     status.textContent = 'Error';
     alert(`Error: ${err?.message || err}`);
     busyStop();
-  }
-}
-
-    // TODO: κάλεσε εδώ τα δικά σου renders/updates όπως ήδη είχες
-    // renderCandidates(candNorm); renderPhase(...); renderCurve(...); κ.λπ.
-
-    busySet(100, 'Done');
-    status.textContent = 'Done';
-  } catch (err) {
-    console.error(err);
-    status.textContent = 'Error';
-    alert(`Error: ${err?.message || err}`);
   }
 }
 
@@ -1434,6 +1422,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
