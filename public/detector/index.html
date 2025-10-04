@@ -813,18 +813,16 @@ async function runUpload(){
     window._skipNeighborsOnce = true;
 
     const res = await fetch(`${API_BASE}/fetch_detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engine,
-        kpeaks,
-        text: txt,            // περιεχόμενο αρχείου
-        neighbors: false,
-        source: 'upload',
-        mission: 'CUSTOM',    // ΚΛΕΙΔΙ: να μη δοκιμάσει MAST
-        target: 'TIC 1'       // ΚΛΕΙΔΙ: περνάει το validator "TIC <id>"
-      })
-    });
+  method: 'POST',
+  headers: {'Content-Type':'application/json'},
+  body: JSON.stringify({
+    engine,
+    kpeaks,
+    text: txt,        // το περιεχόμενο του αρχείου
+    neighbors: false,
+    source: 'upload'
+  })
+});
 
     if (!res.ok) {
       const t = await res.text().catch(()=> '');
@@ -1364,6 +1362,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
