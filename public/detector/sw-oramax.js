@@ -7,10 +7,6 @@ const BACKENDS = [
   'http://127.0.0.1:8000/exoplanet'                 // τοπικό dev
 ];
 
-// --- take control immediately (single handlers) ---
-self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
-
 // ----- κορυφή αρχείου (κοντά στα άλλα const) -----
 const APP_BASE = 'https://oramax-app.fly.dev/exoplanet';           // TIC + Gaia
 const API_BASE = 'https://oramax-exoplanet-api.fly.dev/exoplanet'; // KIC/EPIC
@@ -18,49 +14,6 @@ const API_BASE = 'https://oramax-exoplanet-api.fly.dev/exoplanet'; // KIC/EPIC
 self.addEventListener('install', (e) => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
-// ----- ΚΥΡΙΟΣ ROUTER: πιάσε /detector/api/* με ή χωρίς extra slash -----
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-
-  // same-origin ΜΟΝΟ
-  if (url.origin !== self.location.origin) return;
-
-  // κάνε πιο χαλαρό το match (πιάνει και /detector/detector/api/* αν ποτέ συμβεί)
-  if (url.pathname.includes('/detector/api/')) {
-    event.respondWith(proxyApi(event.request));
-    return;
-  }
-
-  // (άφησε όπως είναι τα υπόλοιπα routes σου)
-});
-
-// ----- Proxy προς app/api ανά flag -----
-async function proxyApi(request) {
-  const inUrl = new URL(request.url);
-
-  // strip Ο,ΤΙ είναι πριν από "/detector/api" → για σιγουριά
-  const ix = inUrl.pathname.indexOf('/detector/api');
-  const pathAfter = inUrl.pathname.slice(ix + '/detector/api'.length); // π.χ. "/fetch_detect"
-
-  const forceApi = inUrl.searchParams.get('__backend') === 'api';
-  inUrl.searchParams.delete('__backend');
-
-  const upstreamBase = forceApi ? API_BASE : APP_BASE;
-
-  // αν έχουν μείνει άλλα query params, ξανά-σύνθεση
-  const qs = inUrl.searchParams.toString();
-  const upstreamUrl = upstreamBase + pathAfter + (qs ? ('?' + qs) : '');
-
-  const init = {
-    method: request.method,
-    headers: new Headers(request.headers),
-    body: (request.method === 'GET') ? undefined : await request.clone().arrayBuffer()
-  };
-  init.headers.delete('Origin');
-  init.headers.delete('Referer');
-
-  return fetch(upstreamUrl, init);
-}
 
 // --------- Helpers ---------
 function join(base, path) {
