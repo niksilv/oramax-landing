@@ -197,6 +197,8 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
       <select id="sourceSel">
         <option value="mast_spoc">MAST · SPOC (PDCSAP)</option>
         <option value="mast_qlp">MAST · QLP</option>
+        <option value="kepler">MAST · Kepler</option>
+        <option value="k2">MAST · K2</option>
         <option value="url">External CSV/TXT URL</option>
       </select>
 
@@ -667,6 +669,23 @@ function toggleInputs(){
   document.getElementById('ticInput').style.display = (src==='url')?'none':'inline-block';
   document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
 }
+
+function setTargetPlaceholder(){
+  const mission = document.getElementById('missionSel')?.value || 'auto';
+  const src = document.getElementById('sourceSel')?.value || 'mast_spoc';
+  const inp = document.getElementById('ticInput');
+  if(!inp) return;
+  if (mission === 'Kepler' || src === 'kepler') {
+    inp.placeholder = 'KIC 8462852';
+  } else if (mission === 'K2' || src === 'k2') {
+    inp.placeholder = 'EPIC 201367065';
+  } else {
+    inp.placeholder = 'TIC 307210830 (for MAST)';
+  }
+}
+document.getElementById('missionSel')?.addEventListener('change', setTargetPlaceholder);
+document.getElementById('sourceSel')?.addEventListener('change', setTargetPlaceholder);
+document.addEventListener('DOMContentLoaded', setTargetPlaceholder);
 
 // ΠΑΝΤΑ με απόλυτο path για το SW route
 function gaiaUrl(target, radius) {
@@ -1323,6 +1342,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
