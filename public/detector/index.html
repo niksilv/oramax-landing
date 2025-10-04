@@ -1277,9 +1277,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
-  // Χρησιμοποιούμε το σωστό backend για το fallback
-  window.API_BASE = "https://oramax-app.fly.dev/exoplanet";
-
+  
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
     navigator.serviceWorker.getRegistration('/detector/').then(reg => {
@@ -1342,6 +1340,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
