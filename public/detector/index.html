@@ -757,37 +757,46 @@ async function runFetch() {
 
     const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
 
-    const source  = document.getElementById('sourceSel').value;     // mast_spoc | mast_qlp | kepler | k2 | url
+    // Read UI values
+    let   source  = document.getElementById('sourceSel').value;     // mast_spoc | mast_qlp | kepler | k2 | url
     let   mission = document.getElementById('missionSel').value;    // auto | TESS | Kepler | K2
-    const target  = document.getElementById('ticInput').value.trim();
+    let   target  = document.getElementById('ticInput').value.trim();
     const url     = document.getElementById('urlInput').value.trim();
 
     const kpeaks  = Number(document.getElementById('kpeaks').value || 3);
-
-    // 👇 Στείλ' το ως string (όχι boolean)
-    const detrendStr      = document.getElementById('detrendSel').value; // 'flatten' | 'none'
-
+    const detrend = document.getElementById('detrendSel').value;    // 'flatten' | 'none'
     const quality         = document.getElementById('qualityChk').checked;
     const remove_outliers = document.getElementById('outlierChk').checked;
     const sigma           = Number(document.getElementById('sigmaVal').value || 5);
     const centroid        = document.getElementById('centroidChk').checked;
-
     const neighbors        = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    // Ευθυγράμμιση mission με source
-    if (source === 'kepler') mission = 'Kepler';
-    else if (source === 'k2') mission = 'K2';
-    else if (source === 'mast_spoc' || source === 'mast_qlp') mission = 'TESS';
+    // --- NEW: normalize target & auto-select correct source/mission from prefix
+    const normalizeTarget = (t) =>
+      t.toUpperCase().replace(/\s+/g,' ').replace(/^(TIC|KIC|EPIC)\s*(\d+)/, '$1 $2').trim();
+    target = normalizeTarget(target);
+
+    if (target.startsWith('KIC ')) {
+      source = 'kepler';
+      mission = 'Kepler';
+    } else if (target.startsWith('EPIC ')) {
+      source = 'k2';
+      mission = 'K2';
+    } else if (target.startsWith('TIC ')) {
+      if (source !== 'mast_spoc' && source !== 'mast_qlp') source = 'mast_spoc';
+      mission = 'TESS';
+    }
+    // (αν έχεις δώσει URL, ο server θα τιμήσει το URL έτσι κι αλλιώς)
 
     const body = JSON.stringify({
-  source, mission, target, url,
-  kpeaks,
-  detrend: detrendStr,   // ← ΣΩΣΤΟ: στέλνουμε το string
-  quality, remove_outliers, sigma,
-  centroid, neighbors, neighbors_radius,
-  engine
-});
+      source, mission, target, url,
+      kpeaks,
+      detrend,                 // string ('flatten' | 'none')
+      quality, remove_outliers, sigma,
+      centroid, neighbors, neighbors_radius,
+      engine
+    });
 
     const res = await fetch(`${API_BASE}/fetch_detect`, {
       method: 'POST',
@@ -1371,6 +1380,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
