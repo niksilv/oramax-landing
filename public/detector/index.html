@@ -5,49 +5,22 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- 1) ΟΡΙΣΜΟΣ ΒΑΣΕΩΝ ΠΡΙΝ ΑΠΟ Ο,ΤΙΔΗΠΟΤΕ ΤΙΣ ΧΡΗΣΙΜΟΠΟΙΕΙ -->
   <script>
-    window.API_BASE = 'https://oramax-app.fly.dev/exoplanet';   // detect/predict/report
-    window.NEI_BASE = 'https://oramax-app.fly.dev/exoplanet';   // gaia_neighbors
-  </script>
-
-  <!-- 1b) Επιλογή σωστού DETECT backend ανά prefix -->
-<script>
-  function detectBaseFor(target) {
-    const t = (target || '').toUpperCase().replace(/\s+/g,' ').trim();
-    if (t.startsWith('KIC ') || t.startsWith('EPIC ')) {
-      // backend για Kepler/K2
-      return 'https://oramax-exoplanet-api.fly.dev/exoplanet';
-    }
-    // default: TIC (SPOC/QLP) – το δικό σου app
-    return (window.API_BASE || 'https://oramax-app.fly.dev/exoplanet');
-  }
-</script>
-
-  
-  <script>
-// register early + take control + reload **μία φορά** όταν γίνει controller
+// register early + take control + reload once the SW becomes controller
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
     .then(() => {
-      if (navigator.serviceWorker.controller) {
-        // έχουμε ήδη controller, καθάρισε πιθανό flag
-        sessionStorage.removeItem('sw-refreshed');
-        return;
-      }
-      const onCtrl = () => {
-        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
-        if (!sessionStorage.getItem('sw-refreshed')) {
-          sessionStorage.setItem('sw-refreshed', '1');
-          location.reload();
-        }
-      };
-      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+      // Αν ήδη ελεγχόμαστε από SW, προχώρα κανονικά
+      if (navigator.serviceWorker.controller) return;
+
+      // Αλλιώς, μόλις γίνει controller, κάνε ένα γρήγορο reload
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        location.reload();
+      });
     })
     .catch(err => console.error('SW register failed', err));
 }
 </script>
-
 
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
@@ -192,10 +165,8 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
       <!-- moved inline call below -->
 
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
-  
 </head>
-
-<body>  
+<body>
 
 <!-- ORAMAX centered navbar -->
 <nav class="ox-nav" aria-label="Main">
@@ -808,7 +779,7 @@ async function runFetch() {
     const neighbors        = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    // --- Normalize target & auto-select correct source/mission from prefix
+    // --- NEW: normalize target & auto-select correct source/mission from prefix
     const normalizeTarget = (t) =>
       t.toUpperCase().replace(/\s+/g,' ').replace(/^(TIC|KIC|EPIC)\s*(\d+)/, '$1 $2').trim();
     target = normalizeTarget(target);
@@ -823,16 +794,7 @@ async function runFetch() {
       if (source !== 'mast_spoc' && source !== 'mast_qlp') source = 'mast_spoc';
       mission = 'TESS';
     }
-    // (αν έχεις δώσει URL, ο server τιμά το URL έτσι κι αλλιώς)
-
-    // --- Επιλογή backend με βάση το prefix του target
-    // --- SW route (same-origin) για να αποφύγουμε CORS ---
-         // KIC/EPIC → backend=api, αλλιώς default (app)
-    const useApi = (target.startsWith('KIC ') || target.startsWith('EPIC '));
-    const DETECT_URL = useApi
-          ? '/detector/api/fetch_detect?__backend=api'
-          : '/detector/api/fetch_detect';
-
+    // (αν έχεις δώσει URL, ο server θα τιμήσει το URL έτσι κι αλλιώς)
 
     const body = JSON.stringify({
       source, mission, target, url,
@@ -843,11 +805,11 @@ async function runFetch() {
       engine
     });
 
-    const res = await fetch(DETECT_URL, {
-  	method: 'POST',
- 	 headers: { 'Content-Type': 'application/json' },
-  	body
-     });
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
 
     if (!res.ok) {
       status.textContent = 'Error';
@@ -872,7 +834,7 @@ async function runFetch() {
 
     const candNorm = normalizeCandidates(data.candidates || []);
 
-    // ---------- GAIA neighbors fallback ----------
+    // neighbors fallback (όπως ήδη είχες)
     const wantNei = neighbors;
     const rad     = neighbors_radius;
     const usable  = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
@@ -880,19 +842,13 @@ async function runFetch() {
 
     if (wantNei && !usable(nei)) {
       try {
-        // 1) Άμεσο GET στο app backend (NEI_BASE)
-        const r0 = await fetch(
-          `${NEI_BASE}/gaia_neighbors?target=${encodeURIComponent(currentTarget)}&radius=${rad}`,
-          { headers:{ 'Accept':'application/json' } }
-        );
+        const r0 = await fetch(`${API_BASE}/gaia_neighbors?target=${encodeURIComponent(currentTarget)}&radius=${rad}`, { headers:{ 'Accept':'application/json' } });
         if (r0.ok) {
           const j0 = await r0.json().catch(()=>null);
           if (j0 && ((j0.available && Array.isArray(j0.items) && j0.items.length) || (Array.isArray(j0) && j0.length))) {
             nei = j0.items ? j0 : { available:true, radius_arcsec:rad, items:j0 };
           }
         }
-
-        // 2) Αν όχι, δοκίμασε SW route
         if (!usable(nei)) {
           const r = await fetch(gaiaUrl(currentTarget, rad), { headers:{ 'Accept':'application/json' } });
           if (r.ok) {
@@ -902,20 +858,13 @@ async function runFetch() {
             }
           }
         }
-
-        // 3) Τελευταίο: POST neighbors-only στο ίδιο detect backend
         if (!usable(nei)) {
           const body2 = JSON.stringify({
             source: 'mast_spoc', mission: 'TESS', target: currentTarget,
             kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
             neighbors: true, neighbors_radius: rad, centroid: false
           });
-          
-	  const r2 = await fetch(DETECT_URL, {
-  		method:'POST', headers:{'Content-Type':'application/json'}, body: body2
-	  });
-
-
+          const r2 = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body: body2 });
           if (r2.ok) {
             const j2 = await r2.json();
             const maybe = j2.neighbors || j2;
@@ -923,7 +872,6 @@ async function runFetch() {
             else if (maybe && Array.isArray(maybe.items)) nei = { available:true, radius_arcsec:(maybe.radius_arcsec||rad), items: maybe.items };
           }
         }
-
         if (!nei) nei = { available:false, reason:'empty', radius_arcsec: rad };
       } catch (e) {
         nei = { available:false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
@@ -945,7 +893,6 @@ async function runFetch() {
     busyStop();
   }
 }
-
  
 // ---------- Upload TXT ----------
 async function runUpload(){
