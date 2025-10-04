@@ -1,6 +1,7 @@
 // OramaX SW proxy v45 — Gaia GET-first + POST fallback, CORS-safe
 const VERSION = 'v45';
 const BACKENDS = [
+  https://oramax-app.fly.dev/exoplanet',         // ← production app ΠΡΩΤΟ
   self.API_BASE || 'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'https://oramax-exoplanet-api.fly.dev/exoplanet',
   'http://127.0.0.1:8000/exoplanet'
