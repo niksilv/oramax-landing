@@ -5,32 +5,6 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<script>
-// Redirect σε /detector/ ΜΟΝΟ μία φορά, ανεξάρτητα αν το path έχει/δεν έχει leading slash
-(function () {
-  try {
-    if (sessionStorage.getItem('redir_done') === '1') return;
-
-    var p = String(location.pathname || '').trim();
-    // κανονικοποίηση: πρόσθεσε leading slash αν λείπει
-    if (p[0] !== '/') p = '/' + p;
-    // βγάλε τυχόν τελικά slashes για έλεγχο ισότητας
-    var pNoTrail = p.replace(/\/+$/, '');
-
-    if (pNoTrail === '/detector') {
-      sessionStorage.setItem('redir_done', '1');
-      location.replace('/detector/'); // no history entry
-    }
-  } catch (_) {}
-})();
-</script>
-
-<script>
-  if (location.pathname === '/detector') {
-    location.replace('/detector/');  // προσθέτει το / και ξαναφορτώνει
-  }
-</script>
-
   <!-- 1) ΟΡΙΣΜΟΣ ΒΑΣΕΩΝ ΠΡΙΝ ΑΠΟ Ο,ΤΙΔΗΠΟΤΕ ΤΙΣ ΧΡΗΣΙΜΟΠΟΙΕΙ -->
   <script>
     window.API_BASE = 'https://oramax-app.fly.dev/exoplanet';   // detect/predict/report
@@ -50,14 +24,27 @@
   }
 </script>
 
+  
   <script>
-// Μόνο εγγραφή – θα κάνεις εσύ ένα χειροκίνητο reload μετά
+// register early + take control + reload **μία φορά** όταν γίνει controller
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', {
-    scope: '/detector'   // χωρίς τελικό slash, καλύπτει και /detector ΚΑΙ /detector/
-  }).then(reg => {
-    console.log('SW registered at scope:', reg.scope);
-  }).catch(err => console.error('SW register failed:', err));
+  navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
+    .then(() => {
+      if (navigator.serviceWorker.controller) {
+        // έχουμε ήδη controller, καθάρισε πιθανό flag
+        sessionStorage.removeItem('sw-refreshed');
+        return;
+      }
+      const onCtrl = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+        if (!sessionStorage.getItem('sw-refreshed')) {
+          sessionStorage.setItem('sw-refreshed', '1');
+          location.reload();
+        }
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+    })
+    .catch(err => console.error('SW register failed', err));
 }
 </script>
 
@@ -1453,6 +1440,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
-
-
