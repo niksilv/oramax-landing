@@ -688,6 +688,46 @@ function normalizeCandidates(cands){
   });
 }
 
+  /* ---------- Fallback probability fixer (when backend is uniform) ---------- */
+function fixProbabilities(cands){
+  if (!Array.isArray(cands) || !cands.length) return cands;
+
+  // Πάρε τις πιθανότητες που ήρθαν
+  const ps = cands.map(c => Number(c.probability)).filter(Number.isFinite);
+  // Uniform αν: (α) όλες ίδιες ή (β) ~1/k
+  const uniq = [...new Set(ps.map(p => p.toFixed(6)))];
+  const uniformLike = (uniq.length <= 1) ||
+                      ps.every(p => Math.abs(p - 1/cands.length) < 1e-6);
+
+  if (!uniformLike) return cands; // Backend φαίνεται εντάξει → μην πειράξεις τίποτα
+
+  // ----- Υπολόγισε score από Power + SNR (z-score + softmax) -----
+  const powers = cands.map(c => Number.isFinite(c.power) ? c.power : 0);
+  const snrs   = cands.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr : 0);
+
+  const z = (arr) => {
+    const m  = arr.reduce((a,b)=>a+b,0) / arr.length;
+    const sd = Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0) / arr.length) || 1;
+    return arr.map(v => (v - m) / sd);
+  };
+
+  const pZ = z(powers);
+  const sZ = z(snrs);
+
+  // Συνδυασμός (ρύθμισε βάρη αν θέλεις)
+  const score = pZ.map((v,i) => 0.6*v + 0.4*sZ[i]);
+
+  // Softmax με ήπια «θερμοκρασία» ώστε να μη γίνονται ακραίες
+  const T = 1.5;
+  const max = Math.max(...score);
+  const exps = score.map(v => Math.exp((v - max)/T));
+  const sum  = exps.reduce((a,b)=>a+b,0) || 1;
+
+  cands.forEach((c,i) => { c.probability = exps[i] / sum; });
+  return cands;
+}
+
+
 // ---------- Source toggle ----------
 function toggleInputs(){
   const src = document.getElementById('sourceSel').value;
@@ -781,6 +821,9 @@ currentTarget = data.target || target || url;
 lastPreproc   = data.preprocess || null;
 
 const candNorm = normalizeCandidates(data.candidates || []);
+const candFinal = fixProbabilities(candNorm);   // <-- ΝΕΟ
+// ...
+renderAll(data.time, data.flux, candFinal, lastNeighbors);
 
 // ---------- NEW: robust GAIA selection ----------
 const wantNei = document.getElementById('gaiaChk')?.checked;
@@ -864,6 +907,9 @@ async function runUpload(){
     const data = await res.json();
     const [T, F] = parseTxt(txt);
     const candNorm = normalizeCandidates(data.candidates || []);
+    const candFinal = fixProbabilities(candNorm);   // <-- ΝΕΟ
+    // ...
+    renderAll(data.time, data.flux, candFinal, lastNeighbors);
 
     currentTarget = '(Uploaded TXT)';
     lastPreproc   = { source:'upload' };
@@ -1399,6 +1445,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
