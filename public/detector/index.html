@@ -280,7 +280,7 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
     <div class="card" style="margin-top:10px;">
       <h3>Upload TXT (2 columns: time, flux)</h3>
       <input type="file" id="file" accept=".txt,.csv"/>
-      <button id="runUpload" type="button">Detect</button>
+      <button id="runUpload">Detect</button>
       <span class="muted" id="statusUp"></span>
     </div>
   </details>
@@ -805,41 +805,18 @@ async function runUpload(){
     if(!file){ alert('Choose a .txt or .csv first'); status.textContent=''; return; }
     const txt = await file.text();
     const [T,F] = parseTxt(txt);
-
-    // Στείλε JSON στο fetch_detect
-    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    const kpeaks = Number(document.getElementById('kpeaks').value || 3);
-
-    const body = JSON.stringify({
-      engine: engine,
-      kpeaks: kpeaks,
-      text: txt,            // εδώ περνάμε το περιεχόμενο του αρχείου
-      neighbors: false
-    });
-
-    const res = await fetch(`${API_BASE}/fetch_detect`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body
-    });
-
+    const form = new FormData(); form.append('file', new Blob([txt], {type:'text/plain'}), 'lc.txt');
+    const res = await fetch(`${API_BASE}/predict-file?kpeaks=3`, {method:'POST', body: form});
     if(!res.ok){ status.textContent='Error'; return; }
-    const data = await res.json();
+    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
     if(data.error){ alert(data.error); status.textContent='Error'; return; }
-
     currentTarget='(Uploaded TXT)';
     lastPreproc = {source:'upload'};
     lastNeighbors = null;
     const candNorm = normalizeCandidates(data.candidates || []);
     renderAll(T,F,candNorm, null);
-
-    status.textContent = 'Done';
-    setTimeout(()=>busyStop(), 600);
-    updateMlBadge();
-  } catch(e){
-    status.textContent = 'Error';
-    console.error(e);
-  }
+    busyAdvance(98,'Rendering plots…'); status.textContent = 'Done'; setTimeout(()=>busyStop(), 600); updateMlBadge();
+  } catch(e){ status.textContent = 'Error'; console.error(e); }
 }
 
 // ---------- Export CSV ----------
@@ -1282,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
   // Χρησιμοποιούμε το σωστό backend για το fallback
-  window.API_BASE = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+  window.API_BASE = "https://oramax-app.fly.dev/exoplanet";
 
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
@@ -1346,8 +1323,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
-
-
 
 
 
