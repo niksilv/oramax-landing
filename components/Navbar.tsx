@@ -8,7 +8,7 @@ export default function Navbar() {
   const router = useRouter();
 
   // Click στο Our Project -> πηγαίνει στη σελίδα /our-project
-  const goOurProject = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+  //const goOurProject = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
     // Αν το submenu είναι κλειστό σε touch, θα ανοιχτεί με CSS/JS – στο desktop αφήνουμε το click να πλοηγεί
     e.preventDefault();
     router.push("/our-project");
