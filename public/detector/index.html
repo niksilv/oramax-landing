@@ -336,7 +336,7 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+    : (window.API_BASE || 'https://oramax-app.fly.dev/exoplanet');
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -859,34 +859,15 @@ async function runUpload(){
 }
 
 // bind μετά το DOM
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('runUpload')?.addEventListener('click', runUpload);
-});
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('runUpload');
+    if (btn && !btn.__bound) {           // προφυλακτικό για διπλά binds
+      btn.__bound = true;
+      btn.addEventListener('click', runUpload);
+    }
+  });
 
-
-    // render όπως στο runFetch
-    const data = await res.json();
-    const [T, F] = parseTxt(txt);
-    const candNorm = normalizeCandidates(data.candidates || []);
-    currentTarget = '(Uploaded TXT)';
-    lastPreproc   = { source:'upload' };
-    lastNeighbors = null;
-    busySet(55,'Processing & BLS…');
-    busyAdvance(90,'Processing & BLS…');
-    renderAll(T, F, candNorm, null);
-    busyAdvance(98,'Rendering plots…');
-    status.textContent = 'Done';
-    setTimeout(()=>busyStop(), 600);
-    updateMlBadge?.();
-
-  } catch(e){
-    console.error(e);
-    status.textContent = 'Error';
-    alert(e.message || e);
-  }
-}
-
-
+    
 // ---------- Export CSV ----------
 function buildCsvRows(cands){
   const rows = [];
@@ -1393,6 +1374,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
