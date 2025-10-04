@@ -11,6 +11,59 @@ const BACKENDS = [
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
 
+// --- βάλε αυτά κάπου ψηλά (globals) ---
+const APP_BASE = 'https://oramax-app.fly.dev/exoplanet';              // TIC (SPOC/QLP) + NEI
+const API_BASE = 'https://oramax-exoplanet-api.fly.dev/exoplanet';    // Kepler/K2
+
+self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
+// --- Ο ΚΥΡΙΟΣ ROUTER: πιάνει /detector/api/* ---
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // μόνο same-origin και μόνο /detector/api/*
+  if (url.origin === self.location.origin && url.pathname.startsWith('/detector/api/')) {
+    event.respondWith(proxyApi(event.request));
+    return;
+  }
+
+  // (άλλα routes σου, αν έχεις, αφήσ’ τα όπως είναι)
+});
+
+async function proxyApi(request) {
+  const inUrl = new URL(request.url);
+
+  // βγάλε το /detector/api prefix → ώστε να γίνει π.χ. "/fetch_detect"
+  const path = inUrl.pathname.replace('/detector/api', '');
+
+  // διάβασε flag για επιλογή backend
+  const forceApi = inUrl.searchParams.get('__backend') === 'api';
+  inUrl.searchParams.delete('__backend');
+
+  const upstreamBase = forceApi ? API_BASE : APP_BASE;
+  const upstreamUrl =
+    upstreamBase + path + (inUrl.search ? '?' + inUrl.searchParams.toString() : '');
+
+  // κλώνος του request (ώστε να περάσουν headers/body)
+  const init = {
+    method: request.method,
+    headers: new Headers(request.headers),
+    // για GET δεν έχει body
+    body: (request.method === 'GET') ? undefined : await request.clone().arrayBuffer()
+  };
+
+  // σημαντικό: αφαίρεσε τυχόν origin-only headers που μπλοκάρουν CORS στον upstream
+  init.headers.delete('Origin');
+  init.headers.delete('Referer');
+
+  // κάνε το upstream fetch
+  const resp = await fetch(upstreamUrl, init);
+
+  // Επιστρέφουμε όπως είναι (ο SW είναι same-origin, άρα ο browser δεν θα κάνει CORS checks)
+  return resp;
+}
+
 // --------- Helpers ---------
 function join(base, path) {
   if (!base.endsWith('/')) base += '/';
