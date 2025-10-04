@@ -1,20 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 export default function Navbar() {
-  const router = useRouter();
-
-  // Click στο Our Project -> πηγαίνει στη σελίδα /our-project
-  //const goOurProject = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-    // Αν το submenu είναι κλειστό σε touch, θα ανοιχτεί με CSS/JS – στο desktop αφήνουμε το click να πλοηγεί
-    e.preventDefault();
-    router.push("/our-project");
-  };
-
-  // Προαιρετικό: μικρό helper ώστε σε touch συσκευές ένα πρώτο tap να ανοίγει το submenu και δεύτερο tap να πλοηγεί
   useEffect(() => {
     const holder = document.querySelector<HTMLDivElement>("#ox-nav .has-sub");
     if (!holder) return;
@@ -24,32 +13,26 @@ export default function Navbar() {
     if (!btn || !menu) return;
 
     let open = false;
-    const isTouch = matchMedia("(pointer: coarse)").matches;
 
-    const onClick = (ev: MouseEvent) => {
-      if (!isTouch) return; // στο desktop δεν κάνουμε override
-      if (!open) {
-        ev.preventDefault();
-        menu.style.display = "block";
-        open = true;
-      } else {
-        // δεύτερο tap: αφήνουμε να πλοηγεί
-      }
+    const toggleMenu = (ev: MouseEvent) => {
+      ev.preventDefault(); // ❗ αποτρέπει την πλοήγηση
+      open = !open;
+      (menu as HTMLElement).style.display = open ? "block" : "none";
     };
 
-    const onDoc = (ev: MouseEvent) => {
-      if (!isTouch || !open) return;
-      if (!holder.contains(ev.target as Node)) {
+    const onDocClick = (ev: MouseEvent) => {
+      if (open && !holder.contains(ev.target as Node)) {
         (menu as HTMLElement).style.display = "none";
         open = false;
       }
     };
 
-    btn.addEventListener("click", onClick);
-    document.addEventListener("click", onDoc);
+    btn.addEventListener("click", toggleMenu);
+    document.addEventListener("click", onDocClick);
+
     return () => {
-      btn.removeEventListener("click", onClick);
-      document.removeEventListener("click", onDoc);
+      btn.removeEventListener("click", toggleMenu);
+      document.removeEventListener("click", onDocClick);
     };
   }, []);
 
@@ -57,7 +40,6 @@ export default function Navbar() {
     <div id="ox-nav">
       <div className="wrap">
         <Link href="/" className="brand" aria-label="Orama X home">
-          {/* Βεβαιώσου ότι υπάρχει στο /public/logos/oramax-logo.png */}
           <img src="/logos/oramax-logo.png" alt="" />
           <strong>ORAMA X</strong>
         </Link>
@@ -65,25 +47,24 @@ export default function Navbar() {
         <nav className="menu" aria-label="Main">
           <Link href="/">Home</Link>
 
-          <div className="has-sub">
-            <a href="/our-project" className="our-project" onClick={goOurProject}>
+          <div className="has-sub relative">
+            <a href="#" className="our-project">
               Our Project <span className="caret">▾</span>
             </a>
-            <div className="submenu" role="menu">
-              <Link href="/our-project/exoplanet-detector" role="menuitem">
+            <div className="submenu absolute bg-[#0b0e1a] rounded-md shadow-lg mt-2 hidden" role="menu">
+              <Link href="/our-project/exoplanet-detector" role="menuitem" className="block px-4 py-2 hover:bg-slate-800">
                 Exoplanet Detector
               </Link>
-              <Link href="/our-project/our-challenge" role="menuitem">
+              <Link href="/our-project/our-challenge" role="menuitem" className="block px-4 py-2 hover:bg-slate-800">
                 How it works?
               </Link>
-              <Link href="/our-project/our-resources" role="menuitem">
+              <Link href="/our-project/our-resources" role="menuitem" className="block px-4 py-2 hover:bg-slate-800">
                 Our Resources
               </Link>
             </div>
           </div>
 
           <Link href="/our-team">Our Team</Link>
-          
         </nav>
       </div>
     </div>
