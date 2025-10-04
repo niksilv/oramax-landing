@@ -352,12 +352,22 @@ function shadedShapes(intervals){
 }
 function renderLC(T, F, intervals){
   Plotly.newPlot('lc', [
-  { x: T, y: F, mode: 'markers', marker: { size: 3 } }
+  {
+    x: T,
+    y: F,
+    mode: 'markers',
+    marker: { size: 3 },
+    hovertemplate:
+      'Time (BJD–2457000): %{x:.6f} d' +
+      '<br>Flux: %{y:.6f} [unitless]' +
+      '<extra></extra>'
+  }
 ], {
   margin: { t: 10 },
   shapes: shadedShapes(intervals),
-  xaxis: { title: 'Time [BJD - 2457000]' },
-  yaxis: { title: 'Normalized Flux' }
+  hovermode: 'closest',
+  xaxis: { title: 'Time [BJD – 2457000]' },
+  yaxis: { title: 'Normalized Flux [unitless]' }
 });
 }
 function centroidBadge(cent, sigmaThr, rhoThr){
@@ -551,7 +561,17 @@ function renderPF(T, F, cand){
     const mfold = phaseFold(mf.time, mf.flux, lastFit.params.period, lastFit.params.t0);
     traces.push({x: mfold.map(d=>d.x), y: mfold.map(d=>d.y), mode:'lines', line:{width:2}, name:'model'});
   }
-  Plotly.newPlot('pf', traces, {xaxis:{title:'Phase [0,1)'}, margin:{t:10}});
+  Plotly.newPlot('pf', traces.map(tr => ({
+  ...tr,
+  hovertemplate: (tr.mode === 'lines')
+    ? 'Model<br>Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
+    : 'Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
+})), {
+  margin: { t: 10 },
+  hovermode: 'closest',
+  xaxis: { title: 'Phase [0–1]' },
+  yaxis: { title: 'Normalized Flux [unitless]' }
+});
 }
 
 // ---------- Table rendering ----------
@@ -1362,6 +1382,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
