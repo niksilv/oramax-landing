@@ -554,24 +554,42 @@ function phaseFoldedTrace(T, F, cand){
 }
 function renderPF(T, F, cand){
   if(!cand) { Plotly.purge('pf'); return; }
-  const pf = phaseFoldedTrace(T, F, cand);
-  const traces = [{x: pf.x, y: pf.y, mode:'markers', marker:{size:3}, name:'data'}];
-  if(lastFit && Math.abs(lastFit.params.period - cand.period) < 1e-6){
+
+  // υπολογισμός δεδομένων φάσης
+  const folded = phaseFold(T, F, cand.period, cand.t0);
+  const dataTrace = {
+    x: folded.map(d=>d.x),
+    y: folded.map(d=>d.y),
+    mode: 'markers',
+    marker: { size: 3 },
+    name: 'data',
+    hovertemplate: 'Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
+  };
+
+  const traces = [dataTrace];
+
+  // αν υπάρχει μοντέλο με ίδια περίοδο, βάλε και overlay
+  if (lastFit && Math.abs(lastFit.params.period - cand.period) < 1e-6){
     const mf = lastFit.model_curve;
     const mfold = phaseFold(mf.time, mf.flux, lastFit.params.period, lastFit.params.t0);
-    traces.push({x: mfold.map(d=>d.x), y: mfold.map(d=>d.y), mode:'lines', line:{width:2}, name:'model'});
+    traces.push({
+      x: mfold.map(d=>d.x),
+      y: mfold.map(d=>d.y),
+      mode: 'lines',
+      line: { width: 2 },
+      name: 'model',
+      hovertemplate: 'Model<br>Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
+    });
   }
-  Plotly.newPlot('pf', traces.map(tr => ({
-  ...tr,
-  hovertemplate: (tr.mode === 'lines')
-    ? 'Model<br>Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
-    : 'Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
-})), {
-  margin: { t: 10 },
-  hovermode: 'closest',
-  xaxis: { title: 'Phase [0–1]' },
-  yaxis: { title: 'Relative Flux [unitless]' }
-});
+
+  Plotly.newPlot('pf', traces, {
+    margin: { t: 10 },
+    hovermode: 'closest',
+    xaxis: { title: 'Phase [0–1]' },
+    yaxis: { title: 'Relative Flux [unitless]' }
+  });
+}
+
 
 // ---------- Table rendering ----------
 function renderTable(candidates){
@@ -1381,6 +1399,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
