@@ -125,7 +125,7 @@ async function runBatchDetect(list){
     showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
 
     const ctrl = new AbortController();      // ← ΝΕΟ
-    const TIMEOUT_MS = 180000;                // π.χ. 3min
+    const TIMEOUT_MS = 300000;                // π.χ. 5min
     let to = null;
 
     try{
@@ -2034,6 +2034,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
