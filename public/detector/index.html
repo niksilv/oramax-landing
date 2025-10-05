@@ -845,22 +845,25 @@ function renderTable(candidates){
 
 function selectCandidateObj(cand){
   if(!cand) return;
-
-  // Βρες τα δεδομένα του target από το store
   const store = perTargetStore[cand._target] || {};
   const T = store.T || lcTime;
   const F = store.F || lcFlux;
 
-  // Κράτα “επιλογή” μόνο για να ξανατρέχει το fit στο σωστό cand αν θες
+  currentTarget = cand._target || currentTarget;           // <-- βεβαίωση target
   lastCands = [cand];
   selectedIdx = 0;
 
   renderPF(T, F, cand);
   renderLC(T, F, cand.windows ? cand.windows.intervals : []);
   renderCentroidInfo(cand.centroid, getSigmaThr(), getRhoThr());
+
+  // ΝΕΟ: γέμισε Gaia table/plot με τα ΠΡΑΓΜΑΤΙΚΑ neighbors του συγκεκριμένου target
+  if (store.neighbors) renderNeighbors(store.neighbors);
+
   document.getElementById('fitBox').style.display='none';
   lastFit = null;
 }
+
 
 function selectCandidate(i){
   selectedIdx = i;
@@ -1876,17 +1879,23 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderShapOrImportance(items){
-    // items: [{name,value}] sorted desc
-    const list = Array.isArray(items) ? items.slice(0,20) : [];
-    const x = list.map(it=>it.value);
-    const y = list.map(it=>it.name);
-    Plotly.newPlot('mlShap', [{
-      x, y, type:'bar', orientation:'h',
-      hovertemplate: '%{y}: %{x:.4f}<extra></extra>'
-    }],{
-      margin:{t:10}, xaxis:{title:'Importance / |SHAP|'}, yaxis:{automargin:true}
-    });
-  }
+  // items: [{name,value}] sorted desc
+  const list = Array.isArray(items) ? items.slice(0,20) : [];
+  const x = list.map(it=>it.value);
+  const y = list.map(it=>it.name);
+  Plotly.newPlot('mlShap', [{
+    x, y, type:'bar', orientation:'h',
+    hovertemplate: '%{y}: %{x:.4f}<extra></extra>'
+  }],{
+    margin:{t:10},
+    xaxis:{title:'Importance / |SHAP|'},
+    yaxis:{
+      title:'Feature name',          // ✅ ΠΡΟΣΘΗΚΗ τίτλου για τον άξονα y
+      automargin:true
+    }
+  });
+}
+
 
   // --- Tabs
   function showStatsTab(flag){
@@ -2091,6 +2100,7 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
 
 
