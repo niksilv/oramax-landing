@@ -103,9 +103,9 @@ async function runBatchDetect(list){
   showBatchStatus(`Queued ${list.length} targets…`);
 
   // --- NEW: fresh pooled session ---
-  allCands = [];
-  for (const k in perTargetStore) delete perTargetStore[k];
-  renderTable(allCands);
+  //allCands = [];
+  //for (const k in perTargetStore) delete perTargetStore[k];
+  //renderTable(allCands);
 
   for (let i=0; i<list.length; i++){
     const t = list[i];
@@ -960,10 +960,16 @@ lastPreproc   = data.preprocess || null;
 
 const candNorm = normalizeCandidates(data.candidates || []);
 const candFinal = fixProbabilities(candNorm);   // <-- ΝΕΟ
+
 // --- NEW: "μαρκάρισμα" κάθε candidate με το target του και συσσώρευση
 const withTarget = (candFinal||[]).map(c => ({ ...c, _target: currentTarget }));
-lastCands = withTarget;                // για το “τρέχον” target
-allCands.push(...withTarget);          // για ΟΛΑ τα targets
+lastCands = withTarget; // για το “τρέχον” target
+
+// ✅ NEW: αφαίρεσε παλιές εγγραφές του ίδιου target (anti-διπλοεγγραφές)
+allCands = (allCands || []).filter(c => c._target !== currentTarget);
+
+// ✅ NEW: πρόσθεσε τους νέους του τρέχοντος target
+allCands.push(...withTarget);
     
 // ...
 renderAll(data.time, data.flux, candFinal, lastNeighbors);
@@ -1087,6 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // ---------- Export CSV ----------
+// ---------- Export CSV ----------
 function buildCsvRows(cands){
   const rows = [];
   const thr = getThreshold();
@@ -1111,13 +1118,16 @@ function buildCsvRows(cands){
       c.centroid?.rho
     ]);
   }
-  
+  return rows;   // ✅ καλό είναι να επιστρέφει ρητά
+}                // ✅ ΕΔΩ έλειπε το κλείσιμο!
+
 function exportCsv(rows, name){
   const csv = rows.map(r=>r.join(",")).join("\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
   a.download = name; a.click();
 }
+
 
 // --- SUGGEST helpers (robust) ---
 function normalizeSuggestData(data){
@@ -1291,8 +1301,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   document.getElementById('thr').addEventListener('input', ()=>{ setThrLabel(); renderTable(allCands||[]); });
-  document.getElementById('sigmaThr').addEventListener('input', ()=>{ setCentroidThrLabels(); renderTable(lastCands||[]); renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr()); });
-  document.getElementById('rhoThr').addEventListener('input', ()=>{ setCentroidThrLabels(); renderTable(lastCands||[]); renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr()); });
+  document.getElementById('sigmaThr').addEventListener('input', ()=>{
+  setCentroidThrLabels();
+  renderTable(allCands || []);  // ✅ αντί για lastCands
+  renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
+  });, getRhoThr()); });
+  document.getElementById('rhoThr').addEventListener('input', ()=>{
+  setCentroidThrLabels();
+  renderTable(allCands || []);  // ✅ αντί για lastCands
+  renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
+  }); getRhoThr()); });
   document.getElementById('neiRadius').addEventListener('input', ()=>{ setNeighborsLabel(); });
 
   document.getElementById('fitBtn').addEventListener('click', runFit);
@@ -1629,6 +1647,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
