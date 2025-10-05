@@ -254,8 +254,37 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 </style>
 
       <!-- moved inline call below -->
-
   <link rel="stylesheet" href="/ormax-ml-toggle.css" />
+<style>
+/* === Restore OramaX blue accent for all interactive controls === */
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+select,
+button {
+  accent-color: #2196f3;   /* βασικό μπλε */
+}
+
+/* Κουμπιά & dropdown borders */
+button,
+select {
+  border-color: #2196f3;
+}
+
+/* Hover / focus glow */
+button:hover,
+select:focus,
+input[type="range"]:focus {
+  box-shadow: 0 0 4px #2196f380;
+}
+
+/* Ασφάλεια σε dark mode — καθαρίζουμε όποιο filter τα σκοτώνει */
+body, #detector {
+  filter: none !important;
+}
+</style>
+
+
 </head>
 <body>
 
@@ -2062,6 +2091,7 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
 
 
