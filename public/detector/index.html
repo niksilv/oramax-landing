@@ -1986,54 +1986,80 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Explain current candidate prediction
-    $('mlExplainBtn')?.addEventListener('click', async ()=>{
-      try{
-        if (!Array.isArray(window.lastCands) || !window.lastCands.length){
-          alert('Run detect and select a candidate first.');
-          return;
-        }
-        const cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
-        // Minimal feature payload (expand as your backend expects)
-        const payload = {
-          target: window.currentTarget,
-          features: {
-            period:   cand?.period,
-            duration: cand?.duration,
-            depth:    cand?.depth,
-            power:    cand?.power,
-            snr:      cand?.fit?.snr,
-            delta_bic:cand?.fit?.delta_bic
-          }
-        };
+    // Explain current candidate prediction (robust)
+$('mlExplainBtn')?.addEventListener('click', async ()=>{
+  try{
+    let cand = null;
 
-        setMlStatus('Explaining prediction…');
-        try{
-          const j = await explainPrediction(payload);
-          const items = Array.isArray(j?.shap) ? j.shap
-                        : Array.isArray(j?.importance) ? j.importance
-                        : [];
-          if (items.length) renderShapOrImportance(items);
-          else renderShapOrImportance(fallbackImportanceFromCand(cand));
-        }catch(_){
-          // Fallback (no endpoint)
-          renderShapOrImportance(fallbackImportanceFromCand(cand));
-        }
-        showStatsTab(true);
-        setMlStatus('Explanation ready.');
-      }catch(err){
-        console.error(err);
-        alert(err?.message || err);
-        setMlStatus('Explain failed.');
+    // 1) Κανονική ροή: από lastCands / selectedIdx
+    if (Array.isArray(window.lastCands) && window.lastCands.length){
+      cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+    }
+
+    // 2) Fallback A: από pooled αποτελέσματα (π.χ. μετά από Bulk)
+    if (!cand && Array.isArray(window.allCands) && window.allCands.length){
+      cand = window.allCands[0];
+      // κάν’ τον “selected” ώστε τα plots να έχουν context
+      window.lastCands = [cand];
+      window.selectedIdx = 0;
+
+      // αν έχουμε αποθηκευμένα T/F για το συγκεκριμένο target, φόρτωσέ τα στα plots
+      const store = (window.perTargetStore && cand._target) ? window.perTargetStore[cand._target] : null;
+      if (store && Array.isArray(store.T) && Array.isArray(store.F)) {
+        window.lcTime = store.T; window.lcFlux = store.F;
+        renderPF(store.T, store.F, cand);
+        renderLC(store.T, store.F, cand.windows ? cand.windows.intervals : []);
       }
-    });
-  });
-})();
+    }
+
+    // 3) Fallback B: διάβασε τον πρώτο candidate από τον πίνακα DOM (τελευταία λύση)
+    if (!cand) {
+      const rows = document.querySelectorAll('#cands tbody tr');
+      if (rows.length) rows[0].click();  // θα καλέσει selectCandidateObj
+    }
+    if (!Array.isArray(window.lastCands) || !window.lastCands.length){
+      alert('Run detect and select a candidate first.');
+      return;
+    }
+    cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+
+    const payload = {
+      target: window.currentTarget || cand._target,
+      features: {
+        period:   cand?.period,
+        duration: cand?.duration,
+        depth:    cand?.depth,
+        power:    cand?.power,
+        snr:      cand?.fit?.snr,
+        delta_bic:cand?.fit?.delta_bic
+      }
+    };
+
+    setMlStatus('Explaining prediction…');
+    try{
+      const j = await explainPrediction(payload);
+      const items = Array.isArray(j?.shap) ? j.shap
+                    : Array.isArray(j?.importance) ? j.importance
+                    : [];
+      renderShapOrImportance(items.length ? items : fallbackImportanceFromCand(cand));
+    }catch{
+      renderShapOrImportance(fallbackImportanceFromCand(cand)); // backend-less fallback
+    }
+    showStatsTab(true);
+    setMlStatus('Explanation ready.');
+  }catch(err){
+    console.error(err);
+    alert(err?.message || err);
+    setMlStatus('Explain failed.');
+  }
+});
+
 </script>
 
 
 </body>
 </html>
+
 
 
 
