@@ -1300,17 +1300,22 @@ document.addEventListener('DOMContentLoaded', ()=>{
     exportCsv(rows, `oramax_vetted_${(currentTarget||'target').toString().replace(/\s+/g,'_')}_p${thr.toFixed(2)}.csv`);
   });
 
-  document.getElementById('thr').addEventListener('input', ()=>{ setThrLabel(); renderTable(allCands||[]); });
-  document.getElementById('sigmaThr').addEventListener('input', ()=>{
+  document.getElementById('thr').addEventListener('input', ()=>{
+  setThrLabel();
+  renderTable(allCands || []);
+});
+
+document.getElementById('sigmaThr').addEventListener('input', ()=>{
   setCentroidThrLabels();
-  renderTable(allCands || []);  // ✅ αντί για lastCands
+  renderTable(allCands || []);
   renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
-  });, getRhoThr()); });
-  document.getElementById('rhoThr').addEventListener('input', ()=>{
+});
+
+document.getElementById('rhoThr').addEventListener('input', ()=>{
   setCentroidThrLabels();
-  renderTable(allCands || []);  // ✅ αντί για lastCands
+  renderTable(allCands || []);
   renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
-  }); getRhoThr()); });
+});
   document.getElementById('neiRadius').addEventListener('input', ()=>{ setNeighborsLabel(); });
 
   document.getElementById('fitBtn').addEventListener('click', runFit);
@@ -1647,6 +1652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
