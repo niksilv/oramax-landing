@@ -16,7 +16,6 @@ export default function Navbar() {
 
           {/* Our Project με hover για submenu */}
           <div className="has-sub relative group">
-            {/* Το anchor ΔΕΝ πλοηγεί – είναι trigger για το submenu */}
             <a
               href="#"
               className="our-project inline-flex items-center"
@@ -27,7 +26,6 @@ export default function Navbar() {
               Our Project <span className="caret ml-1">▾</span>
             </a>
 
-            {/* Submenu: εμφανίζεται σε hover/focus */}
             <div
               className="
                 submenu absolute left-0 mt-2 min-w-[220px]
@@ -51,13 +49,13 @@ export default function Navbar() {
               >
                 How it works?
               </Link>
-              <Link
+              {/* <Link
                 href="/our-project/our-resources"
                 role="menuitem"
                 className="block px-4 py-2 hover:bg-slate-800"
               >
                 Our Resources
-              </Link>
+              </Link> */}
             </div>
           </div>
 
