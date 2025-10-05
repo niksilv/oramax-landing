@@ -1717,8 +1717,8 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
   // Χρησιμοποιούμε το σωστό backend για το fallback
   window.API_BASE = (typeof window.API_BASE !== 'undefined' && window.API_BASE)
-  ? window.API_BASE
-  : 'https://oramax-app.fly.dev/exoplanet';
+    ? window.API_BASE
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
 
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
@@ -2100,4 +2100,5 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
