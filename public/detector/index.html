@@ -120,33 +120,41 @@ async function runBatchDetect(list){
   _batchRunning = true;
   showBatchStatus(`Queued ${list.length} targets…`);
 
-  // --- NEW: fresh pooled session ---
-  //allCands = [];
-  //for (const k in perTargetStore) delete perTargetStore[k];
-  //renderTable(allCands);
-
   for (let i=0; i<list.length; i++){
     const t = list[i];
     showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
+
+    const ctrl = new AbortController();      // ← ΝΕΟ
+    const TIMEOUT_MS = 60000;                // π.χ. 60s
+    let to = null;
+
     try{
-      await runDetectForTarget(t);
+      to = setTimeout(()=>{ try{ ctrl.abort(); }catch{}; }, TIMEOUT_MS);
+      await runDetectForTarget(t, { signal: ctrl.signal });   // ← ΝΕΟ
     }catch(e){
-      showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${e?.message||e}`);
+      const reason = (e?.name === 'AbortError') ? `timeout ${TIMEOUT_MS/1000}s` : (e?.message || e);
+      showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${reason}`);
+      // συνεχίζουμε
+    }finally{
+      if (to) clearTimeout(to);
     }
+
+    await new Promise(r=>setTimeout(r,180)); // μικρή ανάσα
   }
 
   showBatchStatus('Done.');
   _batchRunning = false;
 }
+
 function showBatchStatus(msg){
   const el = document.getElementById('batchStatus');
   if (el) el.textContent = msg || '';
 }
 
-async function runDetectForTarget(target){
+async function runDetectForTarget(target, opts = {}){
   const inp = document.getElementById('ticInput');
   if (inp) inp.value = target;
-  await runFetch(); // τρέχει το υπάρχον flow σου για έναν στόχο
+  await runFetch(opts);                // ← περνάμε { signal } από το batch
 }
 
   
@@ -941,12 +949,18 @@ async function fetchGaiaNeighbors(target, radius) {
 
   
 // ---------- Fetch & Detect ----------
-async function runFetch(){
+async function runFetch(opts = {}) {
+  const { signal } = opts; // ← ΝΕΟ: παίρνουμε τυχόν AbortSignal από το batch
   const status = document.getElementById('status');
-  try{
-    busyStart('Fetching light curve…'); busyAdvance(70,'Downloading…'); busyStart('Fetching light curve…'); busySet(10); status.textContent = 'Fetching...';
+  try {
+    busyStart('Fetching light curve…');
+    busyAdvance(70, 'Downloading…');
+    busyStart('Fetching light curve…');
+    busySet(10);
+    status.textContent = 'Fetching...';
+
     const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    
+
     const source = document.getElementById('sourceSel').value;
     const mission = document.getElementById('missionSel').value;
     const target = document.getElementById('ticInput').value.trim();
@@ -962,76 +976,94 @@ async function runFetch(){
     const neighbors = document.getElementById('gaiaChk').checked;
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
-    const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius, engine });
-    const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if(!res.ok){ status.textContent='Error'; return; }
+    const body = {
+      source, mission, target, url,
+      kpeaks, detrend, quality, remove_outliers,
+      sigma, centroid, neighbors, neighbors_radius, engine
+    };
+
+    // 👇 ΠΕΡΝΑΜΕ ΤΟ signal ΣΤΟ fetch (για abort ανά TIC)
+    const res = await fetch(`${API_BASE}/fetch_detect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal
+    });
+    if (!res.ok) { status.textContent = 'Error'; return; }
     const data = await res.json();
-busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
-if (data.error){ alert(data.error); status.textContent='Error'; return; }
 
-currentTarget = data.target || target || url;
-// --- NEW: αποθήκευση raw T,F ανά target για μελλοντικό render όταν κλικάρουμε από τη λίστα
-perTargetStore[currentTarget] = perTargetStore[currentTarget] || {};
-perTargetStore[currentTarget].T = data.time;
-perTargetStore[currentTarget].F = data.flux;
-lastPreproc   = data.preprocess || null;
+    busySet(55, 'Processing & BLS…');
+    busyAdvance(90, 'Processing & BLS…');
+    if (data.error) { alert(data.error); status.textContent = 'Error'; return; }
 
-const candNorm = normalizeCandidates(data.candidates || []);
-const candFinal = fixProbabilities(candNorm);   // <-- ΝΕΟ
+    currentTarget = data.target || target || url;
+    // --- store per target
+    perTargetStore[currentTarget] = perTargetStore[currentTarget] || {};
+    perTargetStore[currentTarget].T = data.time;
+    perTargetStore[currentTarget].F = data.flux;
+    lastPreproc = data.preprocess || null;
 
-// --- NEW: "μαρκάρισμα" κάθε candidate με το target του και συσσώρευση
-const withTarget = (candFinal||[]).map(c => ({ ...c, _target: currentTarget }));
-lastCands = withTarget; // για το “τρέχον” target
+    const candNorm  = normalizeCandidates(data.candidates || []);
+    const candFinal = fixProbabilities(candNorm);
 
-// ✅ NEW: αφαίρεσε παλιές εγγραφές του ίδιου target (anti-διπλοεγγραφές)
-allCands = (allCands || []).filter(c => c._target !== currentTarget);
+    const withTarget = (candFinal || []).map(c => ({ ...c, _target: currentTarget }));
+    lastCands = withTarget;
+    allCands  = (allCands || []).filter(c => c._target !== currentTarget);
+    allCands.push(...withTarget);
 
-// ✅ NEW: πρόσθεσε τους νέους του τρέχοντος target
-allCands.push(...withTarget);
-    
-// ...
-renderAll(data.time, data.flux, candFinal, lastNeighbors);
+    // αρχικό render με ό,τι neighbors ήρθαν
+    lastNeighbors = data.neighbors || null;
+    renderAll(data.time, data.flux, candFinal, lastNeighbors);
+    renderTable(allCands);
 
-// ---------- NEW: robust GAIA selection ----------
-const wantNei = document.getElementById('gaiaChk')?.checked;
-const rad     = Number(document.getElementById('neiRadius')?.value || 60);
+    // ---------- NEW: robust GAIA selection με signal στο fallback ----------
+    const wantNei = document.getElementById('gaiaChk')?.checked;
+    const rad     = Number(document.getElementById('neiRadius')?.value || 60);
 
-// οτιδήποτε γύρισε ο server αρχικά
-let nei = data.neighbors || null;
+    // helper
+    const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
 
-// helper: usable = έχει items[]
-const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
+    let nei = data.neighbors || null;
+    if (wantNei && !usable(nei)) {
+      try {
+        // 1) προσπάθησε SW route (όπως ήδη έχεις στη fetchGaiaNeighbors) — αφήνουμε ως έχει
 
-// αν ζητήθηκαν neighbors αλλά το αρχικό δεν είναι usable, κάνε fallback
-if (wantNei && !usable(nei)) {
-  try {
-    const n2 = await fetchGaiaNeighbors(currentTarget, rad);
-    if (usable(n2)) {
-      nei = n2;  // ΠΕΡΝΑΜΕ ΤΟ ΚΑΛΟ
-    } else {
-      // κράτα καθαρό reason για να φανεί στο UI
-      nei = n2 || { available:false, reason:'empty', radius_arcsec: rad };
+        // 2) Fallback: POST /fetch_detect (neighbors only) — ΠΕΡΝΑΜΕ signal
+        const body2 = JSON.stringify({
+          source: 'mast_spoc', mission: 'TESS', target,
+          kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+          neighbors: true, neighbors_radius: rad, centroid: false
+        });
+
+        const r2 = await fetch(`${API_BASE}/fetch_detect`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body2,
+          signal // ← ΝΕΟ: ώστε να ακυρώνεται κι εδώ
+        });
+
+        if (r2.ok) {
+          const j2 = await r2.json().catch(() => null);
+          const nx = j2?.neighbors || j2;
+          if (Array.isArray(nx))       nei = { available: true, radius_arcsec: rad, items: nx };
+          else if (nx?.items)          nei = { available: true, radius_arcsec: nx.radius_arcsec || rad, items: nx.items };
+          else                         nei = { available: false, reason: 'empty', radius_arcsec: rad };
+        }
+      } catch (e) {
+        nei = { available: false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
+      }
     }
+
+    lastNeighbors = nei;
+    perTargetStore[currentTarget].neighbors = lastNeighbors;
+    renderAll(data.time, data.flux, candFinal, lastNeighbors);
+    renderTable(allCands);
+
+    busyAdvance(98, 'Rendering plots…');
+    status.textContent = 'Done';
+    setTimeout(() => busyStop(), 600);
+    updateMlBadge();
   } catch (e) {
-    nei = { available:false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
-  }
-}
-
-// αποθήκευση και RENDER μόνο με το τελικό nei
-lastNeighbors = nei;
-// --- NEW: δέσε και τους neighbors στο ανά-target store
-perTargetStore[currentTarget].neighbors = lastNeighbors;
-
-// ΣΗΜΑΝΤΙΚΟ: renderAll να παίρνει το 'nei' που μόλις ορίσαμε
-renderAll(data.time, data.flux, candFinal, lastNeighbors);
-
-// --- NEW: pooled candidates table ---
-renderTable(allCands);   // δείξε ΟΛΟΥΣ τους vetted από ΟΛΑ τα TICs
-    
-busyAdvance(98,'Rendering plots…'); status.textContent='Done';
-setTimeout(()=>busyStop(), 600);
-updateMlBadge();
-} catch(e) {
     console.error(e);
     status.textContent = 'Error';
     busyStop();
@@ -1682,4 +1714,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
