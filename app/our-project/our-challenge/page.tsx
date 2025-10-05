@@ -1,8 +1,8 @@
 // app/our-project/our-challenge/page.tsx
 export const metadata = {
-  title: "Our Challenge — Orama X",
+  title: "How it works? — Orama X",
   description:
-    "Build an AI/ML model using open NASA exoplanet datasets to accurately identify exoplanets from new data.",
+    "Step-by-step manual explaining how Orama X detects and vets exoplanets using AI/ML tools and NASA datasets.",
 };
 
 export default function OurChallengePage() {
@@ -11,98 +11,130 @@ export default function OurChallengePage() {
       className="relative min-h-screen bg-cover bg-center text-white"
       style={{ backgroundImage: "url('/images/challenge.jpg')" }}
     >
-      {/* Overlay για καλύτερη αναγνωσιμότητα */}
       <div className="absolute inset-0 bg-black/60" />
 
-      {/* Περιεχόμενο */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 space-y-16">
-        {/* Hero section */}
-        <div className="text-center space-y-6">
-          <h1 className="text-4xl md:text-6xl font-bold">Our Challenge</h1>
-          <p className="mx-auto max-w-3xl text-lg leading-relaxed text-slate-200">
-            Data from several different space-based exoplanet surveying missions have enabled discovery of thousands of new planets outside our solar system, but most of these exoplanets were identified manually. With advances in artificial intelligence and machine learning (AI/ML), it is possible to automatically analyze large sets of data collected by these missions to identify exoplanets. Your challenge is to create an AI/ML model that is trained on one or more of the open-source exoplanet datasets offered by NASA and that can analyze new data to accurately identify exoplanets. <span className="whitespace-nowrap">(Astrophysics Division)</span>
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-20 space-y-10 prose prose-invert">
+        <h1 className="text-4xl md:text-6xl font-bold text-center mb-10">
+          Our Challenge
+        </h1>
+
+        <section>
+          <h2>1) Before you start</h2>
+          <ul>
+            <li><b>Browser:</b> Use a modern browser (Chrome, Edge, Firefox, Safari). Keep a single tab active when running detections.</li>
+            <li><b>Data access:</b> Orama X fetches light curves and metadata from MAST/SPOC and can query TESSCut and Gaia DR3.</li>
+            <li><b>Terminology:</b> Light curve = Flux vs time; Phase folded = folded on candidate period; BLS = Box Least Squares; Vetting = checks before confirming a planet; P(planet) = AI classifier probability.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>2) Detection panel overview</h2>
+          <p>
+            The main panel lets you choose a source, configure preprocessing, run
+            a period search, and inspect candidates. Use <b>Fetch &amp; Detect</b> to
+            download data, apply filters, and search for transit signals.
           </p>
-        </div>
+        </section>
 
-        {/* Τρία βασικά sections (στυλ όπως στο Our Project) */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
-            <h3 className="text-xl font-semibold mb-2">Goal</h3>
-            <p className="text-sm text-slate-200">
-              Train a robust, generalizable classifier to distinguish planets from
-              eclipsing binaries and instrumental false positives.
-            </p>
-          </div>
-          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
-            <h3 className="text-xl font-semibold mb-2">Datasets</h3>
-            <p className="text-sm text-slate-200">
-              Use open NASA datasets (e.g., TESS/Kepler/K2) and optional Gaia DR3
-              context to improve confidence and reduce contamination.
-            </p>
-          </div>
-          <div className="rounded-xl bg-white/10 backdrop-blur p-6">
-            <h3 className="text-xl font-semibold mb-2">Outcomes</h3>
-            <p className="text-sm text-slate-200">
-              Accurate predictions, clear explainability, and reproducible
-              experiments suitable for scientific review.
-            </p>
-          </div>
-        </div>
+        <section>
+          <h2>3) Single-target workflow</h2>
+          <ol>
+            <li>Enter target ID (TIC / EPIC / Kepler) and keep Mission = auto.</li>
+            <li>Choose preprocessing: quality mask ON, outlier σ = 5, detrend = flatten.</li>
+            <li>Enable centroid vetting and Gaia neighbors for contamination checks.</li>
+            <li>Set thresholds (p = 0.5–0.8, centroid σ thr = 3.0, Gaia radius = 60″).</li>
+            <li>Click <b>Fetch &amp; Detect</b> to run the search, then inspect candidates visually.</li>
+            <li>Check metrics like SNR, ΔBIC, Odd/Even Δ, Secondary?, and Centroid.</li>
+            <li>Fit the transit with <b>batman</b>, review parameters, and export vetted results.</li>
+          </ol>
+        </section>
 
-        {/* Enriched details */}
-        <div className="prose prose-invert max-w-3xl mx-auto">
-          <h2>What to Build</h2>
+        <section>
+          <h2>4) Batch workflow</h2>
+          <p>
+            Analyze multiple targets using the same settings. Paste TICs/EPICs in
+            <b>Bulk</b> mode, configure global parameters, run sequentially, and export
+            results (all or vetted only).
+          </p>
+        </section>
+
+        <section>
+          <h2>5) Custom light curves</h2>
+          <p>
+            Upload TXT/CSV files with at least <code>time</code> and <code>flux</code>
+            columns. Configure detrending and vetting as usual, then run detection and
+            export.
+          </p>
+        </section>
+
+        <section>
+          <h2>6) AI / ML tools</h2>
           <ul>
-            <li>
-              <b>Model:</b> gradient-boosted features or 1D CNNs/transformers on
-              light curves; hybrids are welcome.
-            </li>
-            <li>
-              <b>Preprocessing:</b> masks, outlier handling, detrending, and
-              phase-folding of candidate periods.
-            </li>
-            <li>
-              <b>Generalization:</b> evaluate across missions and times to avoid
-              overfitting to a single distribution.
-            </li>
-            <li>
-              <b>Explainability:</b> SHAP/IG or saliency maps on phase-folded
-              curves; calibration checks for probabilities.
-            </li>
+            <li><b>Classification:</b> Each candidate receives a P(planet) score.</li>
+            <li><b>Explainability:</b> “Explain prediction” highlights top contributing features (depth, duration, SNR, etc.).</li>
+            <li><b>Retraining:</b> Upload labeled CSVs and click “Train new model” to fit a custom classifier and view metrics (F1, PR AUC, confusion matrix).</li>
           </ul>
+        </section>
 
-          <h2>Suggested Datasets</h2>
+        <section>
+          <h2>7) Gaia DR3 Neighbors panel</h2>
+          <p>
+            Shows nearby Gaia sources (sep, dx, dy, Gmag, BP−RP, RUWE). Use this to
+            assess contamination and confirm centroid results.
+          </p>
+        </section>
+
+        <section>
+          <h2>8) Candidates table</h2>
+          <p>
+            Review each candidate’s period, duration, depth, power, P(planet), SNR,
+            ΔBIC, odd/even Δ, and centroid status before confirming as a planet.
+          </p>
+        </section>
+
+        <section>
+          <h2>9) Export & reproducibility</h2>
+          <p>
+            Use <b>Export CSV</b>, <b>Export Vetted CSV</b>, and
+            <b>Download PDF report</b> to save your analyses. Always record mission,
+            detrending, thresholds, and model version for reproducibility.
+          </p>
+        </section>
+
+        <section>
+          <h2>10) Troubleshooting & best practices</h2>
           <ul>
-            <li><b>TESS</b> light curves & full-frame derived series</li>
-            <li><b>Kepler/K2</b> labeled candidates and false positives</li>
-            <li><b>Gaia DR3</b> neighbors: sep [″], Gmag, BP−RP for blend checks</li>
+            <li><b>No candidates?</b> Increase k peaks or relax σ clip.</li>
+            <li><b>Spurious periods?</b> Tighten quality mask and verify by eye.</li>
+            <li><b>Centroid fails?</b> Reduce Gaia radius and recheck neighbors.</li>
+            <li><b>AI over-confident?</b> Raise planet threshold or review explanations.</li>
           </ul>
+        </section>
 
-          <h2>Evaluation</h2>
+        <section>
+          <h2>11) Quick recipes</h2>
           <ul>
-            <li>Precision/Recall, F1, ROC–AUC or PR–AUC</li>
-            <li>Confusion matrix per class (planet / EB / false positive)</li>
-            <li>Time- or mission-split validation for robustness</li>
+            <li><b>Single bright TESS target:</b> Fetch → Detect → Fit → Verify → Export.</li>
+            <li><b>Batch analysis:</b> Bulk mode → run → Export Vetted CSV.</li>
+            <li><b>Custom data:</b> Upload → Detect → Fit → Explain → Export.</li>
           </ul>
+        </section>
 
-          <h2>Deliverables</h2>
-          <ul>
-            <li>Short README/paper with pipeline design and assumptions</li>
-            <li>Trained weights + inference script/notebook</li>
-            <li>Environment file for reproducibility</li>
-            <li>Optional demo on <code>/detector</code></li>
-          </ul>
-        </div>
+        <section>
+          <h2>12) Sensible thresholds</h2>
+          <p>
+            p = 0.5 (exploratory) / 0.8 (high purity), Centroid σ thr = 3.0, Gaia radius = 60″, k peaks = 3 (quick) / 5–10 (deep search).
+          </p>
+        </section>
 
-        {/* CTA */}
-        <div className="text-center">
-          <a
-            href="/detector"
-            className="inline-block rounded-xl bg-blue-600 px-6 py-3 text-white font-semibold hover:bg-blue-700 active:translate-y-[1px]"
-          >
-            Try the Detector
-          </a>
-        </div>
+        <section>
+          <h2>Final note</h2>
+          <p>
+            Orama X enables human-AI collaboration for exoplanet discovery. Always
+            combine AI probabilities with physical vetting (centroid, Gaia neighbors,
+            odd/even tests, ΔBIC) and visual inspection before confirming a planet.
+          </p>
+        </section>
       </div>
     </main>
   );
