@@ -8,6 +8,22 @@
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
 <script>
+
+// ---- API helper: μιλάμε μόνο σε same-origin SW proxy ----
+const API_PROXY_BASE = '/detector/api';
+
+function apiGet(pathAndQuery){
+  return fetch(`${API_PROXY_BASE}${pathAndQuery}`, { credentials: 'omit' });
+}
+function apiPost(path, bodyObj){
+  return fetch(`${API_PROXY_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(bodyObj),
+    credentials: 'omit'
+  });
+}
+  
 // === Top-N suggestions on focus ===
 async function showTopSuggestOnFocus(){
   const input = document.getElementById('ticInput');
@@ -16,7 +32,7 @@ async function showTopSuggestOnFocus(){
     const mission = document.getElementById('missionSel')?.value || 'auto';
     const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
     const q = 'TIC '; // generic to get common targets
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`);
     if(!r.ok) return;
     const list = normalizeSuggestData(await r.json());
     if(list.length) showSuggest(list, input);
@@ -139,7 +155,7 @@ async function searchBrowse(){
   const mission = document.getElementById('missionSel')?.value || 'auto';
   const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
   try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`);
     if(!r.ok){ renderBrowse([],0); return; }
     const list = normalizeSuggestData(await r.json());
     renderBrowse(list, 0);
@@ -945,7 +961,7 @@ async function runFetch(){
     const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
 
     const body = JSON.stringify({ source, mission, target, url, kpeaks, detrend, quality, remove_outliers, sigma, centroid, neighbors, neighbors_radius, engine });
-    const res = await fetch(`${API_BASE}/fetch_detect`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await apiPost('/fetch_detect', JSON.parse(body));
     if(!res.ok){ status.textContent='Error'; return; }
     const data = await res.json();
 busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
@@ -1188,8 +1204,7 @@ const updateSuggest = debounce(async ()=>{
   const containsParam = (onlyDigits || ticDigits) ? '&contains=1' : '';
 
   try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=10${containsParam}`,
-                          { headers:{ 'Accept':'application/json' }});
+    const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=10${containsParam}`);
     let list = [];
     if (r.ok) list = normalizeSuggestData(await r.json());
     if (list.length) showSuggest(list, input); else hideSuggest();
@@ -1219,7 +1234,7 @@ async function runFit(){
       period: cand.period, duration: cand.duration, t0: cand.t0
     });
 
-    const res = await fetch(`${API_BASE}/predict`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await apiPost('/predict', JSON.parse(body));
     if(!res.ok){ fitStatus.textContent='Error'; return; }
     const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
 
@@ -1258,7 +1273,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch(`${API_BASE}/report_pdf`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await apiPost('/report_pdf', payload);
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -1652,6 +1667,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
