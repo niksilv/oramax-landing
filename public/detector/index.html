@@ -412,7 +412,7 @@ body, #detector {
   <div class="inline" role="tablist" style="gap:6px;">
     <button id="tabDetect"    type="button" class="badge">Detection</button>
     <button id="tabModelStat" type="button" class="badge">Model Stats</button>
-    <span class="muted">Tip: use “Explain prediction” after candidate selection.</span>
+    <span class="muted">Tip: use “Explain prediction” while έχεις επιλεγμένο candidate.</span>
   </div>
 
   <!-- Model Stats panel -->
@@ -520,7 +520,7 @@ body, #detector {
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev';
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -2100,15 +2100,3 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
