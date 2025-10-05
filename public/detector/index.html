@@ -23,21 +23,72 @@ function apiPost(path, bodyObj){
     credentials: 'omit'
   });
 }
-  
+
+// Περιμένει να γίνει active ο Service Worker (ώστε /detector/api/* να μην 404άρει)
+async function ensureSWReady(timeoutMs = 1500){
+  if (!('serviceWorker' in navigator)) return true;
+  if (navigator.serviceWorker.controller) return true;
+
+  try { await navigator.serviceWorker.ready; } catch {}
+  if (navigator.serviceWorker.controller) return true;
+
+  return await new Promise(resolve => {
+    let done = false;
+    const to = setTimeout(() => { if (!done) { done = true; resolve(false); } }, timeoutMs);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!done) { done = true; clearTimeout(to); resolve(true); }
+    }, { once:true });
+  });
+}
+
 // === Top-N suggestions on focus ===
 async function showTopSuggestOnFocus(){
   const input = document.getElementById('ticInput');
-  if(!input) return;
-  try{
+  if (!input) return;
+
+  // περίμενε SW ώστε τα /detector/api/* να περάσουν από το proxy
+  const ok = await ensureSWReady();
+  if (!ok) return; // αν δεν προλάβει, άστο για αυτή τη φορά
+
+  try {
     const mission = document.getElementById('missionSel')?.value || 'auto';
-    const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
-    const q = 'TIC '; // generic to get common targets
+    const domParam = (mission === 'TESS') ? '&domain=TESS'
+                  : (mission === 'Kepler') ? '&domain=Kepler' : '';
+    const q = 'TIC '; // generic για δημοφιλή targets
+
     const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`);
-    if(!r.ok) return;
+    if (!r.ok) return;
+
     const list = normalizeSuggestData(await r.json());
-    if(list.length) showSuggest(list, input);
-  }catch{}
+    if (list?.length) showSuggest(list, input);
+  } catch {}
 }
+
+// === Live update suggestions as user types ===
+async function updateSuggest(q, { contains=false, limit=10, offset=0 } = {}){
+  const input = document.getElementById('ticInput');
+  if (!input) return;
+
+  q = (q ?? '').trim();
+  if (!q) { hideSuggest?.(); return; }
+
+  // σιγουρέψου ότι ο SW είναι ενεργός πριν το API call
+  const ok = await ensureSWReady();
+  if (!ok) return;
+
+  try {
+    const mission = document.getElementById('missionSel')?.value || 'auto';
+    const domParam = (mission === 'TESS') ? '&domain=TESS'
+                  : (mission === 'Kepler') ? '&domain=Kepler' : '';
+    const containsParam = contains ? '&contains=1' : '';
+    const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}${containsParam}`);
+    if (!r.ok) return;
+
+    const list = normalizeSuggestData(await r.json());
+    if (list?.length) showSuggest(list, input); else hideSuggest?.();
+  } catch {}
+}
+
 
 // === Browse modal ===
 let _browsePage = 0;
@@ -1664,6 +1715,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
