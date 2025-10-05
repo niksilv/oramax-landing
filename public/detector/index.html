@@ -72,7 +72,7 @@ async function updateSuggest(q, { contains=false, limit=10, offset=0 } = {}){
   q = (q ?? '').trim();
   if (!q) { hideSuggest?.(); return; }
 
-  // σιγουρέψου ότι ο SW είναι ενεργός πριν το API call
+  // περιμένουμε τον SW για να μην 404άρει
   const ok = await ensureSWReady();
   if (!ok) return;
 
@@ -88,6 +88,7 @@ async function updateSuggest(q, { contains=false, limit=10, offset=0 } = {}){
     if (list?.length) showSuggest(list, input); else hideSuggest?.();
   } catch {}
 }
+
 
 
 // === Browse modal ===
@@ -1715,6 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
