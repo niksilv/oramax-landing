@@ -366,6 +366,66 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
       <span class="muted" id="fitStatus"></span>
     </div>
     <div id="fitBox" class="kv" style="margin-top:8px; display:none;"></div>
+    <!-- === AI / Machine Learning === -->
+<div class="card" id="mlCard">
+  <h3>AI / Machine Learning</h3>
+
+  <div class="inline" style="margin-bottom:8px;">
+    <button id="mlTrainBtn" type="button" title="Start/Resume training on server">Train new model</button>
+    <input id="mlDsFile" type="file" accept=".csv" style="display:none">
+    <button id="mlUploadBtn" type="button" title="Upload a labeled CSV dataset">Upload labeled dataset</button>
+    <button id="mlExplainBtn" type="button" title="Explain current prediction (selected candidate)">Explain prediction</button>
+    <button id="mlMetricsBtn" type="button" title="Fetch latest metrics">Refresh Model Stats</button>
+    <span id="mlStatus" class="muted"></span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="inline" role="tablist" style="gap:6px;">
+    <button id="tabDetect"    type="button" class="badge">Detection</button>
+    <button id="tabModelStat" type="button" class="badge">Model Stats</button>
+    <span class="muted">Tip: use “Explain prediction” while έχεις επιλεγμένο candidate.</span>
+  </div>
+
+  <!-- Model Stats panel -->
+  <div id="mlStatsPanel" style="display:none; margin-top:10px;">
+    <div class="row">
+      <div class="col">
+        <h3>Metrics</h3>
+        <table>
+          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+          <tbody id="mlMetricTbody">
+            <tr><td>Accuracy</td><td id="mAcc" class="kv"></td></tr>
+            <tr><td>Precision</td><td id="mPrec" class="kv"></td></tr>
+            <tr><td>Recall</td><td id="mRec" class="kv"></td></tr>
+            <tr><td>ROC-AUC</td><td id="mAuc" class="kv"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col">
+        <h3>Confusion Matrix</h3>
+        <div id="mlConfMat" style="height:320px;"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>Feature importance / SHAP</h3>
+      <div id="mlShap" style="height:340px;"></div>
+      <div class="muted">If SHAP isn’t available from backend, θα δεις fallback feature importance.</div>
+    </div>
+  </div>
+
+  <!-- Data validation help -->
+  <details style="margin-top:10px;">
+    <summary><b>Dataset format (CSV)</b></summary>
+    <div class="note" style="margin-top:8px;">
+      Required: a header row with at least <code>label</code> and one numeric feature column.
+      Optional identifiers: <code>target</code>, <code>tic</code> κ.λπ.<br/>
+      <b>Example header:</b> <code>target,label,period,duration,depth,power,snr,delta_bic</code><br/>
+      Labels: 0 = non-planet, 1 = planet.
+    </div>
+  </details>
+</div>
+
   </div>
 
   <details>
@@ -1711,9 +1771,270 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </footer>
 
+<script>
+/* ===== ML UI + API glue ===== */
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const api = (p) => `${API_BASE}${p.startsWith('/') ? p : '/'+p}`;
+
+  function setMlStatus(msg){ const el=$('mlStatus'); if(el) el.textContent = msg || ''; }
+  function fmt(v, d=4){ return (Number.isFinite(+v) ? (+v).toFixed(d) : '—'); }
+
+  // --- Tiny CSV parser (no deps)
+  function parseCsv(text){
+    const rows = text.replace(/\r/g,'').split('\n').filter(s=>s.trim().length);
+    const head = rows[0].split(',').map(s=>s.trim());
+    const data = rows.slice(1).map(line => {
+      const cols = line.split(',');
+      const obj = {};
+      head.forEach((h,i)=> obj[h] = (cols[i] ?? '').trim());
+      return obj;
+    });
+    return { head, data };
+  }
+
+  // --- Validation for labeled dataset
+  function validateLabeledCsv(text){
+    const errs = [];
+    let parsed;
+    try { parsed = parseCsv(text); } catch(e){ errs.push('Cannot parse CSV.'); }
+    if (!parsed) return { ok:false, errors:errs };
+
+    const head = parsed.head.map(h=>h.toLowerCase());
+    if (!head.includes('label')) errs.push('Missing required "label" column.');
+
+    // At least one numeric feature beyond label/ids
+    const idCols = new Set(['label','target','tic','kic','epic','id','name']);
+    const featureCols = parsed.head.filter(h => !idCols.has(h.toLowerCase()));
+    if (featureCols.length === 0) errs.push('No feature columns found.');
+
+    // Check values
+    const sample = parsed.data.slice(0, Math.min(parsed.data.length, 200));
+    const badLabel = sample.some(r => !/^(0|1)$/.test(String(r.label||'').trim()));
+    if (badLabel) errs.push('Labels must be 0/1.');
+
+    // If any feature present, ensure parsable numbers (ignore blanks)
+    const anyNonNumeric = sample.some(r => {
+      return featureCols.some(c => {
+        const v = r[c];
+        if (v==='' || v==null) return false;
+        return !Number.isFinite(+v);
+      });
+    });
+    if (anyNonNumeric) errs.push('Non-numeric values found in feature columns.');
+
+    return { ok: errs.length===0, errors: errs, head: parsed.head, rows: parsed.data };
+  }
+
+  // --- Rendering
+  function renderMetrics(m){
+    $('mAcc').textContent  = fmt(m?.accuracy, 4);
+    $('mPrec').textContent = fmt(m?.precision,4);
+    $('mRec').textContent  = fmt(m?.recall,   4);
+    $('mAuc').textContent  = fmt(m?.roc_auc,  4);
+  }
+
+  function renderConfusion(cm){
+    // cm expected: [[TN, FP],[FN, TP]] or [[a,b],[c,d]]
+    const Z = Array.isArray(cm) && cm.length===2 ? cm : [[0,0],[0,0]];
+    const data = [{
+      z: Z, type: 'heatmap', x: ['Pred 0','Pred 1'], y: ['True 0','True 1'],
+      hovertemplate: '%{y} vs %{x}: %{z}<extra></extra>'
+    }];
+    Plotly.newPlot('mlConfMat', data, {
+      margin:{t:10}, xaxis:{side:'top'}, yaxis:{autorange:'reversed'}
+    });
+  }
+
+  function renderShapOrImportance(items){
+    // items: [{name,value}] sorted desc
+    const list = Array.isArray(items) ? items.slice(0,20) : [];
+    const x = list.map(it=>it.value);
+    const y = list.map(it=>it.name);
+    Plotly.newPlot('mlShap', [{
+      x, y, type:'bar', orientation:'h',
+      hovertemplate: '%{y}: %{x:.4f}<extra></extra>'
+    }],{
+      margin:{t:10}, xaxis:{title:'Importance / |SHAP|'}, yaxis:{automargin:true}
+    });
+  }
+
+  // --- Tabs
+  function showStatsTab(flag){
+    const p = $('mlStatsPanel');
+    if (!p) return;
+    p.style.display = flag ? 'block' : 'none';
+  }
+
+  // --- API calls (with graceful fallbacks)
+  async function uploadDataset(text){
+    // Try text/csv post
+    const res = await fetch(api('/ml/upload_dataset'), {
+      method:'POST',
+      headers:{ 'Content-Type':'text/csv' },
+      body: text
+    });
+    if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+    return res.json().catch(()=> ({}));
+  }
+
+  async function trainModel(){
+    const res = await fetch(api('/ml/train'), { method:'POST' });
+    if (!res.ok) throw new Error(`Train start failed (HTTP ${res.status})`);
+    return res.json().catch(()=> ({}));
+  }
+
+  async function fetchMetrics(){
+    const res = await fetch(api('/ml/metrics'));
+    if (!res.ok) throw new Error(`Metrics not available (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  async function explainPrediction(payload){
+    const res = await fetch(api('/ml/explain_prediction'), {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`Explain not available (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  // --- Fallback importance if backend lacks SHAP
+  function fallbackImportanceFromCand(c){
+    // simple normalized abs values of common features; tweak as you wish
+    const feats = [
+      ['power',        c?.power],
+      ['snr',          c?.fit?.snr],
+      ['delta_bic',    c?.fit?.delta_bic],
+      ['depth',        c?.depth],
+      ['duration',     c?.duration],
+      ['period',       c?.period],
+    ];
+    const rows = feats.filter(([_,v])=> Number.isFinite(+v)).map(([n,v])=>({name:n, value:Math.abs(+v)}));
+    const max = Math.max(1e-12, ...rows.map(r=>r.value));
+    rows.forEach(r => r.value = r.value/max);
+    rows.sort((a,b)=>b.value-a.value);
+    return rows;
+  }
+
+  // --- Wire-up
+  document.addEventListener('DOMContentLoaded', () => {
+    // Tab buttons
+    $('tabDetect')?.addEventListener('click', ()=> showStatsTab(false));
+    $('tabModelStat')?.addEventListener('click', ()=> showStatsTab(true));
+
+    // Upload dataset
+    $('mlUploadBtn')?.addEventListener('click', ()=> $('mlDsFile')?.click());
+    $('mlDsFile')?.addEventListener('change', async (e)=>{
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      try{
+        setMlStatus('Validating dataset…');
+        const text = await file.text();
+        const val = validateLabeledCsv(text);
+        if (!val.ok){
+          alert('Dataset errors:\n- ' + val.errors.join('\n- '));
+          setMlStatus('Validation failed.');
+          e.target.value='';
+          return;
+        }
+        setMlStatus('Uploading dataset…');
+        await uploadDataset(text);
+        setMlStatus('Dataset uploaded. You can now train.');
+      }catch(err){
+        console.error(err);
+        alert(err?.message || err);
+        setMlStatus('Upload failed.');
+      }finally{
+        e.target.value='';
+      }
+    });
+
+    // Train
+    $('mlTrainBtn')?.addEventListener('click', async ()=>{
+      try{
+        setMlStatus('Starting training…');
+        await trainModel();
+        setMlStatus('Training started on server.');
+      }catch(err){
+        console.error(err);
+        alert(err?.message || err);
+        setMlStatus('Training failed to start.');
+      }
+    });
+
+    // Metrics
+    $('mlMetricsBtn')?.addEventListener('click', async ()=>{
+      try{
+        setMlStatus('Fetching metrics…');
+        const m = await fetchMetrics();
+        renderMetrics(m);
+        if (m?.confusion_matrix) renderConfusion(m.confusion_matrix);
+        if (Array.isArray(m?.feature_importance) && m.feature_importance.length){
+          renderShapOrImportance(m.feature_importance);
+        }else if (Array.isArray(m?.shap_importance) && m.shap_importance.length){
+          renderShapOrImportance(m.shap_importance);
+        }
+        showStatsTab(true);
+        setMlStatus('Metrics updated.');
+      }catch(err){
+        console.warn(err);
+        setMlStatus('Metrics not available; showing empty panel.');
+        renderMetrics({});
+        renderConfusion([[0,0],[0,0]]);
+        renderShapOrImportance([]);
+        showStatsTab(true);
+      }
+    });
+
+    // Explain current candidate prediction
+    $('mlExplainBtn')?.addEventListener('click', async ()=>{
+      try{
+        if (!Array.isArray(window.lastCands) || !window.lastCands.length){
+          alert('Run detect and select a candidate first.');
+          return;
+        }
+        const cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+        // Minimal feature payload (expand as your backend expects)
+        const payload = {
+          target: window.currentTarget,
+          features: {
+            period:   cand?.period,
+            duration: cand?.duration,
+            depth:    cand?.depth,
+            power:    cand?.power,
+            snr:      cand?.fit?.snr,
+            delta_bic:cand?.fit?.delta_bic
+          }
+        };
+
+        setMlStatus('Explaining prediction…');
+        try{
+          const j = await explainPrediction(payload);
+          const items = Array.isArray(j?.shap) ? j.shap
+                        : Array.isArray(j?.importance) ? j.importance
+                        : [];
+          if (items.length) renderShapOrImportance(items);
+          else renderShapOrImportance(fallbackImportanceFromCand(cand));
+        }catch(_){
+          // Fallback (no endpoint)
+          renderShapOrImportance(fallbackImportanceFromCand(cand));
+        }
+        showStatsTab(true);
+        setMlStatus('Explanation ready.');
+      }catch(err){
+        console.error(err);
+        alert(err?.message || err);
+        setMlStatus('Explain failed.');
+      }
+    });
+  });
+})();
+</script>
+
 
 </body>
 </html>
+
 
 
 
