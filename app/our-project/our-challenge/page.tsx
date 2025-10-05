@@ -15,7 +15,7 @@ export default function OurChallengePage() {
 
       <div className="relative z-10 max-w-5xl mx-auto px-6 py-20 space-y-10 prose prose-invert">
         <h1 className="text-4xl md:text-6xl font-bold text-center mb-10">
-          Our Challenge
+          How it works?
         </h1>
 
         <section>
