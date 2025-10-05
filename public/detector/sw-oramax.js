@@ -185,16 +185,16 @@ console.log(`OramaX SW proxy ready (${VERSION})`);
 
 // ---------- Catch-all fallback για αποφυγή 404 στο /detector/api/* ----------
 self.addEventListener('fetch', (evt) => {
-  const url = new URL(evt.request.url);
-  const isSameOrigin = url.origin === self.location.origin;
-  const isApi = url.pathname.startsWith('/detector/api/');
+  const url0 = new URL(evt.request.url);
+  // normalise: /detector/detector/api -> /detector/api
+  const path = url0.pathname.replace(/\/detector\/(?:detector\/)+/g, '/detector/');
+  const isSameOrigin = url0.origin === self.location.origin;
+  const isApi = path.startsWith('/detector/api/');
   if (isSameOrigin && isApi) {
     evt.respondWith((async () => {
       try {
-        // Αν υπάρξει κανονική απάντηση από το router/proxyGeneric, την επιστρέφει
-        return await proxyGeneric(evt.request);
+        return await proxyGeneric(evt.request);   // ήδη νορμαλίζει & προωθεί
       } catch (err) {
-        // Αν αποτύχει ή δεν βρεθεί endpoint -> επέστρεψε ασφαλές JSON αντί για 404
         return new Response(JSON.stringify({ error: 'offline_or_unhandled', sw: VERSION }), {
           status: 503,
           headers: { 'content-type': 'application/json' }
@@ -203,4 +203,5 @@ self.addEventListener('fetch', (evt) => {
     })());
   }
 });
+
 
