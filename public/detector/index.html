@@ -89,6 +89,24 @@ function addFromBulkTextarea(){
   closeBulk();
 }
 
+async function addFromBulkFile(file){
+  const btn = document.getElementById('bulkImportBtn');
+  try{
+    if (btn) btn.disabled = true;
+    const text = await file.text();
+    const ids = Array.from(new Set(parseTargetsFromText(text)));
+    if (!ids.length){ alert('Δεν βρέθηκαν έγκυρα TIC/KIC/EPIC στο αρχείο.'); return; }
+    await queueDetect(ids);
+    closeBulk();
+  } catch(e){
+    console.error(e);
+    alert('Import failed: ' + (e?.message || e));
+  } finally{
+    if (btn) btn.disabled = false;
+  }
+}
+
+
 let _batchRunning = false;
 
 async function queueDetect(targets){
@@ -1331,6 +1349,16 @@ document.getElementById('rhoThr').addEventListener('input', ()=>{
   document.getElementById('bulkBtn')?.addEventListener('click', openBulk);
   document.getElementById('bulkAddBtn')?.addEventListener('click', addFromBulkTextarea);
   document.getElementById('bulkCloseBtn')?.addEventListener('click', closeBulk);
+  // ---> εδώ πρόσθεσε:
+document.getElementById('bulkImportBtn')?.addEventListener('click', () => {
+  document.getElementById('bulkFile')?.click();
+});
+document.getElementById('bulkFile')?.addEventListener('change', async (e) => {
+  const inp = e.target;
+  const f = inp?.files?.[0];
+  if (f) await addFromBulkFile(f);
+  if (inp) inp.value = ''; // reset για να ξαναπυροδοτεί change με ίδιο αρχείο
+});
 });
 </script>
 
@@ -1628,8 +1656,10 @@ document.addEventListener('DOMContentLoaded', () => {
       <textarea id="bulkTA" rows="10" style="width:100%;font-family:ui-monospace,monospace"></textarea>
     </div>
     <div style="padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
-      <button id="bulkAddBtn"   type="button">Add</button>
-      <button id="bulkCloseBtn" type="button">Close</button>
+  <input id="bulkFile" type="file" accept=".txt,.csv" style="display:none">
+  <button id="bulkImportBtn" type="button" title="Import TIC/KIC/EPIC list from .txt or .csv">Import file</button>
+  <button id="bulkAddBtn"   type="button">Add</button>
+  <button id="bulkCloseBtn" type="button">Close</button>
     </div>
   </div>
 </div>
@@ -1652,3 +1682,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
