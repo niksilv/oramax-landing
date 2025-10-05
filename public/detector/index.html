@@ -120,7 +120,7 @@ async function runBatchDetect(list){
     const t = list[i];
     showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
     try{
-      await runFetch(t);
+      await runDetectForTarget(t);  // βάζει το t στο input και καλεί runFetch()
     }catch(e){
       showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${e?.message||e}`);
     }
@@ -1664,6 +1664,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
