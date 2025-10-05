@@ -114,28 +114,25 @@ async function queueDetect(targets){
 }
 
 async function runBatchDetect(list){
-  if (_batchRunning) return;
-  _batchRunning = true;
-  showBatchStatus(`Queued ${list.length} targets…`);
+  busyStart('Batch detect…');
 
-  // --- NEW: fresh pooled session ---
-  //allCands = [];
-  //for (const k in perTargetStore) delete perTargetStore[k];
-  //renderTable(allCands);
-
-  for (let i=0; i<list.length; i++){
+  for (let i = 0; i < list.length; i++){
     const t = list[i];
     showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
     try{
-      await runDetectForTarget(t);
+      await runFetch(t);
     }catch(e){
       showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${e?.message||e}`);
     }
+
+    // ✅ μικρή παύση 180 ms ανά TIC για να μειώσει latency / overload
+    await new Promise(r => setTimeout(r, 180));
   }
 
-  showBatchStatus('Done.');
-  _batchRunning = false;
+  busyStop();
 }
+
+  
 function showBatchStatus(msg){
   const el = document.getElementById('batchStatus');
   if (el) el.textContent = msg || '';
@@ -1667,6 +1664,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
