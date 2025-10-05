@@ -39,17 +39,94 @@ function openBrowse(){
 function closeBrowse(){ const m=document.getElementById('browseModal'); if(m) m.style.display='none'; }
 function renderBrowse(list, totalGuess){
   const el = document.getElementById('browseList');
-  el.innerHTML = (list||[]).map((s,i)=>`<div class="row" data-i="${i}">${(s.label||s.value)}</div>`).join('');
-  document.getElementById('browseStatus').textContent = `${list.length} results · page ${_browsePage+1}`;
+  el.innerHTML = (list||[]).map((s,i)=>`
+    <div class="row" data-i="${i}" style="align-items:center;gap:10px">
+      <input type="checkbox" class="brwPick" data-name="${(s.value||s.label)||''}">
+      <div style="flex:1;cursor:pointer">${(s.label||s.value)}</div>
+    </div>`).join('');
+
+  document.getElementById('browseStatus').textContent =
+    `${list.length} results · page ${_browsePage+1}`;
+
+  // κλικ στο κείμενο = toggle checkbox, διπλό-κλικ = μονή επιλογή & close
   Array.from(el.children).forEach(div=>{
+    const cb = div.querySelector('.brwPick');
+    const i = +div.getAttribute('data-i');
+    const s = list[i];
     div.addEventListener('click', (e)=>{
-      const i = +e.currentTarget.getAttribute('data-i');
-      const s = list[i]; const input=document.getElementById('ticInput');
+      if (e.target !== cb) cb.checked = !cb.checked;
+    });
+    div.addEventListener('dblclick', ()=>{
+      const input = document.getElementById('ticInput');
       applySuggestion(s, input);
       closeBrowse();
     });
   });
 }
+
+function addSelectedFromBrowse(){
+  const picks = [...document.querySelectorAll('.brwPick:checked')];
+  const ids = picks.map(x => (x.dataset.name || '').trim()).filter(Boolean);
+  if (!ids.length) return;
+  queueDetect(ids);
+  closeBrowse();
+}
+
+function openBulk(){ const m=document.getElementById('bulkModal'); if(m) m.style.display='flex'; }
+function closeBulk(){ const m=document.getElementById('bulkModal'); if(m) m.style.display='none'; }
+
+function parseTargetsFromText(txt){
+  return (txt || '')
+    .split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
+    .map(s => /^\d+$/.test(s) ? `TIC ${s}` : s.toUpperCase())
+    .filter(s => /^(TIC|KIC|EPIC)\s+\d+$/.test(s));
+}
+function addFromBulkTextarea(){
+  const raw = document.getElementById('bulkTA').value;
+  const ids = Array.from(new Set(parseTargetsFromText(raw)));
+  if (!ids.length) return;
+  queueDetect(ids);
+  closeBulk();
+}
+
+let _batchRunning = false;
+
+async function queueDetect(targets){
+  const unique = (targets||[]).map(s => s.trim()).filter(Boolean);
+  if (!unique.length) return;
+  await runBatchDetect(unique);
+}
+
+async function runBatchDetect(list){
+  if (_batchRunning) return;
+  _batchRunning = true;
+  showBatchStatus(`Queued ${list.length} targets…`);
+
+  for (let i=0; i<list.length; i++){
+    const t = list[i];
+    showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
+    try{
+      await runDetectForTarget(t);
+    }catch(e){
+      showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${e?.message||e}`);
+    }
+  }
+
+  showBatchStatus('Done.');
+  _batchRunning = false;
+}
+function showBatchStatus(msg){
+  const el = document.getElementById('batchStatus');
+  if (el) el.textContent = msg || '';
+}
+
+async function runDetectForTarget(target){
+  const inp = document.getElementById('ticInput');
+  if (inp) inp.value = target;
+  await runFetch(); // τρέχει το υπάρχον flow σου για έναν στόχο
+}
+
+  
 async function searchBrowse(){
   const q = (document.getElementById('browseQuery')?.value || _browseLastQuery || '').trim() || 'TIC ';
   _browseLastQuery = q;
@@ -235,6 +312,8 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
       <input type="text" id="urlInput" placeholder="https://.../lightcurve.csv (time,flux)" style="display:none; min-width:400px;" />
       <button id="runFetch">Fetch & Detect</button>
       <button id="browseBtn" type="button" title="Open target browser">Browse</button>
+      <button id="bulkBtn" type="button" title="Paste a list of targets">Bulk</button>
+      <span class="muted" id="batchStatus"></span>
       <button id="exportCsv">Export CSV</button>
       <button id="exportVettedCsv" title="Export only candidates with P ≥ threshold">Export Vetted CSV</button>
       <span class="muted" id="status"></span>
@@ -1145,6 +1224,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('browseNextBtn')?.addEventListener('click', browseNext);
   document.getElementById('browsePrevBtn')?.addEventListener('click', browsePrev);
   document.getElementById('browseQuery')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ _browsePage=0; searchBrowse(); }});
+  document.getElementById('browseAddBtn')?.addEventListener('click', addSelectedFromBrowse);
+  document.getElementById('bulkBtn')?.addEventListener('click', openBulk);
+  document.getElementById('bulkAddBtn')?.addEventListener('click', addFromBulkTextarea);
+  document.getElementById('bulkCloseBtn')?.addEventListener('click', closeBulk);
 });
 </script>
 
@@ -1430,11 +1513,32 @@ document.addEventListener('DOMContentLoaded', () => {
       <div>
         <button id="browsePrevBtn" type="button">Prev</button>
         <button id="browseNextBtn" type="button">Next</button>
+        
+        <!-- Bulk Modal -->
+<div id="bulkModal" style="position:fixed;inset:0;display:none;background:rgba(0,0,0,.35);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.2);width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center">
+      <b>Bulk targets</b>
+      <span class="muted">One per line (e.g., “TIC 268125229”)</span>
+    </div>
+    <div style="padding:10px 12px">
+      <textarea id="bulkTA" rows="10" style="width:100%;font-family:ui-monospace,monospace"></textarea>
+    </div>
+    <div style="padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
+      <button id="bulkAddBtn"   type="button">Add</button>
+      <button id="bulkCloseBtn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+        <!-- ΕΔΩ τοποθέτησέ το -->
+       <button id="browseAddBtn" type="button" title="Queue selected results">Add Selected</button>
       </div>
     </div>
   </div>
 </div>
 
+  
 <!-- ORAMAX centered footer -->
 <footer class="ox-footer">
   <div class="ox-footer-inner">
@@ -1445,6 +1549,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
