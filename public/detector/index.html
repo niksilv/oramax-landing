@@ -64,33 +64,6 @@ async function showTopSuggestOnFocus(){
   } catch {}
 }
 
-// === Live update suggestions as user types ===
-async function updateSuggest(q, { contains=false, limit=10, offset=0 } = {}){
-  const input = document.getElementById('ticInput');
-  if (!input) return;
-
-  q = (q ?? '').trim();
-  if (!q) { hideSuggest?.(); return; }
-
-  // περιμένουμε τον SW για να μην 404άρει
-  const ok = await ensureSWReady();
-  if (!ok) return;
-
-  try {
-    const mission = document.getElementById('missionSel')?.value || 'auto';
-    const domParam = (mission === 'TESS') ? '&domain=TESS'
-                  : (mission === 'Kepler') ? '&domain=Kepler' : '';
-    const containsParam = contains ? '&contains=1' : '';
-    const r = await apiGet(`/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}${containsParam}`);
-    if (!r.ok) return;
-
-    const list = normalizeSuggestData(await r.json());
-    if (list?.length) showSuggest(list, input); else hideSuggest?.();
-  } catch {}
-}
-
-
-
 // === Browse modal ===
 let _browsePage = 0;
 let _browseLastQuery = '';
@@ -1716,6 +1689,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 </body>
 </html>
+
 
 
 
