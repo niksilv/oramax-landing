@@ -16,7 +16,7 @@ async function showTopSuggestOnFocus(){
     const mission = document.getElementById('missionSel')?.value || 'auto';
     const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
     const q = 'TIC '; // generic to get common targets
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`, { headers:{ 'Accept':'application/json' } });
     if(!r.ok) return;
     const list = normalizeSuggestData(await r.json());
     if(list.length) showSuggest(list, input);
@@ -165,7 +165,7 @@ async function searchBrowse(){
   const mission = document.getElementById('missionSel')?.value || 'auto';
   const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
   try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`, { headers:{ 'Accept':'application/json' } });
     if(!r.ok){ renderBrowse([],0); return; }
     const list = normalizeSuggestData(await r.json());
     renderBrowse(list, 0);
@@ -517,16 +517,6 @@ body, #detector {
 
 <script>
 // ===== API bases (dynamic) =====
-const API_BASE =
-  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';   // ✅ πρόσθεσε /exoplanet
-
-// Χρησιμοποίησε το APP για /suggest & ελαφριά endpoints
-const APP_BASE =
-  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-    ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-app.fly.dev/exoplanet';
 
 const IS_LOCAL = ['localhost','127.0.0.1'].includes(location.hostname);
 
@@ -1353,7 +1343,7 @@ const updateSuggest = debounce(async ()=>{
   const containsParam = (onlyDigits || ticDigits) ? '&contains=1' : '';
 
   try{
-    const r = await fetch(`${API_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=10${containsParam}`,
+    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=10${containsParam}`,
                           { headers:{ 'Accept':'application/json' }});
     let list = [];
     if (r.ok) list = normalizeSuggestData(await r.json());
@@ -1739,9 +1729,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <script>
   // Χρησιμοποιούμε το σωστό backend για το fallback
-  window.API_BASE = (typeof window.API_BASE !== 'undefined' && window.API_BASE)
-  ? window.API_BASE
-  : 'https://oramax-app.fly.dev/exoplanet';
+window.API_BASE = window.API_BASE || API_BASE;
+window.APP_BASE = window.APP_BASE || APP_BASE;
 
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
@@ -2123,6 +2112,7 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
 
 
