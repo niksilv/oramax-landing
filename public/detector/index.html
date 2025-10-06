@@ -516,11 +516,34 @@ body, #detector {
   </div>
 
 <script>
-// ===== API base (dynamic) =====
+// ===== API bases (dynamic) =====
 const API_BASE =
   (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev';
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';   // ✅ πρόσθεσε /exoplanet
+
+// Χρησιμοποίησε το APP για /suggest & ελαφριά endpoints
+const APP_BASE =
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000/exoplanet'
+    : 'https://oramax-app.fly.dev/exoplanet';
+
+const IS_LOCAL = ['localhost','127.0.0.1'].includes(location.hostname);
+
+  // Βαριά endpoints (detect/predict/report) → API
+  const API_BASE = IS_LOCAL
+    ? 'http://localhost:8000/exoplanet'
+    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+
+  // Ελαφριά endpoints (suggest/autocomplete) → APP
+  const APP_BASE = IS_LOCAL
+    ? API_BASE                          // τοπικά δείξε στο ίδιο
+    : 'https://oramax-app.fly.dev/exoplanet';
+
+  // αν θες το βλέπουν κι άλλα scripts:
+  window.API_BASE = API_BASE;
+  window.APP_BASE = APP_BASE;
+
 
 /* ---------- Helpers ---------- */
 window.makeRegex = function(pattern, flags){
@@ -2100,5 +2123,6 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
 
