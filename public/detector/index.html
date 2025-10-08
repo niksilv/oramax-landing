@@ -530,6 +530,10 @@ const IS_LOCAL = ['localhost','127.0.0.1'].includes(location.hostname);
     ? API_BASE                          // τοπικά δείξε στο ίδιο
     : 'https://oramax-app.fly.dev/exoplanet';
 
+  // Same-origin προς τον SW proxy ώστε να μην έχουμε CORS
+  const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
+  const APP_BASE = IS_LOCAL ? API_BASE                              : '/detector/api';
+ 
   // αν θες το βλέπουν κι άλλα scripts:
   window.API_BASE = API_BASE;
   window.APP_BASE = APP_BASE;
@@ -1088,7 +1092,7 @@ async function runFetch(opts = {}) {
     };
 
     // 👇 ΠΕΡΝΑΜΕ ΤΟ signal ΣΤΟ fetch (για abort ανά TIC)
-    const res = await fetch(`${API_BASE}/fetch_detect`, {
+    const res = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1193,7 +1197,7 @@ async function runUpload(){
     window._skipNeighborsOnce = true;
 
     // POST στο /fetch_detect (ΟΧΙ /predict-file)
-    const res = await fetch(`${API_BASE}/fetch_detect`, {
+    const res = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1374,7 +1378,7 @@ async function runFit(){
       period: cand.period, duration: cand.duration, t0: cand.t0
     });
 
-    const res = await fetch(`${API_BASE}/predict`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
+    const res = await fetch(`${API_BASE}/predict?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
     if(!res.ok){ fitStatus.textContent='Error'; return; }
     const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
 
@@ -1413,7 +1417,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch(`${API_BASE}/report_pdf`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await fetch(`${API_BASE}/report_pdf?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -2112,6 +2116,7 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 </body>
 </html>
+
 
 
 
