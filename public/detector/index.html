@@ -520,20 +520,10 @@ body, #detector {
 
 const IS_LOCAL = ['localhost','127.0.0.1'].includes(location.hostname);
 
-  // Βαριά endpoints (detect/predict/report) → API
-  const API_BASE = IS_LOCAL
-    ? 'http://localhost:8000/exoplanet'
-    : 'https://oramax-exoplanet-api.fly.dev/exoplanet';
-
-  // Ελαφριά endpoints (suggest/autocomplete) → APP
-  const APP_BASE = IS_LOCAL
-    ? API_BASE                          // τοπικά δείξε στο ίδιο
-    : 'https://oramax-app.fly.dev/exoplanet';
-
   // Same-origin προς τον SW proxy ώστε να μην έχουμε CORS
-  const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
-  const APP_BASE = IS_LOCAL ? API_BASE                              : '/detector/api';
- 
+const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
+const APP_BASE = IS_LOCAL ? API_BASE : '/detector/api';
+
   // αν θες το βλέπουν κι άλλα scripts:
   window.API_BASE = API_BASE;
   window.APP_BASE = APP_BASE;
@@ -2114,6 +2104,7 @@ window.APP_BASE = window.APP_BASE || APP_BASE;
 
 </body>
 </html>
+
 
 
 
