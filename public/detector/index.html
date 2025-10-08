@@ -1731,41 +1731,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<script>
-  // Χρησιμοποιούμε το σωστό backend για το fallback
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
-
-  if ('serviceWorker' in navigator) {
-    // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
-    navigator.serviceWorker.getRegistration('/detector/').then(reg => {
-      if (!reg) {
-        navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
-          .catch(err => console.error('SW register failed', err));
-      } else {
-        // προαιρετικό: πες του να τσεκάρει για update στο background
-        reg.update().catch(()=>{});
-      }
-    });
-
-    // Κάνε reload ΜΙΑ φορά όταν γίνει controller για πρώτη φορά (όχι αμέσως)
-    if (!navigator.serviceWorker.controller) {
-      const onCtrl = () => {
-        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
-        if (!sessionStorage.getItem('sw-refreshed')) {
-          sessionStorage.setItem('sw-refreshed', '1');
-          location.reload();
-        }
-      };
-      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
-    } else {
-      // Μόλις έχουμε controller, καθάρισε το flag
-      sessionStorage.removeItem('sw-refreshed');
-    }
-  }
-</script>
-
-  
 <script src="/detector/engine-toggle.js?v=7"></script>
 
 <!-- Browse Modal -->
@@ -2113,9 +2078,43 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 })();   
 </script>
 
+<script>
+  // Χρησιμοποιούμε το σωστό backend για το fallback
+window.API_BASE = window.API_BASE || API_BASE;
+window.APP_BASE = window.APP_BASE || APP_BASE;
+
+  if ('serviceWorker' in navigator) {
+    // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
+    navigator.serviceWorker.getRegistration('/detector/').then(reg => {
+      if (!reg) {
+        navigator.serviceWorker.register('/detector/sw-oramax.js?v=52', { scope: '/detector/' })
+          .catch(err => console.error('SW register failed', err));
+      } else {
+        // προαιρετικό: πες του να τσεκάρει για update στο background
+        reg.update().catch(()=>{});
+      }
+    });
+
+    // Κάνε reload ΜΙΑ φορά όταν γίνει controller για πρώτη φορά (όχι αμέσως)
+    if (!navigator.serviceWorker.controller) {
+      const onCtrl = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+        if (!sessionStorage.getItem('sw-refreshed')) {
+          sessionStorage.setItem('sw-refreshed', '1');
+          location.reload();
+        }
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+    } else {
+      // Μόλις έχουμε controller, καθάρισε το flag
+      sessionStorage.removeItem('sw-refreshed');
+    }
+  }
+</script>
 
 </body>
 </html>
+
 
 
 
