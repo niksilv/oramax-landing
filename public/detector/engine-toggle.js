@@ -74,7 +74,7 @@
   }
 
   async function gaiaFallbackViaDetect(target, radius){
-    var API = (window.API_BASE || window.NEI_BASE || "https://oramax-app.fly.dev/exoplanet");
+    var API = (window.API_BASE || window.NEI_BASE || "/detector/api");
     var body = JSON.stringify({
       source: 'mast_spoc', mission: 'TESS', target,
       kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
