@@ -158,6 +158,11 @@ async function proxyGeneric(req) {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // ❗ Άσε τα /detector/api/* στον server (Next rewrites/handlers)
+  if (url.pathname.startsWith('/detector/api/')) {
+    return; // μην κάνεις respondWith -> περνάει στο network/Next
+  }
+
   // μόνο same-origin & scope /detector/
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.includes('/detector/')) return;
