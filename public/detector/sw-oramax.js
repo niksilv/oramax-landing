@@ -1,10 +1,9 @@
-// OramaX SW proxy v52 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
-const VERSION = 'v52';
+// OramaX SW proxy v60 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
+const VERSION = 'v60';
 
 const BACKENDS = [
-  'https://oramax-app.fly.dev/exoplanet',           // production (πρώτο)
-  'https://oramax-exoplanet-api.fly.dev/exoplanet', // εναλλακτικό
-  'http://127.0.0.1:8000/exoplanet'                 // τοπικό dev
+  'https://oramax-exoplanet-api.fly.dev/exoplanet', // ΠΡΩΤΟ
+  'http://127.0.0.1:8000/exoplanet'
 ];
 
 // ----- κορυφή αρχείου (κοντά στα άλλα const) -----
