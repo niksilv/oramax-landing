@@ -1,51 +1,51 @@
-﻿// OramaX SW proxy v42 — PDF always client-side, Gaia robust fallbacks
-const VERSION = 'v42';
+// OramaX SW proxy v52 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
+const VERSION = 'v52';
+
 const BACKENDS = [
-  self.API_BASE, // new-style
-  'http://127.0.0.1:8000'            // legacy root
+  'https://oramax-app.fly.dev/exoplanet',           // production (πρώτο)
+  'https://oramax-exoplanet-api.fly.dev/exoplanet', // εναλλακτικό
+  'http://127.0.0.1:8000/exoplanet'                 // τοπικό dev
 ];
 
-self.addEventListener('install', e => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+// ----- κορυφή αρχείου (κοντά στα άλλα const) -----
+// production == oramax.space (οτιδήποτε άλλο εκτός localhost)
+const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith('/detector/')) return;
+// ΠΑΝΤΑ same-origin, για να μην έχουμε CORS
+const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
+const APP_BASE = API_BASE;
 
-  // 1) PDF: πάντα client-side (κόβουμε δρόμο)
-  if (url.pathname === '/detector/api/report_pdf') {
-    event.respondWith(handlePdfDirect(event.request));
-    return;
+// Αν υπάρχουν global που τα διαβάζουν άλλα scripts, άφησέ τα:
+window.API_BASE = window.API_BASE || API_BASE;
+window.APP_BASE = window.APP_BASE || APP_BASE;
+
+
+// --------- Helpers ---------
+function join(base, path) {
+  if (!base.endsWith('/')) base += '/';
+  return base + path.replace(/^\//, '');
+}
+function normalizeNeighbors(nei, defaultRadius) {
+  if (!nei) return { available: false, reason: 'n/a', radius_arcsec: defaultRadius };
+  if (typeof nei.available === 'boolean') {
+    if (!('radius_arcsec' in nei)) nei.radius_arcsec = defaultRadius;
+    return nei;
   }
+  if (Array.isArray(nei)) return { available: true, radius_arcsec: defaultRadius, items: nei };
+  const items = nei.items || nei.sources || nei.data || [];
+  return { available: Array.isArray(items) && items.length > 0, radius_arcsec: (nei.radius_arcsec || defaultRadius), items };
+}
+function jsonError(status, msg) {
+  return new Response(JSON.stringify({ error: msg, sw: VERSION }), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `err-${VERSION}` }
+  });
+}
 
-  // 2) Gaia neighbors με fallbacks
-  if (url.pathname === '/detector/api/gaia_neighbors') {
-    event.respondWith(handleGaiaNeighbors(event.request));
-    return;
-  }
-
-  // 3) Άλλα /detector/api/* → απλό proxy με fallbacks
-  if (url.pathname.startsWith('/detector/api/')) {
-    event.respondWith(proxyGeneric(event.request));
-  }
-});
-
-// ---------- PDF (always client-side) ----------
-async function handlePdfDirect(req){
-  try{
-    let savedBodyBuf = null, normalized = null;
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      savedBodyBuf = await req.clone().arrayBuffer();
-      const ct = req.headers.get('content-type') || '';
-      if (ct.includes('application/json')) {
-        try {
-          const body = JSON.parse(new TextDecoder().decode(savedBodyBuf));
-          normalized = normalizePdfPayload(body);
-        } catch {}
-      }
-    }
-    const pdfBytes = buildSimplePdfBytes(normalized || {});
+// --------- PDF (always client-side) ---------
+async function handlePdfDirect(req) {
+  try {
+    const pdfBytes = new TextEncoder().encode('%PDF-1.4\n%…minimal…\n%%EOF');
     return new Response(pdfBytes, {
       status: 200,
       headers: {
@@ -54,167 +54,166 @@ async function handlePdfDirect(req){
         'X-Oramax-SW': `client-pdf-${VERSION}`
       }
     });
-  }catch(err){
-    return jsonError(500, `SW PDF error: ${String(err)}`);
+  } catch (e) {
+    return jsonError(500, `SW PDF error: ${String(e)}`);
   }
 }
 
-// ---------- Gaia neighbors (robust) ----------
-async function handleGaiaNeighbors(req){
-  const url = new URL(req.url);
+// --------- GAIA neighbors (GET-first, smart POST-fallback) ---------
+async function handleGaiaNeighbors(req) {
+  // normalise μονοπάτι (π.χ. /detector/detector/api → /detector/api)
+  const url0 = new URL(req.url);
+  const url = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
-  const radius = parseFloat(url.searchParams.get('radius') || '60');
+  const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
-  // 1) POST /fetch_detect (neighbors only)
+  // 1) Προσπάθησε GET /gaia_neighbors σε κάθε backend
+  for (const base of BACKENDS) {
+    try {
+      const up = join(base, 'gaia_neighbors') + `?target=${encodeURIComponent(targetName)}&radius=${radius}`;
+      const r = await fetch(up, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (r.ok) {
+        const buf = await r.arrayBuffer();
+        return new Response(buf, {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-get-${VERSION}` }
+        });
+      }
+    } catch { /* try next */ }
+  }
+
+  // 2) Fallback: POST /fetch_detect (neighbors only) με σωστή αποστολή (TIC/KIC/EPIC)
+  const tgt = (targetName || '').trim().toUpperCase();
+  const guess =
+    tgt.startsWith('TIC')  ? { source:'mast_spoc', mission:'TESS' } :
+    tgt.startsWith('KIC')  ? { source:'kepler',    mission:'Kepler' } :
+    tgt.startsWith('EPIC') ? { source:'k2',        mission:'K2' } :
+                             { source:'mast_spoc', mission:'TESS' };
+
   const body = JSON.stringify({
-    source: 'mast_spoc', mission: 'TESS', target: targetName,
-    kpeaks: 0, detrend:'none', quality:false, remove_outliers:false, sigma:5,
-    neighbors: true, neighbors_radius: Number.isFinite(radius) ? radius : 60
+    source: guess.source, mission: guess.mission, target: targetName,
+    kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+    neighbors: true, neighbors_radius: radius, centroid: false
   });
-  const initPost = { method:'POST', headers: {'Content-Type':'application/json'}, body, redirect:'follow' };
-  const tries = [];
-  for (const base of BACKENDS) tries.push(fetch(join(base, 'fetch_detect'), initPost).catch(e=>e));
+  const initPost = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body };
 
-  // 2) GET /exoplanet/gaia_neighbors?...
-  for (const base of BACKENDS) tries.push(fetch(join(base, 'gaia_neighbors') + url.search, {redirect:'follow'}).catch(e=>e));
-
-  // εκτέλεσε σειριακά με early success
-  let last = null;
-  for (const p of tries){
-    try{
-      const r = await p;
-      if (r && r.ok) return r; // πέρασε ένας
-      last = r;
-    }catch(e){ last = e; }
-  }
-  const detail = (last && typeof last.text === 'function')
-    ? await last.text().catch(()=>String(last)) : String(last);
-  return jsonError(502, `Gaia neighbors failed on all backends. ${detail}`);
-}
-
-// ---------- Generic proxy for other /detector/api/* ----------
-async function proxyGeneric(req){
-  const url = new URL(req.url);
-  const rest = url.pathname.replace(/^\/detector\/api\//,'');
-  const candidates = [];
-  for (const base of BACKENDS) candidates.push(join(base, rest) + url.search);
-
-  const init = { method:req.method, headers:new Headers(req.headers), redirect:'follow' };
-  if (req.method !== 'GET' && req.method !== 'HEAD') init.body = await req.clone().arrayBuffer();
-
-  let last = null;
-  for (const target of candidates) {
-    try{
-      const r = await fetch(target, init);
-      if (r.status !== 404 && r.status !== 405) return r;
-      last = r;
-    }catch(e){ last = e; }
-  }
-  const detail = (last && typeof last.text === 'function')
-    ? await last.text().catch(()=>String(last)) : String(last);
-  return jsonError(502, `Backend not reachable or endpoint missing.\n${detail}`);
-}
-
-// ---------- Helpers ----------
-function join(base, path){ if (!base.endsWith('/')) base += '/'; return base + path.replace(/^\//,''); }
-function num(v){ const n=Number(v); return Number.isFinite(n)?n:null; }
-function jsonError(status, msg){
-  return new Response(JSON.stringify({ error: msg, detail: msg, sw: VERSION }), {
-    status, headers: { 'Content-Type':'application/json', 'X-Oramax-SW': `err-${VERSION}` }
-  });
-}
-
-// old → new schema for PDF
-function normalizePdfPayload(body){
-  const out = { target:'', preprocess:{}, candidates:[], neighbors:{available:false}, pfold:null, centroid:null };
-  if (!body || typeof body !== 'object') return out;
-
-  if (body.meta || body.candidate) {
-    out.target = String(body?.meta?.target || body?.meta?.tic || '');
-    out.preprocess = body?.preprocess || {};
-    const c = body.candidate || {};
-    out.candidates = [{
-      period: num(c.period), duration: num(c.duration), depth: num(c.depth),
-      power: num(c.power), p_planet: num(c.probability ?? c.p_planet ?? 0),
-      snr: num(c?.fit?.snr), delta_bic: num(c?.fit?.delta_bic),
-      odd_even_delta_ppm: num(c?.vetting?.odd_even_diff_ppm) ?? 0,
-      secondary: !!(c?.vetting?.has_secondary_like),
-      centroid_ok: (c?.centroid?.available===true) ? !c?.centroid?.suspect_beb : null,
-      t0: num(c.t0)
-    }];
-    out.neighbors = body?.neighbors || { available:false };
-    return out;
+  for (const base of BACKENDS) {
+    try {
+      const r = await fetch(join(base, 'fetch_detect'), initPost);
+      if (!r.ok) continue;
+      const j = await r.json();
+      const nei = normalizeNeighbors(j.neighbors || j, radius);
+      return new Response(JSON.stringify(nei), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fd-${VERSION}` }
+      });
+    } catch { /* try next */ }
   }
 
-  out.target = String(body.target || '');
-  out.preprocess = body.preprocess || {};
-  out.candidates = Array.isArray(body.candidates) ? body.candidates : [];
-  out.neighbors = body.neighbors || { available:false };
-  out.pfold = body.pfold || null;
-  out.centroid = body.centroid || null;
-  return out;
+  return new Response(JSON.stringify({
+    available: false, reason: 'Gaia neighbors failed on all backends.', radius_arcsec: radius
+  }), { status: 502, headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fail-${VERSION}` } });
 }
 
-// Tiny PDF (text only) — always valid
-function buildSimplePdfBytes(data){
-  const title = `OramaX · Vetting Report (${VERSION})`;
-  const target = (data?.target || 'target').toString();
-  const lines = [];
+// --------- Generic proxy (/detector/api/*) ---------
+async function proxyGeneric(req) {
+  const url0 = new URL(req.url);
+  // κανονικοποίηση /detector/detector/api -> /detector/api
+  const url  = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
 
-  lines.push(`Target: ${target}`);
-  const cands = Array.isArray(data?.candidates) ? data.candidates : [];
-  if (!cands.length) {
-    lines.push(`No candidates provided.`);
-  } else {
-    lines.push(`Candidates: ${cands.length}`);
-    cands.slice(0,12).forEach((c,i)=>{
-      const p  = isFinite(c.period)   ? c.period.toFixed(6)   : '';
-      const du = isFinite(c.duration) ? c.duration.toFixed(6) : '';
-      const d  = isFinite(c.depth)    ? c.depth.toExponential(2) : '';
-      const pow= isFinite(c.power)    ? c.power.toFixed(3)    : '';
-      const pp = isFinite(c.p_planet) ? c.p_planet.toFixed(3) : '';
-      lines.push(`#${i+1}  P=${p} d  dur=${du} d  depth=${d}  power=${pow}  Pp=${pp}`);
-    });
+  // path μετά το /detector/api/
+  const rest = url.pathname.replace(/^\/detector\/api\//, '');
+
+  // διάβασε & αφαίρεσε το flag __backend
+  const forceApi = url.searchParams.get('__backend') === 'api';
+  url.searchParams.delete('__backend');
+  const query = url.searchParams.toString();
+
+  // προτεραιότητα upstreams: API πρώτα για KIC/EPIC, αλλιώς APP
+  const upstreams = forceApi
+    ? [API_BASE, APP_BASE, 'http://127.0.0.1:8000/exoplanet']
+    : [APP_BASE, API_BASE, 'http://127.0.0.1:8000/exoplanet'];
+
+  const init = {
+    method: req.method,
+    headers: new Headers(req.headers),
+    redirect: 'follow'
+  };
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    init.body = await req.clone().arrayBuffer();
   }
-  return makePdf({ title, lines });
-}
+  // αφαίρεσε headers που προκαλούν CORS upstream
+  init.headers.delete('Origin');
+  init.headers.delete('Referer');
 
-function makePdf({ title, lines }) {
-  const esc = s => (s||'').toString().replace(/([()\\])/g, '\\$1');
-  const header = '%PDF-1.4\n';
-  let y = 760;
-  let stream = 'BT\n/F1 18 Tf\n72 ' + y + ' Td\n(' + esc(title) + ') Tj\n';
-  y -= 24;
-  stream += '/F1 12 Tf\n72 ' + y + ' Td\n';
-  lines.forEach((ln, idx) => { if (idx>0) stream += '0 -16 Td\n'; stream += '(' + esc(ln) + ') Tj\n'; });
-  stream += 'ET';
-  const cont = `4 0 obj << /Length ${stream.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
-  const font = '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n';
-  const page = '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj\n';
-  const pages = '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n';
-  const catalog = '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n';
-
-  let pdf = header;
-  const offsets = [0];
-  function add(part){ offsets.push(pdf.length); pdf += part; }
-  add(catalog); add(pages); add(page); add(cont); add(font);
-
-  const xrefStart = pdf.length;
-  pdf += `xref\n0 6\n0000000000 65535 f \n`;
-  for (let i=1;i<=5;i++){
-    const off = offsets[i].toString().padStart(10, '0');
-    pdf += `${off} 00000 n \n`;
+  let lastErr = null;
+  for (const base of upstreams) {
+    try {
+      const r = await fetch(join(base, rest) + (query ? '?' + query : ''), init);
+      if (r.status !== 404 && r.status !== 405) return r;  // δέξου το πρώτο «ουσιαστικό» response
+      lastErr = `HTTP ${r.status}`;
+    } catch (e) {
+      lastErr = e?.message || String(e);
+    }
   }
-  pdf += `trailer << /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
-  return new TextEncoder().encode(pdf);
+  return jsonError(502, `Backend not reachable or endpoint missing. ${lastErr || ''}`);
 }
+
+// --------- Router ---------
+self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+
+  // ❗ Άσε τα /detector/api/* στον server (Next rewrites/handlers)
+  if (url.pathname.startsWith('/detector/api/')) {
+    return; // μην κάνεις respondWith -> περνάει στο network/Next
+  }
+
+  // μόνο same-origin & scope /detector/
+  if (url.origin !== self.location.origin) return;
+  if (!url.pathname.includes('/detector/')) return;
+
+  // PDF
+  if (url.pathname.includes('/detector/api/report_pdf')) {
+    event.respondWith(handlePdfDirect(event.request));
+    return;
+  }
+
+  // GAIA (πιάσε κάθε παραλλαγή /api/gaia_neighbors)
+  if (/\/detector(?:\/detector)*\/api\/gaia_neighbors$/.test(url.pathname)) {
+    event.respondWith(handleGaiaNeighbors(event.request));
+    return;
+  }
+
+  // Generic /detector/api/*
+  if (url.pathname.includes('/detector/api/')) {
+    event.respondWith(proxyGeneric(event.request));
+    return;
+  }
+});
 
 console.log(`OramaX SW proxy ready (${VERSION})`);
 
-
-
-
-
-
+// ---------- Catch-all fallback για αποφυγή 404 στο /detector/api/* ----------
+self.addEventListener('fetch', (evt) => {
+  const url0 = new URL(evt.request.url);
+  // normalise: /detector/detector/api -> /detector/api
+  const path = url0.pathname.replace(/\/detector\/(?:detector\/)+/g, '/detector/');
+  const isSameOrigin = url0.origin === self.location.origin;
+  const isApi = path.startsWith('/detector/api/');
+  if (isSameOrigin && isApi) {
+    evt.respondWith((async () => {
+      try {
+        return await proxyGeneric(evt.request);   // ήδη νορμαλίζει & προωθεί
+      } catch (err) {
+        return new Response(JSON.stringify({ error: 'offline_or_unhandled', sw: VERSION }), {
+          status: 503,
+          headers: { 'content-type': 'application/json' }
+        });
+      }
+    })());
+  }
+});
 
 

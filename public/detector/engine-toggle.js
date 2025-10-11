@@ -1,4 +1,5 @@
-﻿(function(){
+/* OramaX engine toggle + GAIA safe fetch */
+(function(){
   function ensureEngineUI(){
     if (document.getElementById("engineSelect")) return;
     var box = document.createElement("div");
@@ -15,7 +16,10 @@
     var optC = document.createElement("option"); optC.value = "cnn"; optC.textContent = "CNN";
     sel.appendChild(optB); sel.appendChild(optC);
     var KEY = "oramax_engine"; var init = localStorage.getItem(KEY) || "bls"; sel.value = init;
-    sel.addEventListener("change", function __fix__(){ localStorage.setItem(KEY, sel.value); window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } })); });
+    sel.addEventListener("change", function __fix__(){
+      localStorage.setItem(KEY, sel.value);
+      window.dispatchEvent(new CustomEvent("oramax-engine-change", { detail: { engine: sel.value } }));
+    });
     box.appendChild(label); box.appendChild(sel); document.body.appendChild(box);
   }
 
@@ -24,11 +28,68 @@
   window.lastPreprocess = window.lastPreprocess || {}; window.lastCandidates = window.lastCandidates || [];
   window.lastNeighbors = window.lastNeighbors || {};
 
-  function _isML(url){
-    return /\/ml\/score_lightcurve\b/.test(url);       // πιάνει και /exoplanet/ και /detector/api/
+  function _isML(url){ return /\/ml\/score_lightcurve\b/.test(url); }
+  function _isPDF(url){ return /\/report_pdf\b|\/report\/pdf\b/.test(url); }
+  function _isGaia(url){ return /\/gaia_neighbors\b/.test(url); }
+  function _isDetect(url){ return /\/exoplanet\/fetch_detect\b/.test(url); }
+
+  function normalizeGaiaUrl(uStr){
+    // 1) canonical προς SW scope
+    if (/^detector\/api\/gaia_neighbors\b/.test(uStr)) uStr = "/" + uStr;
+    var u = new URL(uStr, location.origin);
+    // 2) αν είναι απευθείας στο fly.dev, ξαναστείλ’ το στο SW route
+    if (/oramax-exoplanet-api\.fly\.dev\/exoplanet\/gaia_neighbors\b/.test(u.href)) {
+      var repl = new URL("/detector/api/gaia_neighbors", location.origin);
+      u.searchParams.forEach((v,k)=>repl.searchParams.set(k,v));
+      u = repl;
+    }
+    // 3) καθάρισε διπλό /detector/
+    u.pathname = u.pathname.replace(/\/detector\/(?:detector\/)+/g, "/detector/");
+    return u.toString();
   }
-  function _isPDF(url){
-    return /\/report_pdf\b|\/report\/pdf\b/.test(url); // πιάνει /report_pdf (frontend) ή /report/pdf (backend)
+
+  function extractGaiaParams(uStr){
+    var u = new URL(uStr, location.origin);
+    return {
+      target: u.searchParams.get("target") || u.searchParams.get("tic") || "",
+      radius: Number(u.searchParams.get("radius") || "60") || 60
+    };
+  }
+
+  function normalizeNeighbors(nei, fallbackRadius){
+    if (!nei) return { available:false, radius_arcsec:fallbackRadius, items:[], reason:"empty" };
+    if (Array.isArray(nei)) {
+      return { available: nei.length>0, radius_arcsec:fallbackRadius, items: nei, reason: nei.length?undefined:"empty" };
+    }
+    if (Array.isArray(nei.items)) {
+      return { available: nei.items.length>0, radius_arcsec: (nei.radius_arcsec||fallbackRadius), items: nei.items, reason: nei.items.length?undefined:(nei.reason||"empty") };
+    }
+    // ήδη normalized ή άγνωστο
+    return {
+      available: !!nei.available && Array.isArray(nei.items) && nei.items.length>0,
+      radius_arcsec: nei.radius_arcsec || fallbackRadius,
+      items: Array.isArray(nei.items)?nei.items:[],
+      reason: nei.reason || (Array.isArray(nei.items)&&nei.items.length?undefined:"empty")
+    };
+  }
+
+  async function gaiaFallbackViaDetect(target, radius){
+    var API = (window.API_BASE || window.NEI_BASE || "/detector/api");
+    var body = JSON.stringify({
+      source: 'mast_spoc', mission: 'TESS', target,
+      kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
+      neighbors: true, neighbors_radius: radius, centroid: false
+    });
+    var r = await origFetch(API + "/fetch_detect", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var j = await r.json();
+    var safe = normalizeNeighbors(j.neighbors || j, radius);
+    // store + event
+    window.lastNeighbors = safe;
+    window.dispatchEvent(new CustomEvent("oramax-neighbors", { detail: safe }));
+    return safe;
   }
 
   window.fetch = async function(url, options){
@@ -36,8 +97,10 @@
       var isStr = typeof url === "string";
       if(!isStr) return origFetch(url, options);
 
-      var isML = _isML(url);
-      var isPDF = _isPDF(url);
+      var isML   = _isML(url);
+      var isPDF  = _isPDF(url);
+      var isGaia = _isGaia(url);
+      var isDet  = _isDetect(url);
 
       // inject engine στο ML
       if (isML && options && typeof options.body === "string") {
@@ -50,21 +113,74 @@
         }catch(e){}
       }
 
+      // --- GAIA: canonicalize URL ώστε να περνάει από τον SW ---
+      if (isGaia) {
+        url = normalizeGaiaUrl(url);
+      }
+
       var resp = await origFetch(url, options);
 
-      // αποθήκευση ML αποτελεσμάτων
-      if (isML) {
+      // -------- Α) GAIA GET: έλεγχος & fallback ----------
+      if (isGaia) {
+        let needFallback = !resp || !resp.ok;
+        let peek = null;
+        if (!needFallback) {
+          try { peek = await resp.clone().json(); }
+          catch { needFallback = true; }
+        }
+        if (!needFallback && peek) {
+          if (peek.available === false) needFallback = true;
+          else if (Array.isArray(peek.items) && peek.items.length === 0) needFallback = true;
+          else if (Array.isArray(peek) && peek.length === 0) needFallback = true;
+          // store από το κανονικό GET
+          if (!needFallback) {
+            const safe = normalizeNeighbors(peek, extractGaiaParams(url).radius);
+            window.lastNeighbors = safe;
+            window.dispatchEvent(new CustomEvent("oramax-neighbors", { detail: safe }));
+          }
+        }
+        if (needFallback) {
+          try {
+            const p = extractGaiaParams(url);
+            const safe = await gaiaFallbackViaDetect(p.target, p.radius);
+            return new Response(JSON.stringify(safe), {
+              status: 200, headers: { 'Content-Type': 'application/json', 'X-Oramax-Client': 'gaia-fallback' }
+            });
+          } catch {}
+        }
+      }
+
+      // -------- Β) POST /exoplanet/fetch_detect: μάζεψε neighbors ----------
+      if (isDet) {
         try{
-          var data = await resp.clone().json();
-          window.lastMeta       = data.meta || {};
-          window.lastPfold      = data.pfold || {};
-          window.lastPreprocess = data.preprocess || {};
-          window.lastCandidates = data.candidates || [];
-          window.lastNeighbors  = data.neighbors || {};
+          const data = await resp.clone().json();
+          const nei = normalizeNeighbors(data && (data.neighbors || data), 60);
+          if (nei && (nei.available || (Array.isArray(nei.items) && nei.items.length))) {
+            window.lastNeighbors = nei;
+            window.dispatchEvent(new CustomEvent("oramax-neighbors", { detail: nei }));
+          }
+          // αποθήκευσε και τα υπόλοιπα αν υπάρχουν
+          if (data && data.meta)       window.lastMeta = data.meta;
+          if (data && data.pfold)      window.lastPfold = data.pfold;
+          if (data && data.preprocess) window.lastPreprocess = data.preprocess;
+          if (data && data.candidates) window.lastCandidates = data.candidates;
         }catch(e){}
       }
 
-      // εμπλουτισμός PDF body (αν πάει server-side)
+      // αποθήκευση ML αποτελεσμάτων (αν έρθουν από ML endpoint)
+      if (isML) {
+        try{
+          var data2 = await resp.clone().json();
+          window.lastMeta       = data2.meta || {};
+          window.lastPfold      = data2.pfold || {};
+          window.lastPreprocess = data2.preprocess || {};
+          window.lastCandidates = data2.candidates || [];
+          window.lastNeighbors  = normalizeNeighbors(data2.neighbors || {}, 60);
+          window.dispatchEvent(new CustomEvent("oramax-neighbors", { detail: window.lastNeighbors }));
+        }catch(e){}
+      }
+
+      // εμπλουτισμός PDF body
       if (isPDF && options && typeof options.body === "string") {
         try{
           var p2 = JSON.parse(options.body||"{}");
@@ -86,11 +202,3 @@
   document.addEventListener("DOMContentLoaded", ensureEngineUI);
 })();
 console.log("engine-toggle (paths+top-right) loaded");
-
-
-
-
-
-
-
-

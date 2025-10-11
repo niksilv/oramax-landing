@@ -1,96 +1,138 @@
 // app/our-project/our-challenge/page.tsx
-import BgHero from "@/components/BgHero";
+export const metadata = {
+  title: "How it works? — Orama X",
+  description:
+    "Step-by-step manual explaining how Orama X detects and vets exoplanets using AI/ML tools and NASA datasets.",
+};
 
-export const metadata = { title: "Our Challenge — Orama X" };
-
-export default function ChallengePage() {
+export default function OurChallengePage() {
   return (
-    <main className="min-h-[80vh] px-4 py-10">
-      <div className="max-w-6xl mx-auto space-y-12">
-        <BgHero image="/images/challenge.jpg" title="Our" subtitle="Challenge">
-          <p className="max-w-3xl mx-auto">
-            Why exoplanet discovery is hard—and how Orama X raises trust,
-            speed, and reproducibility for the NASA ecosystem.
-          </p>
-        </BgHero>
+    <main
+      className="relative min-h-screen bg-cover bg-center text-white"
+      style={{ backgroundImage: "url('/images/challenge.jpg')" }}
+    >
+      <div className="absolute inset-0 bg-black/60" />
 
-        {/* Problem framing */}
-        <section className="space-y-4">
-          <h2 className="text-2xl md:text-3xl font-semibold">The Problem We’re Tackling</h2>
-          <p className="text-slate-300 leading-relaxed">
-            Space-based surveys like <b>TESS</b> and <b>Kepler</b> produce millions of light curves. 
-            Turning those into <b>reliable</b> exoplanet candidates is challenging: stellar variability,
-            systematics, blended sources, and data gaps all conspire to create false positives. 
-            Traditional vetting is <b>slow</b>, often <b>manual</b>, and difficult to <b>reproduce</b> end-to-end.
-          </p>
-          <ul className="list-disc pl-6 space-y-1 text-slate-300">
-            <li><b>Scale:</b> millions of targets, multiple observing sectors, evolving calibrations.</li>
-            <li><b>Ambiguity:</b> eclipsing binaries and instrumental artifacts mimic transit signals.</li>
-            <li><b>Blends:</b> crowded fields make centroid motion and neighbor contamination critical.</li>
-            <li><b>Traceability:</b> ad-hoc settings hinder auditability and collaboration.</li>
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-20 space-y-10 prose prose-invert">
+        <h1 className="text-4xl md:text-6xl font-bold text-center mb-10">
+          How it works?
+        </h1>
+
+        <section>
+          <h2>1) Before you start</h2>
+          <ul>
+            <li><b>Browser:</b> Use a modern browser (Chrome, Edge, Firefox, Safari). Keep a single tab active when running detections.</li>
+            <li><b>Data access:</b> Orama X fetches light curves and metadata from MAST/SPOC and can query TESSCut and Gaia DR3.</li>
+            <li><b>Terminology:</b> Light curve = Flux vs time; Phase folded = folded on candidate period; BLS = Box Least Squares; Vetting = checks before confirming a planet; P(planet) = AI classifier probability.</li>
           </ul>
         </section>
 
-        {/* Our approach */}
-        <section className="space-y-4">
-          <h2 className="text-2xl md:text-3xl font-semibold">Our Approach</h2>
-          <p className="text-slate-300 leading-relaxed">
-            Orama X unifies <b>classic signal processing</b> with <b>modern ML</b> and 
-            contextual information from <b>Gaia</b>. We automate the heavy lifting while 
-            keeping every decision <b>transparent</b> and <b>auditable</b>.
+        <section>
+          <h2>2) Detection panel overview</h2>
+          <p>
+            The main panel lets you choose a source, configure preprocessing, run
+            a period search, and inspect candidates. Use <b>Fetch &amp; Detect</b> to
+            download data, apply filters, and search for transit signals.
           </p>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="rounded-xl p-5">
-              <h3 className="font-semibold mb-2">Technical Pillars</h3>
-              <ul className="list-disc pl-6 space-y-1 text-slate-300">
-                <li><b>Preprocessing:</b> quality masks, outlier rejection, configurable detrending.</li>
-                <li><b>Detection:</b> <b>BLS</b> for periodicity plus a lightweight <b>CNN</b> for ranking.</li>
-                <li><b>Context:</b> <b>Gaia neighbors</b>, centroid consistency, and dilution checks.</li>
-                <li><b>Diagnostics:</b> phase-folded views, odd/even, secondary search, ΔBIC, SNR.</li>
-              </ul>
-            </div>
-            <div className="rounded-xl p-5">
-              <h3 className="font-semibold mb-2">Trust & Reproducibility</h3>
-              <ul className="list-disc pl-6 space-y-1 text-slate-300">
-                <li><b>Deterministic runs:</b> fixed seeds and explicit parameter capture.</li>
-                <li><b>Full provenance:</b> inputs, settings, and model versions saved with results.</li>
-                <li><b>One-click reports:</b> printable PDFs and CSV exports for follow-up teams.</li>
-                <li><b>Human-in-the-loop:</b> interactive vetting for rapid collaborative review.</li>
-              </ul>
-            </div>
-          </div>
         </section>
 
-        {/* What success looks like */}
-        <section className="space-y-4">
-          <h2 className="text-2xl md:text-3xl font-semibold">What Success Looks Like</h2>
-          <p className="text-slate-300 leading-relaxed">
-            We measure impact across three axes—<b>precision</b>, <b>velocity</b>, and <b>clarity</b>:
-          </p>
-          <ul className="list-disc pl-6 space-y-1 text-slate-300">
-            <li><b>Higher precision</b> on vetted candidates via centroid and neighbor screening.</li>
-            <li><b>Faster triage</b> of sector-scale datasets with reproducible pipelines.</li>
-            <li><b>Clearer hand-offs</b> to observers through standardized, audit-ready reports.</li>
-          </ul>
-        </section>
-
-        {/* Roadmap */}
-        <section className="space-y-4">
-          <h2 className="text-2xl md:text-3xl font-semibold">Roadmap</h2>
-          <ol className="list-decimal pl-6 space-y-1 text-slate-300">
-            <li><b>Model hardening:</b> balanced training sets, calibration drifts, uncertainty estimates.</li>
-            <li><b>Broader coverage:</b> cadence-aware handling of additional missions and sectors.</li>
-            <li><b>Follow-up hooks:</b> export formats for RV/photometric scheduling pipelines.</li>
-            <li><b>Open benchmarks:</b> side-by-side comparisons on public vetting sets.</li>
+        <section>
+          <h2>3) Single-target workflow</h2>
+          <ol>
+            <li>Enter target ID (TIC / EPIC / Kepler) and keep Mission = auto.</li>
+            <li>Choose preprocessing: quality mask ON, outlier σ = 5, detrend = flatten.</li>
+            <li>Enable centroid vetting and Gaia neighbors for contamination checks.</li>
+            <li>Set thresholds (p = 0.5–0.8, centroid σ thr = 3.0, Gaia radius = 60″).</li>
+            <li>Click <b>Fetch &amp; Detect</b> to run the search, then inspect candidates visually.</li>
+            <li>Check metrics like SNR, ΔBIC, Odd/Even Δ, Secondary?, and Centroid.</li>
+            <li>Fit the transit with <b>batman</b>, review parameters, and export vetted results.</li>
           </ol>
         </section>
 
-        {/* CTA */}
-        <section className="rounded-xl p-6">
-          <h3 className="text-xl font-semibold mb-2">Partner with Us</h3>
-          <p className="text-slate-300 leading-relaxed">
-            We welcome collaborations with survey teams and follow-up networks.
-            Let’s validate at scale, publish reproducible results, and accelerate the discovery of new worlds.
+        <section>
+          <h2>4) Batch workflow</h2>
+          <p>
+            Analyze multiple targets using the same settings. Paste TICs/EPICs in
+            <b>Bulk</b> mode, configure global parameters, run sequentially, and export
+            results (all or vetted only).
+          </p>
+        </section>
+
+        <section>
+          <h2>5) Custom light curves</h2>
+          <p>
+            Upload TXT/CSV files with at least <code>time</code> and <code>flux</code>
+            columns. Configure detrending and vetting as usual, then run detection and
+            export.
+          </p>
+        </section>
+
+        <section>
+          <h2>6) AI / ML tools</h2>
+          <ul>
+            <li><b>Classification:</b> Each candidate receives a P(planet) score.</li>
+            <li><b>Explainability:</b> “Explain prediction” highlights top contributing features (depth, duration, SNR, etc.).</li>
+            <li><b>Retraining:</b> Upload labeled CSVs and click “Train new model” to fit a custom classifier and view metrics (F1, PR AUC, confusion matrix).</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>7) Gaia DR3 Neighbors panel</h2>
+          <p>
+            Shows nearby Gaia sources (sep, dx, dy, Gmag, BP−RP, RUWE). Use this to
+            assess contamination and confirm centroid results.
+          </p>
+        </section>
+
+        <section>
+          <h2>8) Candidates table</h2>
+          <p>
+            Review each candidate’s period, duration, depth, power, P(planet), SNR,
+            ΔBIC, odd/even Δ, and centroid status before confirming as a planet.
+          </p>
+        </section>
+
+        <section>
+          <h2>9) Export & reproducibility</h2>
+          <p>
+            Use <b>Export CSV</b>, <b>Export Vetted CSV</b>, and
+            <b>Download PDF report</b> to save your analyses. Always record mission,
+            detrending, thresholds, and model version for reproducibility.
+          </p>
+        </section>
+
+        <section>
+          <h2>10) Troubleshooting & best practices</h2>
+          <ul>
+            <li><b>No candidates?</b> Increase k peaks or relax σ clip.</li>
+            <li><b>Spurious periods?</b> Tighten quality mask and verify by eye.</li>
+            <li><b>Centroid fails?</b> Reduce Gaia radius and recheck neighbors.</li>
+            <li><b>AI over-confident?</b> Raise planet threshold or review explanations.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>11) Quick recipes</h2>
+          <ul>
+            <li><b>Single bright TESS target:</b> Fetch → Detect → Fit → Verify → Export.</li>
+            <li><b>Batch analysis:</b> Bulk mode → run → Export Vetted CSV.</li>
+            <li><b>Custom data:</b> Upload → Detect → Fit → Explain → Export.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>12) Sensible thresholds</h2>
+          <p>
+            p = 0.5 (exploratory) / 0.8 (high purity), Centroid σ thr = 3.0, Gaia radius = 60″, k peaks = 3 (quick) / 5–10 (deep search).
+          </p>
+        </section>
+
+        <section>
+          <h2>Final note</h2>
+          <p>
+            Orama X enables human-AI collaboration for exoplanet discovery. Always
+            combine AI probabilities with physical vetting (centroid, Gaia neighbors,
+            odd/even tests, ΔBIC) and visual inspection before confirming a planet.
           </p>
         </section>
       </div>

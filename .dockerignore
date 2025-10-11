@@ -1,0 +1,23 @@
+# --- KEEP SOURCE CODE ---
+
+node_modules
+.next
+dist
+out
+.npm
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.git
+.gitignore
+.gitattributes
+.vscode
+.vercel
+
+.env
+.env.*
+
+.DS_Store
+Thumbs.db
