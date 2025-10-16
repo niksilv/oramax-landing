@@ -4,7 +4,9 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
 
   async rewrites() {
-    const isProd = process.env.VERCEL === '1' || process.env.NODE_ENV === 'production';
+  if (!isProd) return [];
+  return [{ source: '/detector/api/:path*', destination: `${process.env.UPSTREAM_BASE}/:path*` }];
+}
 
     // Προτεραιότητα: UPSTREAM_BASE → TARGET → ασφαλές default (prod) → localhost (dev)
     const PROD_DEFAULT = 'https://oramax-exoplanet-api.fly.dev/exoplanet';

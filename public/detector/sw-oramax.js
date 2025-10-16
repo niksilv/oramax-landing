@@ -1,25 +1,12 @@
-// OramaX SW proxy v60 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
-const VERSION = 'v60';
+// OramaX SW proxy v61 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
+const VERSION = 'v61';
 
 const BACKENDS = [
-  'https://oramax-exoplanet-api.fly.dev/exoplanet', // ΠΡΩΤΟ
-  'http://127.0.0.1:8000/exoplanet'
+  'https://oramax-exoplanet-api.fly.dev/exoplanet', // κύριο upstream
+  'http://127.0.0.1:8000/exoplanet'                 // τοπικό fallback (dev)
 ];
 
-// ----- κορυφή αρχείου (κοντά στα άλλα const) -----
-// production == oramax.space (οτιδήποτε άλλο εκτός localhost)
-const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-
-// ΠΑΝΤΑ same-origin, για να μην έχουμε CORS
-const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
-const APP_BASE = API_BASE;
-
-// Αν υπάρχουν global που τα διαβάζουν άλλα scripts, άφησέ τα:
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
-
-
-// --------- Helpers ---------
+// --- Helpers ---
 function join(base, path) {
   if (!base.endsWith('/')) base += '/';
   return base + path.replace(/^\//, '');
@@ -30,7 +17,7 @@ function normalizeNeighbors(nei, defaultRadius) {
     if (!('radius_arcsec' in nei)) nei.radius_arcsec = defaultRadius;
     return nei;
   }
-  if (Array.isArray(nei)) return { available: true, radius_arcsec: defaultRadius, items: nei };
+  if (Array.isArray(nei)) return { available: nei.length > 0, radius_arcsec: defaultRadius, items: nei };
   const items = nei.items || nei.sources || nei.data || [];
   return { available: Array.isArray(items) && items.length > 0, radius_arcsec: (nei.radius_arcsec || defaultRadius), items };
 }
@@ -41,8 +28,8 @@ function jsonError(status, msg) {
   });
 }
 
-// --------- PDF (always client-side) ---------
-async function handlePdfDirect(req) {
+// --- PDF (always client-side) ---
+async function handlePdfDirect() {
   try {
     const pdfBytes = new TextEncoder().encode('%PDF-1.4\n%…minimal…\n%%EOF');
     return new Response(pdfBytes, {
@@ -58,15 +45,15 @@ async function handlePdfDirect(req) {
   }
 }
 
-// --------- GAIA neighbors (GET-first, smart POST-fallback) ---------
+// --- GAIA neighbors (GET-first, smart POST-fallback) ---
 async function handleGaiaNeighbors(req) {
-  // normalise μονοπάτι (π.χ. /detector/detector/api → /detector/api)
+  // κανονικοποίηση μονοπατιού (/detector/detector/api → /detector/api)
   const url0 = new URL(req.url);
   const url = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
   const targetName = url.searchParams.get('target') || url.searchParams.get('tic') || '';
   const radius = Number(url.searchParams.get('radius') || '60') || 60;
 
-  // 1) Προσπάθησε GET /gaia_neighbors σε κάθε backend
+  // 1) GET /gaia_neighbors σε κάθε backend
   for (const base of BACKENDS) {
     try {
       const up = join(base, 'gaia_neighbors') + `?target=${encodeURIComponent(targetName)}&radius=${radius}`;
@@ -78,10 +65,10 @@ async function handleGaiaNeighbors(req) {
           headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-get-${VERSION}` }
         });
       }
-    } catch { /* try next */ }
+    } catch { /* δοκίμασε επόμενο backend */ }
   }
 
-  // 2) Fallback: POST /fetch_detect (neighbors only) με σωστή αποστολή (TIC/KIC/EPIC)
+  // 2) Fallback: POST /fetch_detect (neighbors only) — υποστήριξη TIC/KIC/EPIC
   const tgt = (targetName || '').trim().toUpperCase();
   const guess =
     tgt.startsWith('TIC')  ? { source:'mast_spoc', mission:'TESS' } :
@@ -106,7 +93,7 @@ async function handleGaiaNeighbors(req) {
         status: 200,
         headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fd-${VERSION}` }
       });
-    } catch { /* try next */ }
+    } catch { /* επόμενο */ }
   }
 
   return new Response(JSON.stringify({
@@ -114,24 +101,15 @@ async function handleGaiaNeighbors(req) {
   }), { status: 502, headers: { 'Content-Type': 'application/json', 'X-Oramax-SW': `gaia-fail-${VERSION}` } });
 }
 
-// --------- Generic proxy (/detector/api/*) ---------
+// --- Generic proxy για /detector/api/* ---
 async function proxyGeneric(req) {
-  const url0 = new URL(req.url);
   // κανονικοποίηση /detector/detector/api -> /detector/api
+  const url0 = new URL(req.url);
   const url  = new URL(url0.href.replace(/\/detector\/(?:detector\/)+/g, '/detector/'));
 
   // path μετά το /detector/api/
   const rest = url.pathname.replace(/^\/detector\/api\//, '');
-
-  // διάβασε & αφαίρεσε το flag __backend
-  const forceApi = url.searchParams.get('__backend') === 'api';
-  url.searchParams.delete('__backend');
   const query = url.searchParams.toString();
-
-  // προτεραιότητα upstreams: API πρώτα για KIC/EPIC, αλλιώς APP
-  const upstreams = forceApi
-    ? [API_BASE, APP_BASE, 'http://127.0.0.1:8000/exoplanet']
-    : [APP_BASE, API_BASE, 'http://127.0.0.1:8000/exoplanet'];
 
   const init = {
     method: req.method,
@@ -141,15 +119,15 @@ async function proxyGeneric(req) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     init.body = await req.clone().arrayBuffer();
   }
-  // αφαίρεσε headers που προκαλούν CORS upstream
+  // καθάρισε headers που προκαλούν CORS upstream
   init.headers.delete('Origin');
   init.headers.delete('Referer');
 
   let lastErr = null;
-  for (const base of upstreams) {
+  for (const base of BACKENDS) {
     try {
       const r = await fetch(join(base, rest) + (query ? '?' + query : ''), init);
-      if (r.status !== 404 && r.status !== 405) return r;  // δέξου το πρώτο «ουσιαστικό» response
+      if (r.status !== 404 && r.status !== 405) return r; // δέξου το πρώτο «ουσιαστικό» response
       lastErr = `HTTP ${r.status}`;
     } catch (e) {
       lastErr = e?.message || String(e);
@@ -158,16 +136,12 @@ async function proxyGeneric(req) {
   return jsonError(502, `Backend not reachable or endpoint missing. ${lastErr || ''}`);
 }
 
-// --------- Router ---------
-self.addEventListener('install', (e) => self.skipWaiting());
+// --- Router (single fetch listener) ---
+self.addEventListener('install', (e) => e.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-
-  // ❗ Άσε τα /detector/api/* στον server (Next rewrites/handlers)
-  if (url.pathname.startsWith('/detector/api/')) {
-    return; // μην κάνεις respondWith -> περνάει στο network/Next
-  }
 
   // μόνο same-origin & scope /detector/
   if (url.origin !== self.location.origin) return;
@@ -179,40 +153,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // GAIA (πιάσε κάθε παραλλαγή /api/gaia_neighbors)
+  // GAIA (κάθε παραλλαγή /api/gaia_neighbors)
   if (/\/detector(?:\/detector)*\/api\/gaia_neighbors$/.test(url.pathname)) {
     event.respondWith(handleGaiaNeighbors(event.request));
     return;
   }
 
   // Generic /detector/api/*
-  if (url.pathname.includes('/detector/api/')) {
+  if (url.pathname.startsWith('/detector/api/')) {
     event.respondWith(proxyGeneric(event.request));
     return;
   }
 });
 
 console.log(`OramaX SW proxy ready (${VERSION})`);
-
-// ---------- Catch-all fallback για αποφυγή 404 στο /detector/api/* ----------
-self.addEventListener('fetch', (evt) => {
-  const url0 = new URL(evt.request.url);
-  // normalise: /detector/detector/api -> /detector/api
-  const path = url0.pathname.replace(/\/detector\/(?:detector\/)+/g, '/detector/');
-  const isSameOrigin = url0.origin === self.location.origin;
-  const isApi = path.startsWith('/detector/api/');
-  if (isSameOrigin && isApi) {
-    evt.respondWith((async () => {
-      try {
-        return await proxyGeneric(evt.request);   // ήδη νορμαλίζει & προωθεί
-      } catch (err) {
-        return new Response(JSON.stringify({ error: 'offline_or_unhandled', sw: VERSION }), {
-          status: 503,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-    })());
-  }
-});
-
-

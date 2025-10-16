@@ -2078,7 +2078,7 @@ window.APP_BASE = window.APP_BASE || APP_BASE;
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
     navigator.serviceWorker.getRegistration('/detector/').then(reg => {
       if (!reg) {
-        navigator.serviceWorker.register('/detector/sw-oramax.js?v=60', { scope: '/detector/' })
+        navigator.serviceWorker.register('/detector/sw-oramax.js?v=61', { scope: '/detector/' })
           .catch(err => console.error('SW register failed', err));
       } else {
         // προαιρετικό: πες του να τσεκάρει για update στο background
