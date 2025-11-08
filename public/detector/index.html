@@ -6,19 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script>
-
 // ===== API bases (dynamic) =====
-  // production == οτιδήποτε εκτός localhost
-const IS_LOCAL  = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+const IS_LOCAL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
 
-// ΠΑΝΤΑ same-origin για να δουλεύουν rewrites/SW και να μην έχεις CORS
-const API_BASE  = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
-const APP_BASE  = API_BASE;
+let API_BASE = window.__API_BASE
+  || (IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api');
 
-// Αν τα διαβάζουν κι άλλα scripts, κράτα τα:
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
-
+const APP_BASE = API_BASE;
+window.API_BASE = API_BASE;
+window.APP_BASE = APP_BASE;
 </script>
 
 
@@ -1138,7 +1134,7 @@ function toggleInputs(){
 
 // ΠΑΝΤΑ με απόλυτο path για το SW route
 function gaiaUrl(target, radius) {
-  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  const u = new URL(`${API_BASE}/gaia_neighbors`, location.origin);
   u.search = new URLSearchParams({ target, radius: String(radius || 60) }).toString();
   return u.toString();
 }
@@ -1151,7 +1147,7 @@ async function fetchGaiaNeighbors(targetName, radiusArcsec) {
       radius: String(radiusArcsec)
     }).toString();
 
-    const r1 = await apiFetch(`/detector/api/gaia_neighbors?${q}`);
+    const r1 = await apiFetch(`${API_BASE}/gaia_neighbors?${q}`);
     if (r1.ok) {
       const j1 = await r1.json();
       // Υποστήριξη για array ή {items:[]}
@@ -1926,16 +1922,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     const j = await r.json().catch(()=> ({}));
     if (j?.ok !== true) console.warn('Backend health non-ok:', j);
   }catch(e){
-    const bar = document.getElementById('busy');
-    if (bar){
-      bar.classList.remove('hidden'); bar.style.display='flex';
-      document.getElementById('busyTxt').textContent = 'Backend proxy error';
-      document.getElementById('busyPct').textContent = (e?.message || '502/Network');
+    // 🔁 fallback σε Fly αν λείπουν τα rewrites στο Vercel
+    try {
+      API_BASE = 'https://oramax-exoplanet-api.fly.dev/exoplanet';
+      window.API_BASE = API_BASE;
+
+      const r2 = await apiFetch(`${API_BASE}/health`, { headers:{ 'Accept':'application/json' }});
+      if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
+
+      const bar = document.getElementById('busy');
+      if (bar){
+        bar.classList.remove('hidden'); bar.style.display='flex';
+        document.getElementById('busyTxt').textContent = 'Using Fly backend (fallback)';
+        document.getElementById('busyPct').textContent = '';
+        setTimeout(()=>{ bar.classList.add('hidden'); bar.style.display='none'; }, 1200);
+      }
+      console.warn('Switched API_BASE to Fly fallback:', API_BASE);
+      return;
+    } catch(e2){
+      const bar = document.getElementById('busy');
+      if (bar){
+        bar.classList.remove('hidden'); bar.style.display='flex';
+        document.getElementById('busyTxt').textContent = 'Backend proxy error';
+        document.getElementById('busyPct').textContent = (e2?.message || 'Network');
+      }
+      console.error('Fallback also failed:', e2);
     }
-    console.error('Health check failed:', e);
   }
 });
 </script>
+
 
 
 <script src="/detector/engine-toggle.js?v=7"></script>
