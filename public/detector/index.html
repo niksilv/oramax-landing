@@ -5,7 +5,88 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+<script>
+
+// ===== API bases (dynamic) =====
+  // production == οτιδήποτε εκτός localhost
+const IS_LOCAL  = (location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+
+// ΠΑΝΤΑ same-origin για να δουλεύουν rewrites/SW και να μην έχεις CORS
+const API_BASE  = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
+const APP_BASE  = API_BASE;
+
+// Αν τα διαβάζουν κι άλλα scripts, κράτα τα:
+window.API_BASE = window.API_BASE || API_BASE;
+window.APP_BASE = window.APP_BASE || APP_BASE;
+
+</script>
+
+
+<script>
+/* --- OramaX API fetch helper: no-store + versioned query --- */
+window.ORAMAX_UI_VER = '2025-10-25.1';  // bump σε κάθε release
+function apiFetch(url, opts = {}) {
+  const u = new URL(url, location.origin);
+  u.searchParams.set('_v', window.ORAMAX_UI_VER);
+  const headers = Object.assign(
+    { 'Cache-Control': 'no-store', 'Pragma': 'no-cache', 'Accept': 'application/json' },
+    (opts.headers || {})
+  );
+  return fetch(u.toString(), Object.assign({}, opts, { headers }));
+}
+</script>
+
+
+<style>
+/* ===== NAV look-and-feel (match main site) ===== */
+#ox-nav{
+  position:sticky; top:0; z-index:1000;
+  background:#0b0e1a; border-bottom:1px solid #151a2c; box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+/* wrap: κρατά το brand αριστερά, αλλά μας δίνει reference για να κεντράρουμε το menu */
+#ox-nav .wrap{
+  position:relative;                      /* νέο */
+  max-width:1200px; margin:0 auto; padding:12px 16px;
+  display:flex; align-items:center; gap:22px; justify-content:flex-start;
+}
+#ox-nav .brand{display:inline-flex;align-items:center;gap:10px;color:#e6ecff;text-decoration:none;font-weight:700}
+#ox-nav .brand img{height:22px;width:auto;display:block;filter:brightness(1.1)}
+
+/* menu: κεντραρισμένο οπτικά στη μπάρα */
+#ox-nav .menu{
+  display:flex; align-items:center; gap:18px;
+  position:absolute; left:50%; transform:translateX(-50%);   /* κέντρο */
+}
+#ox-nav .menu>a{color:#e6ecff;text-decoration:none;font-weight:600;padding:8px 12px;border-radius:10px;position:relative;transition:color .25s}
+#ox-nav .menu>a:hover{color:#fff}
+#ox-nav .menu>a::after{content:"";position:absolute;left:10%;bottom:4px;width:0;height:2px;background:#3956d7;border-radius:1px;transition:width .3s}
+#ox-nav .menu>a:hover::after{width:80%}
+
+/* pill look for "Our Project" */
+#ox-nav .our-project{display:inline-flex;align-items:center;gap:6px;color:#e6ecff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);padding:8px 12px;border-radius:12px}
+#ox-nav .caret{margin-left:2px;opacity:.9}
+
+/* dropdown: ΔΕΝ κλείνει στο κλικ και είναι κεντραρισμένο κάτω από το κουμπί */
+#ox-nav .has-sub{ position:relative; }                         /* χωρίς extra padding-bottom */
+#ox-nav .has-sub:hover .submenu,
+#ox-nav .has-sub:focus-within .submenu{ display:block; }       /* hover + focus */
+
+#ox-nav .has-sub::after{                                       /* μικρό buffer για να μη χάνεται το hover */
+  content:""; position:absolute; left:0; right:0; top:100%; height:8px;
+}
+
+#ox-nav .submenu{
+  position:absolute; top:100%;                                  /* κολλητά στο κουμπί */
+  left:50%; transform:translateX(-50%);                         /* κέντρο κάτω από το κουμπί */
+  min-width:260px; margin-top:0;
+  background:#0b0e1a; border:1px solid #1a223b; border-radius:12px;
+  box-shadow:0 18px 38px rgba(0,0,0,.45); padding:6px 0; display:none; z-index:50;
+}
+#ox-nav .submenu a{display:block;color:#e6ecff;padding:10px 14px;text-decoration:none;border-radius:8px;margin:2px 4px}
+#ox-nav .submenu a:hover{background:#141a2d;color:#fff}
+</style>
+
+
 <!-- moved inline JS below -->
 <script>
 // === Top-N suggestions on focus ===
@@ -16,7 +97,9 @@ async function showTopSuggestOnFocus(){
     const mission = document.getElementById('missionSel')?.value || 'auto';
     const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
     const q = 'TIC '; // generic to get common targets
-    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=20&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = '?' + new URLSearchParams({ q, limit: '20', contains: '1' }).toString() + (domParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' } })
     if(!r.ok) return;
     const list = normalizeSuggestData(await r.json());
     if(list.length) showSuggest(list, input);
@@ -165,7 +248,11 @@ async function searchBrowse(){
   const mission = document.getElementById('missionSel')?.value || 'auto';
   const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
   try{
-    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=${limit}&offset=${offset}&contains=1`, { headers:{ 'Accept':'application/json' } });
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = new URLSearchParams({
+  q, limit: String(limit), offset: String(offset), contains: '1'
+}).toString() + (domParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' } })
     if(!r.ok){ renderBrowse([],0); return; }
     const list = normalizeSuggestData(await r.json());
     renderBrowse(list, 0);
@@ -226,27 +313,50 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 #browseList .row:hover{background:#f7f7f7}
 #browseFoot{padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;justify-content:space-between}
 
-/* --- ORAMAX: centered navbar & footer (isolated styles) --- */
-.ox-nav{ position:relative; z-index:1000; }
+/* --- ORAMAX: centered navbar & footer (DARK, fixed dropdown) --- */
+.ox-nav {
+  position: relative;
+  z-index: 1000;
+  background: #0b0e1a;                 /* dark header */
+  border-bottom: 1px solid #151a2c;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
 .ox-nav-inner{
   max-width: 1100px; margin: 0 auto; padding: 10px 12px;
   display:flex; align-items:center; justify-content:center; gap:18px;
 }
+
+/* links in header */
 .ox-nav a{
-  text-decoration:none; color:#0b0e1a; font-weight:600; padding:6px 10px; border-radius:10px;
+  text-decoration:none; color:#e6ecff; font-weight:600;
+  padding:6px 10px; border-radius:10px; position:relative; transition:color .25s;
 }
-.ox-nav a:hover{ background:#f2f2f2; }
-.ox-nav .ox-dropdown{ position:relative; }
+.ox-nav a:hover{ color:#ffffff; background:#141a2d; }
+
+/* dropdown */
+.ox-nav .ox-dropdown{ position:relative; padding-bottom:6px; } /* μικρό «γέφυρο» */
 .ox-nav .ox-dd-btn{ cursor:pointer; }
-.ox-nav .ox-dd{ position:absolute; top:100%; left:50%; transform:translateX(-50%);
-  background:#0b0e1a; color:#fff; border-radius:10px; padding:8px 0;
-  box-shadow:0 12px 28px rgba(0,0,0,.25); min-width:220px; display:none;
+
+/* κεντραρισμένο submenu + δεν κλείνει όταν πάω να κλικάρω */
+.ox-nav .ox-dd{
+  position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:#0b0e1a; color:#fff; border:1px solid #1a223b; border-radius:12px;
+  padding:6px 0; box-shadow:0 18px 38px rgba(0,0,0,.45); min-width:240px; display:none; z-index:50;
 }
-.ox-nav .ox-dd a{ color:#fff; display:block; padding:8px 14px; }
-.ox-nav .ox-dd a:hover{ background:#1b1f2a; }
-.ox-nav .ox-dropdown:hover .ox-dd{ display:block; }
-.ox-footer{ margin:28px 0 10px; }
-.ox-footer-inner{ max-width:1100px; margin:0 auto; text-align:center; color:#333; font-size:12.5px; }
+.ox-nav .ox-dd a{ color:#e6ecff; display:block; padding:10px 14px; border-radius:8px; margin:2px 4px; }
+.ox-nav .ox-dd a:hover{ background:#141a2d; color:#fff; }
+
+/* hover ΚΑΙ focus-within ώστε να μένει ανοιχτό όταν πας να κλικάρεις */
+.ox-nav .ox-dropdown:hover .ox-dd,
+.ox-nav .ox-dropdown:focus-within .ox-dd{ display:block; }
+
+/* footer (dark + centered) */
+.ox-footer{ margin:32px 0 0; border-top:1px solid #151a2c; background:#0b0e1a; box-shadow:0 -8px 24px rgba(0,0,0,.3); }
+.ox-footer-inner{ max-width:1100px; margin:0 auto; text-align:center; color:#a9b3d0; font-size:13px; line-height:1.6; padding:18px 0; }
+.ox-footer-inner a{ color:#a9b3d0; text-decoration:none; }
+.ox-footer-inner a:hover{ color:#fff; }
+
+/* responsive */
 @media (max-width:720px){
   .ox-nav-inner{ flex-wrap:wrap; gap:10px; }
 }
@@ -284,28 +394,40 @@ body, #detector {
 }
 </style>
 
+<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 
 </head>
 <body>
 
-<!-- ORAMAX centered navbar -->
-<nav class="ox-nav" aria-label="Main">
-  <div class="ox-nav-inner">
-    <a href="/">ORAMA X</a>
-    <a href="/">Home</a>
+<!-- === NAVBAR (same as main site) === -->
+<div id="ox-nav" aria-label="Main">
+  <div class="wrap">
+    <a href="/" class="brand" aria-label="Orama X home">
+      <img src="/logos/oramax-logo.png" alt="" />
+      <strong>ORAMA X</strong>
+    </a>
 
-    <div class="ox-dropdown">
-      <a class="ox-dd-btn">Our Project ▾</a>
-      <div class="ox-dd" role="menu">
-        <a href="/detector" role="menuitem">Exoplanet Detector</a>
-        <a href="/our-project/our-challenge" role="menuitem">Our Challenge</a>
-        <a href="/our-project/our-resources" role="menuitem">Our Resources</a>
+    <nav class="menu">
+      <a href="/">Home</a>
+
+      <!-- Our Project dropdown -->
+      <div class="has-sub">
+        <a href="#" class="our-project" aria-haspopup="true" aria-expanded="false" onclick="event.preventDefault()">
+          Our Project <span class="caret">▾</span>
+        </a>
+        <div class="submenu" role="menu">
+          <a href="/our-project/exoplanet-detector" role="menuitem">Exoplanet Detector</a>
+          <a href="/our-project/our-challenge" role="menuitem">How it works?</a>
+        </div>
       </div>
-    </div>
 
-    <a href="/our-team">Our Team</a>
-    </div>
-</nav>
+      <a href="/our-team">Our Team</a>
+    </nav>
+  </div>
+</div>
+<!-- === /NAVBAR === -->
+
+
 
   <h1>Orama X · Exoplanet Detector</h1>
 <div id="busy" class="hidden"><div class="bar" id="busyBar"></div><span id="busyTxt">Working…</span><span id="busyPct"></span></div>
@@ -516,18 +638,6 @@ body, #detector {
   </div>
 
 <script>
-// ===== API bases (dynamic) =====
-
-// production == oramax.space (οτιδήποτε άλλο εκτός localhost)
-const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-
-// ΠΑΝΤΑ same-origin, για να μην έχουμε CORS
-const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
-const APP_BASE = API_BASE;
-
-// Αν υπάρχουν global που τα διαβάζουν άλλα scripts, άφησέ τα:
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
 
 
 /* ---------- Helpers ---------- */
@@ -559,26 +669,36 @@ function shadedShapes(intervals){
   if(!intervals) return [];
   return intervals.map(iv => ({type:'rect', xref:'x', yref:'paper', x0:iv[0], x1:iv[1], y0:0, y1:1, fillcolor:'rgba(0,0,0,0.08)', line:{width:0}}));
 }
-function renderLC(T, F, intervals){
-  Plotly.newPlot('lc', [
-  {
-    x: T,
-    y: F,
+
+function renderLC(time, flux, intervals = []) {
+  const traceLC = {
+    x: time,
+    y: flux,
+    type: 'scattergl',
     mode: 'markers',
-    marker: { size: 3 },
-    hovertemplate:
-      'Time (BJD–2457000): %{x:.6f} d' +
-      '<br>Flux: %{y:.6f} [unitless]' +
-      '<extra></extra>'
-  }
-], {
-  margin: { t: 10 },
-  shapes: shadedShapes(intervals),
-  hovermode: 'closest',
-  xaxis: { title: 'Time [BJD – 2457000]' },
-  yaxis: { title: 'Normalized Flux [unitless]' }
-});
+    marker: { size: 3, opacity: 0.9 },
+    name: 'LC'
+  };
+
+  const shapes = (intervals || []).map(([t1, t2]) => ({
+    type: 'rect',
+    xref: 'x', yref: 'paper',
+    x0: t1, x1: t2,
+    y0: 0, y1: 1,
+    line: { width: 0 },
+    fillcolor: 'rgba(255,165,0,0.1)'
+  }));
+
+  Plotly.react('lc', [traceLC], {
+    margin: { l: 60, r: 20, t: 20, b: 50 },
+    autosize: true,
+    showlegend: false,
+    xaxis: { title: 'Time [BJD − 2457000]' },
+    yaxis: { title: 'Normalized Flux [unitless]' },
+    shapes
+  }, { responsive: true, displaylogo: false });
 }
+
 function centroidBadge(cent, sigmaThr, rhoThr){
   if(!cent) return '';
   if(!cent.available){
@@ -588,6 +708,7 @@ function centroidBadge(cent, sigmaThr, rhoThr){
   const beb = (Number.isFinite(sig) && sig >= sigmaThr) && (!Number.isFinite(rho) || rho >= rhoThr);
   return beb ? '<span class="badge badge-beb">BEB</span>' : '<span class="badge badge-ok">OK</span>';
 }
+
 function renderCentroidInfo(cent, sigmaThr, rhoThr){
   const el = document.getElementById('centroidBox');
   if(!cent){ el.textContent = ''; return; }
@@ -603,80 +724,92 @@ function renderCentroidInfo(cent, sigmaThr, rhoThr){
   const badge = centroidBadge(cent, sigmaThr, rhoThr);
   el.innerHTML = `Centroid: ${txt} ${badge ? '  ' + badge : ''}`;
 }
-function renderNeighbors(nei){
-  if (Array.isArray(nei)) {
-    nei = { available: nei.length > 0, radius_arcsec: Number(document.getElementById('neiRadius')?.value || 60), items: nei };
-  }
+
+async function renderNeighbors(nei){
   const info = document.getElementById('neighborsInfo');
-  const tbl = document.querySelector('#neighborsTbl tbody');
+  const tbl  = document.querySelector('#neighborsTbl tbody');
+
+  // normalize object
+  if (Array.isArray(nei)) {
+    nei = { available: nei.length>0, radius_arcsec: Number(document.getElementById('neiRadius')?.value || 60), items: nei };
+  }
+
+  // αν δεν υπάρχουν καθόλου items
   if(!nei || !nei.available){
     info.textContent = nei?.reason ? ('Gaia: ' + nei.reason) : 'Gaia: n/a';
     tbl.innerHTML=''; Plotly.purge('neighborsPlot'); return;
   }
-  const items = nei.items || [];
+
+  // map aliases
+  const mapItems = (arr) => (arr||[]).map(r=>{
+    const o = { ...r };
+    o.sep_arcsec = Number.isFinite(r.sep_arcsec) ? +r.sep_arcsec :
+                   Number.isFinite(r.sep)       ? +r.sep       : NaN;
+    o.dx_arcsec  = Number.isFinite(r.dx_arcsec)  ? +r.dx_arcsec  :
+                   Number.isFinite(r.dx)        ? +r.dx        : NaN;
+    o.dy_arcsec  = Number.isFinite(r.dy_arcsec)  ? +r.dy_arcsec  :
+                   Number.isFinite(r.dy)        ? +r.dy        : NaN;
+    o.Gmag = Number.isFinite(r.Gmag) ? +r.Gmag :
+             Number.isFinite(r.gmag) ? +r.gmag :
+             Number.isFinite(r.phot_g_mean_mag) ? +r.phot_g_mean_mag : NaN;
+    o.BP_RP   = Number.isFinite(r.BP_RP)   ? +r.BP_RP   : (Number.isFinite(r.bp_rp) ? +r.bp_rp : NaN);
+    o.parallax= Number.isFinite(r.parallax)? +r.parallax: (Number.isFinite(r.plx)   ? +r.plx   : NaN);
+    o.pmra    = Number.isFinite(r.pmra)    ? +r.pmra    : (Number.isFinite(r.pmRA)  ? +r.pmRA  : NaN);
+    o.pmdec   = Number.isFinite(r.pmdec)   ? +r.pmdec   : (Number.isFinite(r.pmDec) ? +r.pmDec : NaN);
+    o.ruwe    = Number.isFinite(r.ruwe)    ? +r.ruwe    : NaN;
+    o.source_id = r.source_id ?? r.id ?? '';
+    return o;
+  });
+
+  let items = mapItems(nei.items);
+
   const rad = Number(nei.radius_arcsec || 60);
   info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
 
-  // Πίνακας (με ασφάλεια για κενά πεδία)
-  const safe = v => (Number.isFinite(v) ? v : '');
-  const fix = (v, n=2) => (Number.isFinite(v) ? v.toFixed(n) : '');
-  const txt = v => (v != null ? String(v) : '');
-
-  tbl.innerHTML = '';
-  items.slice(0,80).forEach(r=>{
+  // table
+  const fix = (v,n=2)=> Number.isFinite(v) ? v.toFixed(n) : '';
+  tbl.innerHTML='';
+  items.slice(0,200).forEach(r=>{
     const tr = document.createElement('tr');
-    const sep = fix(r.sep_arcsec,1);
-    const dx  = fix(r.dx_arcsec,1);
-    const dy  = fix(r.dy_arcsec,1);
-    const g   = (Number.isFinite(r.Gmag) ? r.Gmag.toFixed(2)
-              : Number.isFinite(r.gmag)  ? r.gmag.toFixed(2) : '');
-    const bprp = (Number.isFinite(r.BP_RP) ? r.BP_RP.toFixed(2)
-                : Number.isFinite(r.bp_rp) ? r.bp_rp.toFixed(2) : '');
-    const par  = fix(r.parallax,2);
-    const pmra = fix(r.pmra,2);
-    const pmde = fix(r.pmdec,2);
-    const ruwe = fix(r.ruwe,2);
-    const sid  = txt(r.source_id);
-
-    tr.innerHTML = `<td>${sep}</td><td>${dx}</td><td>${dy}</td>
-                    <td>${g}</td><td>${bprp}</td>
-                    <td>${par}</td><td>${pmra}</td><td>${pmde}</td>
-                    <td>${ruwe}</td><td>${sid}</td>`;
+    tr.innerHTML = `
+      <td>${fix(r.sep_arcsec,1)}</td>
+      <td>${fix(r.dx_arcsec,1)}</td>
+      <td>${fix(r.dy_arcsec,1)}</td>
+      <td>${fix(r.Gmag,2)}</td>
+      <td>${fix(r.BP_RP,2)}</td>
+      <td>${fix(r.parallax,2)}</td>
+      <td>${fix(r.pmra,2)}</td>
+      <td>${fix(r.pmdec,2)}</td>
+      <td>${fix(r.ruwe,2)}</td>
+      <td>${r.source_id}</td>`;
     tbl.appendChild(tr);
   });
 
-  // Plot
-  const x = items.map(r=>r.dx_arcsec);
-  const y = items.map(r=>r.dy_arcsec);
-  const s = items.map(r=>{
-    const mag = (Number.isFinite(r.Gmag) ? r.Gmag : (Number.isFinite(r.gmag) ? r.gmag : 15));
-    return Math.max(6, 12 - 0.8*(mag-10));
+  // plot
+  const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
+  const xx = hasXY ? items.map(r=>r.dx_arcsec)
+                   : items.map(r=> Number.isFinite(r.sep_arcsec) ? r.sep_arcsec : NaN);
+  const yy = hasXY ? items.map(r=>r.dy_arcsec)
+                   : items.map(r=> 0);
+  const size = items.map(r=>{
+    const m = Number.isFinite(r.Gmag) ? r.Gmag : 15;
+    return Math.max(6, 12 - 0.8*(m-10));
   });
 
-  const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
-  if (hasXY) {
-    Plotly.newPlot('neighborsPlot',[
-      {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
-      {x:x, y:y, mode:'markers', marker:{size:s}}
-    ],{
-      margin:{t:10}, xaxis:{title:'East ["]'}, yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
-      shapes:[
-        {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
-        {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad, line:{dash:'solid'}}
-      ]
-    });
-  } else {
-    const sep = items.map(r=>r.sep_arcsec ?? 0);
-    Plotly.newPlot('neighborsPlot',[
-      {x:sep, y:sep.map(()=>0), mode:'markers', marker:{size:s}, name:'sources'}
-    ],{
-      margin:{t:10},
-      xaxis:{title:'Separation ["]'},
-      yaxis:{visible:false, range:[-1,1]},
-      shapes:[{type:'line', x0:21, x1:21, y0:-1, y1:1, line:{dash:'dot'}}]
-    });
-  }
+  Plotly.newPlot('neighborsPlot',[
+    {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
+    {x:xx, y:yy, mode:'markers', marker:{size:size}}
+  ],{
+    margin:{t:10},
+    xaxis:{title:'East ["]'},
+    yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
+    shapes:[
+      {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
+      {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad}
+    ]
+  });
 }
+
 
 // ---------- State ----------
 
@@ -765,42 +898,43 @@ function phaseFoldedTrace(T, F, cand){
   const folded = phaseFold(T, F, cand.period, cand.t0);
   return {x: folded.map(d=>d.x), y: folded.map(d=>d.y)};
 }
-function renderPF(T, F, cand){
-  if(!cand) { Plotly.purge('pf'); return; }
 
-  // υπολογισμός δεδομένων φάσης
-  const folded = phaseFold(T, F, cand.period, cand.t0);
-  const dataTrace = {
-    x: folded.map(d=>d.x),
-    y: folded.map(d=>d.y),
-    mode: 'markers',
-    marker: { size: 3 },
-    name: 'data',
-    hovertemplate: 'Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
-  };
+function renderPF(time, flux, cand) {
+  const P  = cand?.period || cand?.P || null;
+  const t0 = cand?.t0 || cand?.epoch || time?.[0] || 0;
 
-  const traces = [dataTrace];
-
-  // αν υπάρχει μοντέλο με ίδια περίοδο, βάλε και overlay
-  if (lastFit && Math.abs(lastFit.params.period - cand.period) < 1e-6){
-    const mf = lastFit.model_curve;
-    const mfold = phaseFold(mf.time, mf.flux, lastFit.params.period, lastFit.params.t0);
-    traces.push({
-      x: mfold.map(d=>d.x),
-      y: mfold.map(d=>d.y),
-      mode: 'lines',
-      line: { width: 2 },
-      name: 'model',
-      hovertemplate: 'Model<br>Phase: %{x:.4f}<br>Flux: %{y:.6f} [unitless]<extra></extra>'
-    });
+  if (!P || !time?.length || !flux?.length) {
+    Plotly.react('pf', [], {
+      margin: { l: 60, r: 20, t: 20, b: 50 },
+      autosize: true,
+      xaxis: { title: 'Phase [0–1]' },
+      yaxis: { title: 'Relative Flux [unitless]' }
+    }, { responsive: true, displaylogo: false });
+    return;
   }
 
-  Plotly.newPlot('pf', traces, {
-    margin: { t: 10 },
-    hovermode: 'closest',
+  const phase = time.map(t => {
+    let ph = ((t - t0) / P) % 1;
+    if (ph < 0) ph += 1;
+    return ph;
+  });
+
+  const tracePF = {
+    x: phase,
+    y: flux,
+    type: 'scattergl',
+    mode: 'markers',
+    marker: { size: 3, opacity: 0.9 },
+    name: 'PF'
+  };
+
+  Plotly.react('pf', [tracePF], {
+    margin: { l: 60, r: 20, t: 20, b: 50 },
+    autosize: true,
+    showlegend: false,
     xaxis: { title: 'Phase [0–1]' },
     yaxis: { title: 'Relative Flux [unitless]' }
-  });
+  }, { responsive: true, displaylogo: false });
 }
 
 
@@ -824,8 +958,12 @@ function renderTable(candidates){
     // vetted highlighting παραμένει
     tr.classList.add('vetted');
 
-    const snr  = (c.fit && Number.isFinite(c.fit.snr)) ? c.fit.snr.toFixed(1) : '';
-    const dbic = (c.fit && Number.isFinite(c.fit.delta_bic)) ? c.fit.delta_bic.toFixed(1) : '';
+    const snrV  = Number.isFinite(c?.fit?.snr) ? c.fit.snr : (Number.isFinite(c.snr) ? c.snr : null);
+    const dbicV = Number.isFinite(c?.fit?.delta_bic) ? c.fit.delta_bic :
+               (Number.isFinite(c.delta_bic) ? c.delta_bic : null);
+    const snr  = Number.isFinite(snrV)  ? snrV.toFixed(1)  : '';
+    const dbic = Number.isFinite(dbicV) ? dbicV.toFixed(1) : '';
+
     const badge = centroidBadge(c.centroid, sThr, rThr);
 
     tr.innerHTML = `
@@ -900,7 +1038,7 @@ function renderAll(T, F, candidates, neighbors){
 /* ---------- NEW: normalize backend candidates to UI shape ---------- */
 function normalizeCandidates(cands){
   return (cands||[]).map(c=>{
-    // 1) Προτίμησε centroid αντικείμενο από backend, αν υπάρχει
+    // centroid object (backend-first, with fallbacks)
     let centroid = null;
     if (c && typeof c.centroid === 'object') {
       centroid = {
@@ -912,7 +1050,6 @@ function normalizeCandidates(cands){
         suspect_beb: !!c.centroid.suspect_beb
       };
     } else if (c && (c.centroid_sigma!=null || c.centroid_rho!=null || c.centroid_dr_pix!=null)) {
-      // 2) ή σκόρπια πεδία *αν* στέλνονται με flat schema
       centroid = {
         available: true,
         dr_pix: Number(c.centroid_dr_pix),
@@ -921,7 +1058,6 @@ function normalizeCandidates(cands){
         suspect_beb: !!c.centroid_suspect_beb
       };
     } else {
-      // 3) fallback σε centroid_ok (παλιό placeholder)
       centroid =
         (c.centroid_ok === true)  ? {available:true,  sigma:0,   rho_flux_centroid:0, suspect_beb:false} :
         (c.centroid_ok === false) ? {available:true,  sigma:5.0, rho_flux_centroid:null, suspect_beb:true} :
@@ -933,17 +1069,22 @@ function normalizeCandidates(cands){
       duration : Number(c.duration),
       depth    : Number(c.depth),
       power    : Number(c.power),
-      probability : Number(c.p_planet ?? 0),
+      probability : Number(c.p_planet ?? c.probability ?? c.p ?? 0),
       t0       : Number(c.t0 ?? 0),
-      // --- ΠΕΡΑΣΕ αυτουσίως τα windows από backend (αν υπάρχουν) ---
       windows  : (c.windows && typeof c.windows === 'object') ? c.windows : null,
-      fit      : { snr: (c.snr ?? null), delta_bic: (c.delta_bic ?? null) },
+      fit      : {
+        snr      : (Number.isFinite(c?.fit?.snr) ? c.fit.snr : (Number.isFinite(c.snr) ? c.snr : null)),
+        delta_bic: (Number.isFinite(c?.fit?.delta_bic) ? c.fit.delta_bic :
+                    (Number.isFinite(c.delta_bic) ? c.delta_bic : null))
+      },
       vetting  : {
-        odd_even_diff_ppm   : Number.isFinite(c.odd_even_delta_ppm)? c.odd_even_delta_ppm : 0,
+        odd_even_diff_ppm   : Number.isFinite(c.odd_even_delta_ppm) ? c.odd_even_delta_ppm :
+                              Number.isFinite(c.odd_even_diff_ppm) ? c.odd_even_diff_ppm : 0,
         secondary_depth_ppm : null,
         has_secondary_like  : !!c.secondary
       },
-      centroid
+      centroid,
+      _target  : (c._target || c.target || null)
     };
   });
 }
@@ -1002,174 +1143,182 @@ function gaiaUrl(target, radius) {
   return u.toString();
 }
 
-async function fetchGaiaNeighbors(target, radius) {
-  if (!target) return { available: false, reason: 'no target' };
-  const rad = Number(radius || document.getElementById('neiRadius')?.value || 60);
-
-  // 1) Πρώτη προσπάθεια στο SW route
+// Gaia neighbors: ΧΩΡΙΣ fallback στο /fetch_detect
+async function fetchGaiaNeighbors(targetName, radiusArcsec) {
   try {
-    const r = await fetch(gaiaUrl(target, rad), { headers: { 'Accept': 'application/json' } });
-    if (r.ok) {
-      const j = await r.json().catch(() => null);
-      // ΑΝ το σώμα δηλώνει αποτυχία/κενό, προχώρα σε fallback
-      if (j && ((j.available === false) || (Array.isArray(j.items) && j.items.length === 0))) {
-        // continue to fallback
-      } else if (j) {
-        return j; // usable
+    const q = new URLSearchParams({
+      target: targetName,
+      radius: String(radiusArcsec)
+    }).toString();
+
+    const r1 = await apiFetch(`/detector/api/gaia_neighbors?${q}`);
+    if (r1.ok) {
+      const j1 = await r1.json();
+      // Υποστήριξη για array ή {items:[]}
+      if (Array.isArray(j1)) {
+        return { available: true, radius_arcsec: radiusArcsec, items: j1 };
+      }
+      if (Array.isArray(j1?.items)) {
+        return { available: true, radius_arcsec: radiusArcsec, items: j1.items };
       }
     }
-    // αν δεν είναι ok ή δεν διαβάζεται JSON, προχώρα σε fallback
-  } catch (_) {
-    // network error -> fallback
-  }
-
-  // 2) Fallback: POST /fetch_detect (neighbors only) — CORS OK
-  try {
-    const body = JSON.stringify({
-      source: 'mast_spoc', mission: 'TESS', target,
-      kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
-      neighbors: true, neighbors_radius: rad, centroid: false
-    });
-
-    const r2 = await fetch(`${API_BASE}/fetch_detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body
-    });
-    if (!r2.ok) throw new Error(`HTTP ${r2.status}`);
-    const j2 = await r2.json();
-    const nei = j2.neighbors || j2;
-    if (Array.isArray(nei)) return { available: true, radius_arcsec: rad, items: nei };
-    if (nei && Array.isArray(nei.items)) return { available: true, radius_arcsec: nei.radius_arcsec || rad, items: nei.items };
-    return { available: false, reason: 'empty', radius_arcsec: rad };
-  } catch (e) {
-    return { available: false, reason: e?.message || 'gaia fetch failed', radius_arcsec: rad };
+    return { available: false, reason: `Gaia query failed (${r1.status})` };
+  } catch (err) {
+    console.error('fetchGaiaNeighbors failed:', err);
+    return { available: false, reason: err?.message || 'network error' };
   }
 }
 
-  
+
+
+function extractSeries(data) {
+  // διάφορες πιθανές θέσεις/ονόματα
+  let T = data?.time || data?.T || data?.lc?.time || data?.lightcurve?.time || data?.series?.time || [];
+  let F = data?.flux || data?.F || data?.lc?.flux || data?.lightcurve?.flux || data?.series?.flux || [];
+
+  // αν ήρθαν ζεύγη [[t,f],...]
+  if ((!Array.isArray(T) || !Array.isArray(F)) && Array.isArray(data?.lightcurve)) {
+    const pairs = data.lightcurve.filter(r => Array.isArray(r) && r.length >= 2);
+    T = pairs.map(r => +r[0]); F = pairs.map(r => +r[1]);
+  }
+  // καθάρισμα
+  const outT=[], outF=[];
+  for (let i=0;i<Math.min(T.length,F.length);i++) {
+    const t=+T[i], f=+F[i];
+    if (Number.isFinite(t) && Number.isFinite(f)) { outT.push(t); outF.push(f); }
+  }
+  return [outT, outF];
+}
+
+ 
 // ---------- Fetch & Detect ----------
-async function runFetch(opts = {}) {
-  const { signal } = opts; // ← ΝΕΟ: παίρνουμε τυχόν AbortSignal από το batch
-  const status = document.getElementById('status');
-  try {
-    busyStart('Fetching light curve…');
-    busyAdvance(70, 'Downloading…');
-    busyStart('Fetching light curve…');
-    busySet(10);
-    status.textContent = 'Fetching...';
 
-    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+async function runFetch(){
+  try{
+    busyStart('Fetching…');
+    busySet(20);
 
-    const source = document.getElementById('sourceSel').value;
-    const mission = document.getElementById('missionSel').value;
-    const target = document.getElementById('ticInput').value.trim();
-    const url    = document.getElementById('urlInput').value.trim();
+    // 1) Διαβάζουμε τα controls
+    const targetRaw = document.getElementById('ticInput').value || currentTarget || '';
+let target = (targetRaw || '').trim();
+const m = target.match(/(\d{6,})/);           // πιάσε «γυμνά» digits
+if (m) target = `TIC ${m[1]}`;                // σιγουρέψου prefix
+    const sourceUI  = (document.getElementById('sourceSel')?.value || 'mast_spoc').trim(); // ΔΕΝ το αλλάζουμε
+  const missionSel= (document.getElementById('missionSel')?.value || 'auto').trim();
+  const neighbors = !!document.getElementById('gaiaChk')?.checked;
+  const engine    = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+ const quality  = !!document.getElementById('qualityChk')?.checked;
+ const sigma    = Number(document.getElementById('sigmaVal')?.value || 5);
+ const detrend  = (document.getElementById('detrendSel')?.value || 'flatten');
+ const kpeaks   = Number(document.getElementById('kpeaks')?.value || 3);
+ const centroid = !!document.getElementById('centroidChk')?.checked;
+ const neighbors_radius = Number(document.getElementById('neiRadius')?.value || 60);
 
-    const kpeaks = Number(document.getElementById('kpeaks').value || 3);
-    const detrend = document.getElementById('detrendSel').value;
-    const quality = document.getElementById('qualityChk').checked;
-    const remove_outliers = document.getElementById('outlierChk').checked;
-    const sigma = Number(document.getElementById('sigmaVal').value || 5);
-    const centroid = document.getElementById('centroidChk').checked;
-
-    const neighbors = document.getElementById('gaiaChk').checked;
-    const neighbors_radius = Number(document.getElementById('neiRadius').value || 60);
-
-    const body = {
-      source, mission, target, url,
-      kpeaks, detrend, quality, remove_outliers,
-      sigma, centroid, neighbors, neighbors_radius, engine
-    };
-
-    // 👇 ΠΕΡΝΑΜΕ ΤΟ signal ΣΤΟ fetch (για abort ανά TIC)
-    const res = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal
-    });
-    if (!res.ok) { status.textContent = 'Error'; return; }
-    const data = await res.json();
-
-    busySet(55, 'Processing & BLS…');
-    busyAdvance(90, 'Processing & BLS…');
-    if (data.error) { alert(data.error); status.textContent = 'Error'; return; }
-
-    currentTarget = data.target || target || url;
-    // --- store per target
-    perTargetStore[currentTarget] = perTargetStore[currentTarget] || {};
-    perTargetStore[currentTarget].T = data.time;
-    perTargetStore[currentTarget].F = data.flux;
-    lastPreproc = data.preprocess || null;
-
-    const candNorm  = normalizeCandidates(data.candidates || []);
-    const candFinal = fixProbabilities(candNorm);
-
-    const withTarget = (candFinal || []).map(c => ({ ...c, _target: currentTarget }));
-    lastCands = withTarget;
-    allCands  = (allCands || []).filter(c => c._target !== currentTarget);
-    allCands.push(...withTarget);
-
-    // αρχικό render με ό,τι neighbors ήρθαν
-    lastNeighbors = data.neighbors || null;
-    renderAll(data.time, data.flux, candFinal, lastNeighbors);
-    renderTable(allCands);
-
-    // ---------- NEW: robust GAIA selection με signal στο fallback ----------
-    const wantNei = document.getElementById('gaiaChk')?.checked;
-    const rad     = Number(document.getElementById('neiRadius')?.value || 60);
-
-    // helper
-    const usable = (n) => !!(n && n.available && Array.isArray(n.items) && n.items.length > 0);
-
-    let nei = data.neighbors || null;
-    if (wantNei && !usable(nei)) {
-      try {
-        // 1) προσπάθησε SW route (όπως ήδη έχεις στη fetchGaiaNeighbors) — αφήνουμε ως έχει
-
-        // 2) Fallback: POST /fetch_detect (neighbors only) — ΠΕΡΝΑΜΕ signal
-        const body2 = JSON.stringify({
-          source: 'mast_spoc', mission: 'TESS', target,
-          kpeaks: 0, detrend: 'none', quality: false, remove_outliers: false,
-          neighbors: true, neighbors_radius: rad, centroid: false
-        });
-
-        const r2 = await fetch(`${API_BASE}/fetch_detect`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: body2,
-          signal // ← ΝΕΟ: ώστε να ακυρώνεται κι εδώ
-        });
-
-        if (r2.ok) {
-          const j2 = await r2.json().catch(() => null);
-          const nx = j2?.neighbors || j2;
-          if (Array.isArray(nx))       nei = { available: true, radius_arcsec: rad, items: nx };
-          else if (nx?.items)          nei = { available: true, radius_arcsec: nx.radius_arcsec || rad, items: nx.items };
-          else                         nei = { available: false, reason: 'empty', radius_arcsec: rad };
-        }
-      } catch (e) {
-        nei = { available: false, reason: e?.message || 'gaia fallback failed', radius_arcsec: rad };
-      }
+    if(!targetRaw && sourceUI !== 'url'){
+      alert('Δώσε Target (π.χ. “TIC 268125229”)');
+      busyStop(); return;
     }
 
-    lastNeighbors = nei;
-    perTargetStore[currentTarget].neighbors = lastNeighbors;
-    renderAll(data.time, data.flux, candFinal, lastNeighbors);
-    renderTable(allCands);
+    // 2) Κανονικοποιήσεις
+    //const target = targetRaw.replace(/\s+/g,' ').replace(/^tic\s*/i,'TIC ');
+    let mission = missionSel;
+if (mission === 'auto') {
+  // auto → κάνε απλή «μαντεψιά» για εμφάνιση,
+  // ΑΛΛΑ προς backend θα στείλουμε μόνο 'auto' ή 'TESS'
+  if (/^(?:TIC\s*)?\d+$/i.test(target)) mission = 'auto';
+  else mission = 'auto';
+}
+const missionApi = (mission === 'auto') ? 'auto' : 'TESS';   // ← ΜΟΝΟ αυτά τα 2 δέχεται ο backend
 
-    busyAdvance(98, 'Rendering plots…');
-    status.textContent = 'Done';
-    setTimeout(() => busyStop(), 600);
-    updateMlBadge();
-  } catch (e) {
-    console.error(e);
-    status.textContent = 'Error';
+    // 3) Ελάχιστο payload απολύτως συμβατό με API
+
+  // Διαβάζουμε αν είναι ενεργό το checkbox "Remove outliers"
+const outlierOn = !!document.getElementById('outlierChk')?.checked;
+
+const payload = {
+  source: sourceUI,
+  mission: missionApi,
+  target,
+  kpeaks,
+  detrend,
+  quality_mask: quality,
+  remove_outliers_sigma: outlierOn ? sigma : 0,  // ✅ αν είναι τσεκαρισμένο
+  neighbors,
+  neighbors_radius_arcsec: neighbors_radius,
+  centroid
+};
+
+    // 4) Κλήση στο backend (same-origin proxy)
+    busySet(35);
+    let res;
+    try{
+      res = await apiFetch(`${API_BASE}/fetch_detect`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    }catch(e){
+      busyStop();
+      alert(`Network error: ${e?.message||e}`);
+      return;
+    }
+
+    if(!res.ok){
+      let detail = '';
+      try{ const j = await res.json(); detail = j?.detail || JSON.stringify(j); }catch{ detail = res.statusText; }
+      busyStop();
+      alert(`Server error: HTTP ${res.status} ${detail}`);
+      return;
+    }
+
+    // 5) Ανάγνωση και βασικός έλεγχος
+    busySet(65);
+    const data = await res.json();
+    if(!data?.time?.length || !data?.flux?.length){
+      busyStop();
+      alert('No light curve returned.');
+      return;
+    }
+
+    // 6) Άμεσο render στα plots
+    const [T0, F0] = extractSeries(data); // όπως ήδη το έχεις
+    renderLC(T0, F0, data.candidates?.[0]?.windows?.intervals || []);
+    if ((data.candidates||[]).length) {
+      renderPF(T0, F0, data.candidates[0]);
+    }
+
+    // 7) Κανονικοποίηση candidates & συνολικά renders (όπως πριν)
+    const candsNorm   = normalizeCandidates(data.candidates || []);
+    const candsFinal  = fixProbabilities(candsNorm);
+    const tName = target || '(Target)';
+    const candsWithTarget = candsFinal.map(c => ({...c, _target: tName}));
+
+    perTargetStore[tName] = { T: T0, F: F0 };
+    allCands = [...(allCands || []), ...candsWithTarget];
+    renderAll(T0, F0, candsWithTarget, data.neighbors || null);
+  
+// --- Fallback: αν ο server δεν έφερε neighbors αλλά ο χρήστης το έχει τσεκάρει, ζήτα Gaia μόνος σου
+if (!data.neighbors && neighbors) {
+  try {
+    const tName = target || '(Target)';
+    const nei = await fetchGaiaNeighbors(tName, neighbors_radius);
+    lastNeighbors = nei;
+    // απόθεσε τους στο perTargetStore για το συγκεκριμένο target
+    if (perTargetStore[tName]) perTargetStore[tName].neighbors = nei;
+    renderNeighbors(nei);
+  } catch {}
+}
+
+     busySet(100);
+  }catch(err){
+    console.error('fetch_detect failed:', err);
+    alert(err?.message || 'Fetch failed');
+  }finally{
     busyStop();
   }
 }
-  
+
+
 // ---------- Upload TXT ----------
 async function runUpload(){
   const status = document.getElementById('statusUp');
@@ -1177,28 +1326,38 @@ async function runUpload(){
     status.textContent = 'Running...';
 
     const file = document.getElementById('file')?.files?.[0];
-    if(!file){ alert('Choose a .txt or .csv (2 columns: time, flux)'); status.textContent=''; return; }
+    if(!file){
+      alert('Choose a .txt or .csv (2 columns: time, flux)');
+      status.textContent='';
+      return;
+    }
 
+    // διάβασε αρχείο
     const txt = await file.text();
 
-    const engine = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
-    const kpeaks = Number(document.getElementById('kpeaks')?.value || 3);
+    // ρυθμίσεις από UI
+    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
 
     // μην ζητήσεις neighbors σε upload (δεν έχουμε πραγματικό TIC)
     window._skipNeighborsOnce = true;
 
-    // POST στο /fetch_detect (ΟΧΙ /predict-file)
-    const res = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        engine,
-        kpeaks,
-        text: txt,               // περιεχόμενο του αρχείου
-        neighbors: false,
-        source: 'upload',
-        target: 'TIC 00000000'   // placeholder με σωστό prefix που ζητά το backend
-      })
+    // ελάχιστο payload συμβατό με backend
+    const payload = {
+      source: 'upload',
+      mission: 'auto',
+      target: 'TIC 00000000',
+      engine,
+      kpeaks,
+      text: txt,                 // περιεχόμενο αρχείου
+      neighbors: false,
+      centroid: false
+    };
+
+    const res = await apiFetch(`${API_BASE}/fetch_detect`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
     });
 
     if(!res.ok){
@@ -1207,27 +1366,19 @@ async function runUpload(){
       throw new Error(`HTTP ${res.status} ${t}`);
     }
 
-    // --- render όπως στο runFetch (ΟΛΑ μέσα στην async function) ---
+    // απόκριση server
     const data = await res.json();
-    const [T, F] = parseTxt(txt);
-    const candNorm = normalizeCandidates(data.candidates || []);
-    const candFinal = fixProbabilities(candNorm);   // <-- ΝΕΟ
-    // ...
-    renderAll(data.time, data.flux, candFinal, lastNeighbors);
+    const [T, F] = extractSeries(data);      // προτιμά τα series από το backend
+
+    const candNorm  = normalizeCandidates(data.candidates || []);
+    const candFinal = fixProbabilities(candNorm);
 
     currentTarget = '(Uploaded TXT)';
     lastPreproc   = { source:'upload' };
     lastNeighbors = null;
 
-    busySet(55,'Processing & BLS…');
-    busyAdvance(90,'Processing & BLS…');
     renderAll(T, F, candFinal, null);
-    busyAdvance(98,'Rendering plots…');
-
     status.textContent = 'Done';
-    setTimeout(()=>busyStop(), 600);
-    updateMlBadge?.();
-
   } catch(e){
     console.error(e);
     status.textContent = 'Error';
@@ -1242,7 +1393,6 @@ document.addEventListener('DOMContentLoaded', () => {
   
 
 
-// ---------- Export CSV ----------
 // ---------- Export CSV ----------
 function buildCsvRows(cands){
   const rows = [];
@@ -1265,7 +1415,7 @@ function buildCsvRows(cands){
       c.vetting?.odd_even_diff_ppm,
       c.vetting?.has_secondary_like ? 'Yes' : 'No',
       c.centroid?.sigma,
-      c.centroid?.rho
+      c.centroid?.rho_flux_centroid
     ]);
   }
   return rows;   // ✅ καλό είναι να επιστρέφει ρητά
@@ -1338,8 +1488,11 @@ const updateSuggest = debounce(async ()=>{
   const containsParam = (onlyDigits || ticDigits) ? '&contains=1' : '';
 
   try{
-    const r = await fetch(`${APP_BASE}/suggest?q=${encodeURIComponent(q)}${domParam}&limit=10${containsParam}`,
-                          { headers:{ 'Accept':'application/json' }});
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = new URLSearchParams({
+  q, limit: '10'
+}).toString() + (domParam || '') + (containsParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' }});
     let list = [];
     if (r.ok) list = normalizeSuggestData(await r.json());
     if (list.length) showSuggest(list, input); else hideSuggest();
@@ -1350,48 +1503,91 @@ const updateSuggest = debounce(async ()=>{
 
 
 // ---------- Transit Fit ----------
+
 async function runFit(){
+  // --- normalize target ---
+  let targetNorm = (document.getElementById('ticInput').value || window.currentTarget || '').trim();
+  const mDigits = targetNorm.match(/(\d{6,})/);
+  if (mDigits) targetNorm = `TIC ${mDigits[1]}`;
+
+  // --- read UI ---
+  const sourceUI   = (document.getElementById('sourceSel').value || 'mast_spoc').trim();
+  const missionSel = (document.getElementById('missionSel').value || 'auto').trim();
+
+  // --- force mission for backend ---
+  // Για TIC → TESS. (Αν κάποτε περάσεις KIC/EPIC, προσαρμόζεις ανάλογα.)
+  let missionApi = 'TESS';
+  if (/^KIC\s*\d+$/i.test(targetNorm)) missionApi = 'Kepler';
+  if (/^EPIC\s*\d+$/i.test(targetNorm)) missionApi = 'K2';
+
   const fitStatus = document.getElementById('fitStatus');
-  const fitBox = document.getElementById('fitBox');
+  const fitBox    = document.getElementById('fitBox');
+
   try{
-    if(!lastCands.length){ alert('Run detect first'); return; }
-    const cand = lastCands[selectedIdx];
-    if(!cand){ alert('Select a candidate'); return; }
+    if (!window.lastCands?.length){ alert('Run detect first'); return; }
+    const cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+    if (!cand){ alert('Select a candidate'); return; }
+
     fitStatus.textContent = 'Fitting...';
 
-    // Καλούμε το /predict του backend με period/duration/t0 (όχι /fit_transit)
-    const source   = document.getElementById('sourceSel').value || 'mast_spoc';
-    const mission  = document.getElementById('missionSel').value || 'TESS';
-    const target   = document.getElementById('ticInput').value || currentTarget;
+    // optional: πάρε και method/bootstrap από το UI, αν ο backend τα δέχεται
+    const method = (document.getElementById('fitMethod')?.value || 'batman');
+    const bootN  = Number(document.getElementById('fitBoot')?.value || 0);
 
-    const body = JSON.stringify({
-      source, mission, target,
-      period: cand.period, duration: cand.duration, t0: cand.t0
-    });
+   const body = {
+  target:   targetNorm,
+  period:   Number(cand.period),
+  duration: Number(cand.duration),
+  t0:       Number.isFinite(cand.t0) ? cand.t0 : undefined, // προαιρετικό
+  mission:  missionApi,   // 'TESS' για TIC, αλλιώς 'Kepler'/'K2' όπως ήδη κάνεις
+  source:   sourceUI,     // 'mast_spoc' | 'mast_qlp'
+  method:   method,       // 'batman' | 'trapezoid'
+  bootstrap: bootN        // integer
+};
 
-    const res = await fetch(`${API_BASE}/predict?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if(!res.ok){ fitStatus.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+const res = await apiFetch(`${API_BASE}/fit_transit`, {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body: JSON.stringify(body)
+});
 
-    // Μετατρέπουμε phase→“ψευδο-time” για να εμφανιστεί σωστά το overlay στο phase plot
-    const P = data?.params?.period ?? cand.period;
-    const T0 = data?.params?.t0 ?? cand.t0;
+    if (!res.ok){
+      // δείξε αναλυτικό λόγο για να ξέρεις τι γύρισε 400
+      const txt = await res.text().catch(()=> '');
+      fitStatus.textContent = `Error (HTTP ${res.status})`;
+      console.error('fit_transit error:', txt || res.statusText);
+      alert(`fit_transit failed (HTTP ${res.status})\n${txt}`);
+      return;
+    }
+
+    const data = await res.json();
+
+    // Μικρό trick: φτιάχνουμε “ψευδο-time” για overlay στο phase plot
+    const P  = data?.params?.period ?? cand.period;
+    const T0 = data?.params?.t0     ?? cand.t0;
     const timesFromPhase = (data.phase||[]).map(ph => T0 + (ph + 0.5) * P);
+    window.lastFit = {
+      params: data.params || {period:P, t0:T0},
+      model_curve: { time: timesFromPhase, flux: data.model || [] }
+    };
 
-    lastFit = { params: data.params || {period:P, t0:T0}, model_curve: { time: timesFromPhase, flux: data.model || [] } };
+    // re-render PF (το overlay μπορείς να το προσθέσεις αν θες)
+    renderPF(window.lcTime, window.lcFlux, cand);
 
-    renderPF(lcTime, lcFlux, cand);
-
+    // info box
     const p = data.params || {}; const u = data.uncertainties || {};
-    function fmt(v, s){ if(v==null || !isFinite(v)) return ''; return (s!=null && isFinite(s)) ? `${v.toFixed(4)}  ${s.toFixed(4)}` : v.toFixed(4); }
-    fitBox.innerHTML = `
-      <div><b>Method:</b> model</div>
-      <div><b>Rp/R:</b> ${fmt(p.rp_rs, u.rp_rs)}  <b>b:</b> ${fmt(p.b, u.b)}  <b>a/R:</b> ${fmt(p.a_rs, u.a_rs)}</div>
-      <div class="muted">P=${p.period?.toFixed? p.period.toFixed(6):p.period} d, t0=${p.t0?.toFixed? p.t0.toFixed(6):p.t0}</div>
-    `;
+    const fmt = (v,s) => (Number.isFinite(v) ? (s!=null && Number.isFinite(s) ? `${v.toFixed(4)}  ${s.toFixed(4)}` : v.toFixed(4)) : '');
+    fitBox.innerHTML =
+      `<div><b>Method:</b> ${method}</div>
+       <div><b>Rp/R:</b> ${fmt(p.rp_rs,u.rp_rs)}  <b>b:</b> ${fmt(p.b,u.b)}  <b>a/R:</b> ${fmt(p.a_rs,u.a_rs)}</div>
+       <div class="muted">P=${p.period?.toFixed ? p.period.toFixed(6):p.period} d, t0=${p.t0?.toFixed ? p.t0.toFixed(6):p.t0}</div>`;
     fitBox.style.display='block';
     fitStatus.textContent = 'Done';
-  }catch(e){ console.error(e); fitStatus.textContent = 'Error'; }
+  }catch(e){
+    console.error(e);
+    fitStatus.textContent = 'Error';
+    alert(e?.message || e);
+  }
 }
 
 // ---------- PDF report ----------
@@ -1408,7 +1604,7 @@ async function runPdf(){
       neighbors: lastNeighbors || {},
       fit_method: document.getElementById('fitMethod').value
     };
-    const res = await fetch(`${API_BASE}/report_pdf?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const res = await apiFetch(`${API_BASE}/report_pdf`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if(!res.ok){
       const j = await res.json().catch(()=>({error:"unknown"}));
       alert(j.error || "report failed"); return;
@@ -1469,7 +1665,7 @@ document.getElementById('rhoThr').addEventListener('input', ()=>{
   document.getElementById('neiRadius').addEventListener('input', ()=>{ setNeighborsLabel(); });
 
   document.getElementById('fitBtn').addEventListener('click', runFit);
-  document.getElementById('pdfBtn').addEventListener('click', runPdf);
+  
   // Browse modal bindings
   document.getElementById('browseBtn')?.addEventListener('click', openBrowse);
   document.getElementById('browseCloseBtn')?.addEventListener('click', closeBrowse);
@@ -1722,6 +1918,26 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try{
+    const r = await apiFetch(`${API_BASE}/health`, { headers: { 'Accept':'application/json' }});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json().catch(()=> ({}));
+    if (j?.ok !== true) console.warn('Backend health non-ok:', j);
+  }catch(e){
+    const bar = document.getElementById('busy');
+    if (bar){
+      bar.classList.remove('hidden'); bar.style.display='flex';
+      document.getElementById('busyTxt').textContent = 'Backend proxy error';
+      document.getElementById('busyPct').textContent = (e?.message || '502/Network');
+    }
+    console.error('Health check failed:', e);
+  }
+});
+</script>
+
+
 <script src="/detector/engine-toggle.js?v=7"></script>
 
 <!-- Browse Modal -->
@@ -1771,7 +1987,8 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ORAMAX centered footer -->
 <footer class="ox-footer">
   <div class="ox-footer-inner">
-    Copyright © 2025 | Powered by Oramax Team | For NASA Challenge 2025
+    <div>Copyright © 2025 | Powered by Orama X Team | All rights reserved.</div>
+    <div>NASA Space Apps Challenge 2025</div>
   </div>
 </footer>
 
@@ -2062,45 +2279,43 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
     alert(err?.message || err);
     setMlStatus('Explain failed.');
   }
-});
+});  // <-- αυτό λείπει και προκαλεί το "Unexpected end of input"
 
-// ⬇️ ΑΥΤΑ ΤΑ ΔΥΟ ΠΡΕΠΕΙ ΝΑ ΥΠΑΡΧΟΥΝ
-});     
+//⬇️ ΑΥΤΑ ΤΑ ΔΥΟ ΠΡΕΠΕΙ ΝΑ ΥΠΑΡΧΟΥΝ
 })();   
 </script>
 
 <script>
-  // Χρησιμοποιούμε το σωστό backend για το fallback
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
-
+  
+// --- Service Worker registration (version-aware) ---
   if ('serviceWorker' in navigator) {
-    // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
-    navigator.serviceWorker.getRegistration('/detector/').then(reg => {
+    const SW_URL = '/detector/sw-oramax.js?v=60';
+    const SCOPE  = '/detector/';
+    const KEY    = 'sw-refreshed';
+
+    navigator.serviceWorker.getRegistration(SCOPE).then(reg => {
       if (!reg) {
-        navigator.serviceWorker.register('/detector/sw-oramax.js?v=57', { scope: '/detector/' })
-          .catch(err => console.error('SW register failed', err));
+        navigator.serviceWorker.register(SW_URL, { scope: SCOPE })
+          .catch(err => console.error('SW registration failed:', err));
       } else {
-        // προαιρετικό: πες του να τσεκάρει για update στο background
-        reg.update().catch(()=>{});
+        reg.update().catch(() => {});
       }
     });
 
-    // Κάνε reload ΜΙΑ φορά όταν γίνει controller για πρώτη φορά (όχι αμέσως)
     if (!navigator.serviceWorker.controller) {
       const onCtrl = () => {
         navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
-        if (!sessionStorage.getItem('sw-refreshed')) {
-          sessionStorage.setItem('sw-refreshed', '1');
+        if (!sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, '1');
           location.reload();
         }
       };
       navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
     } else {
-      // Μόλις έχουμε controller, καθάρισε το flag
-      sessionStorage.removeItem('sw-refreshed');
+      sessionStorage.removeItem(KEY);
     }
   }
+
 </script>
 
 </body>
