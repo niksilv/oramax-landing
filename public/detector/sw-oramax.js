@@ -1,5 +1,5 @@
 // OramaX SW proxy v61 — Gaia GET-first + smart POST fallback (TIC/KIC/EPIC), CORS-safe
-const VERSION = 'v62';
+const VERSION = 'v63';
 
 const BACKENDS = [
   'https://oramax-exoplanet-api.fly.dev/exoplanet', // κύριο upstream
