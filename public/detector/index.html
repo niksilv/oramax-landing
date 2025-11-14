@@ -524,10 +524,12 @@ const IS_LOCAL = location.hostname === 'localhost' || location.hostname === '127
 // ΠΑΝΤΑ same-origin, για να μην έχουμε CORS
 const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
 const APP_BASE = API_BASE;
+Object.defineProperty(window, 'API_BASE', { value: API_BASE, writable: false, configurable: false });
+Object.defineProperty(window, 'APP_BASE', { value: APP_BASE, writable: false, configurable: false });
 
 // Αν υπάρχουν global που τα διαβάζουν άλλα scripts, άφησέ τα:
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
+window.API_BASE = API_BASE;
+window.APP_BASE = APP_BASE;
 
 
 /* ---------- Helpers ---------- */
@@ -2071,14 +2073,14 @@ $('mlExplainBtn')?.addEventListener('click', async ()=>{
 
 <script>
   // Χρησιμοποιούμε το σωστό backend για το fallback
-window.API_BASE = window.API_BASE || API_BASE;
-window.APP_BASE = window.APP_BASE || APP_BASE;
+window.API_BASE = API_BASE;
+window.APP_BASE = APP_BASE;
 
   if ('serviceWorker' in navigator) {
     // Κάνε register ΜΟΝΟ αν δεν υπάρχει ήδη registration στο scope
     navigator.serviceWorker.getRegistration('/detector/').then(reg => {
       if (!reg) {
-        navigator.serviceWorker.register('/detector/sw-oramax.js?v=61', { scope: '/detector/' })
+        navigator.serviceWorker.register('/detector/sw-oramax.js?v=64', { scope: '/detector/' })
           .catch(err => console.error('SW register failed', err));
       } else {
         // προαιρετικό: πες του να τσεκάρει για update στο background
