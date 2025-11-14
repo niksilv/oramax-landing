@@ -1,37 +1,30 @@
-/** @type {import('next').NextConfig} */
+﻿/** @type {import('next').NextConfig} */
+const upstream = (process.env.UPSTREAM_BASE || 'https://oramax-exoplanet-api.fly.dev')
+  .replace(/\/+$/,'');
+
 const nextConfig = {
-  typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+  reactStrictMode: true,
 
   async rewrites() {
-  if (!isProd) return [];
-  return [{ source: '/detector/api/:path*', destination: `${process.env.UPSTREAM_BASE}/:path*` }];
-}
-
-    // Προτεραιότητα: UPSTREAM_BASE → TARGET → ασφαλές default (prod) → localhost (dev)
-    const PROD_DEFAULT = 'https://oramax-exoplanet-api.fly.dev/exoplanet';
-    const upstream =
-      process.env.UPSTREAM_BASE ||
-      process.env.TARGET ||
-      (isProd ? PROD_DEFAULT : 'http://localhost:8000/exoplanet');
-
     return [
+      // σερβίρει το static UI
       { source: '/detector',  destination: '/detector/index.html' },
       { source: '/detector/', destination: '/detector/index.html' },
 
-      // Proxy τα πάντα προς το backend
-      { source: '/detector/api/:path*', destination: `${upstream}/:path*` },
-
-      // Προαιρετικό unified path
-      { source: '/api/exo/:path*',      destination: `${upstream}/:path*` },
+      // API proxy (same-origin  no CORS)
+      { source: '/detector/api/:path*', destination: `${upstream}/exoplanet/:path*` },
+      { source: '/api/:path*',          destination: `${upstream}/exoplanet/:path*` },
     ];
   },
 
   async headers() {
-    return [{
-      source: '/:path*',
-      headers: [{ key: 'Cache-Control', value: 'no-store' }],
-    }];
+    return [
+      { source: '/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+        ]
+      }
+    ];
   },
 };
 

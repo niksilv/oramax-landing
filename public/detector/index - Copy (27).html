@@ -1,0 +1,2332 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Orama X · Exoplanet Detector</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<script>
+// ===== API bases (dynamic) =====
+const IS_LOCAL = ['localhost','127.0.0.1'].includes(location.hostname);
+  if (IS_LOCAL) {
+    const s = document.createElement('script');
+    s.src = '/detector/app.js?v=dev';
+    document.head.appendChild(s);
+  }
+
+// ΠΑΝΤΑ same-origin proxy: /detector/api/* (σε prod) — αποφεύγουμε CORS
+const API_BASE = IS_LOCAL ? 'http://localhost:8000/exoplanet' : '/detector/api';
+const APP_BASE = API_BASE;
+
+// εκθέτουμε και global για όποια scripts τα χρειαστούν
+window.API_BASE = API_BASE;
+window.APP_BASE = APP_BASE;
+</script>
+
+<script>
+/* --- OramaX API fetch helper: no-store + versioned query --- */
+window.ORAMAX_UI_VER = '2025-10-25.1';  // bump σε κάθε release
+function apiFetch(url, opts = {}) {
+  const u = new URL(url, location.origin);
+  u.searchParams.set('_v', window.ORAMAX_UI_VER);
+  const headers = Object.assign(
+    { 'Cache-Control': 'no-store', 'Pragma': 'no-cache', 'Accept': 'application/json' },
+    (opts.headers || {})
+  );
+  return fetch(u.toString(), Object.assign({}, opts, { headers }));
+}
+</script>
+
+
+<style>
+/* ===== NAV look-and-feel (match main site) ===== */
+#ox-nav{
+  position:sticky; top:0; z-index:1000;
+  background:#0b0e1a; border-bottom:1px solid #151a2c; box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+/* wrap: κρατά το brand αριστερά, αλλά μας δίνει reference για να κεντράρουμε το menu */
+#ox-nav .wrap{
+  position:relative;                      /* νέο */
+  max-width:1200px; margin:0 auto; padding:12px 16px;
+  display:flex; align-items:center; gap:22px; justify-content:flex-start;
+}
+#ox-nav .brand{display:inline-flex;align-items:center;gap:10px;color:#e6ecff;text-decoration:none;font-weight:700}
+#ox-nav .brand img{height:22px;width:auto;display:block;filter:brightness(1.1)}
+
+/* menu: κεντραρισμένο οπτικά στη μπάρα */
+#ox-nav .menu{
+  display:flex; align-items:center; gap:18px;
+  position:absolute; left:50%; transform:translateX(-50%);   /* κέντρο */
+}
+#ox-nav .menu>a{color:#e6ecff;text-decoration:none;font-weight:600;padding:8px 12px;border-radius:10px;position:relative;transition:color .25s}
+#ox-nav .menu>a:hover{color:#fff}
+#ox-nav .menu>a::after{content:"";position:absolute;left:10%;bottom:4px;width:0;height:2px;background:#3956d7;border-radius:1px;transition:width .3s}
+#ox-nav .menu>a:hover::after{width:80%}
+
+/* pill look for "Our Project" */
+#ox-nav .our-project{display:inline-flex;align-items:center;gap:6px;color:#e6ecff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);padding:8px 12px;border-radius:12px}
+#ox-nav .caret{margin-left:2px;opacity:.9}
+
+/* dropdown: ΔΕΝ κλείνει στο κλικ και είναι κεντραρισμένο κάτω από το κουμπί */
+#ox-nav .has-sub{ position:relative; }                         /* χωρίς extra padding-bottom */
+#ox-nav .has-sub:hover .submenu,
+#ox-nav .has-sub:focus-within .submenu{ display:block; }       /* hover + focus */
+
+#ox-nav .has-sub::after{                                       /* μικρό buffer για να μη χάνεται το hover */
+  content:""; position:absolute; left:0; right:0; top:100%; height:8px;
+}
+
+#ox-nav .submenu{
+  position:absolute; top:100%;                                  /* κολλητά στο κουμπί */
+  left:50%; transform:translateX(-50%);                         /* κέντρο κάτω από το κουμπί */
+  min-width:260px; margin-top:0;
+  background:#0b0e1a; border:1px solid #1a223b; border-radius:12px;
+  box-shadow:0 18px 38px rgba(0,0,0,.45); padding:6px 0; display:none; z-index:50;
+}
+#ox-nav .submenu a{display:block;color:#e6ecff;padding:10px 14px;text-decoration:none;border-radius:8px;margin:2px 4px}
+#ox-nav .submenu a:hover{background:#141a2d;color:#fff}
+</style>
+
+
+<!-- moved inline JS below -->
+<script>
+// === Top-N suggestions on focus ===
+async function showTopSuggestOnFocus(){
+  const input = document.getElementById('ticInput');
+  if(!input) return;
+  try{
+    const mission = document.getElementById('missionSel')?.value || 'auto';
+    const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
+    const q = 'TIC '; // generic to get common targets
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = new URLSearchParams({ q, limit: '20', contains: '1' }).toString() + (domParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' } })
+    if(!r.ok) return;
+    const list = normalizeSuggestData(await r.json());
+    if(list.length) showSuggest(list, input);
+  }catch{}
+}
+
+// === Browse modal ===
+let _browsePage = 0;
+let _browseLastQuery = '';
+function openBrowse(){
+  const m = document.getElementById('browseModal');
+  if(!m) return;
+  const q = (document.getElementById('ticInput')?.value || '').trim();
+  document.getElementById('browseQuery').value = q;
+  _browsePage = 0;
+  _browseLastQuery = q || 'TIC ';
+  m.style.display = 'flex';
+  searchBrowse();
+}
+function closeBrowse(){ const m=document.getElementById('browseModal'); if(m) m.style.display='none'; }
+function renderBrowse(list, totalGuess){
+  const el = document.getElementById('browseList');
+  el.innerHTML = (list||[]).map((s,i)=>`
+    <div class="row" data-i="${i}" style="align-items:center;gap:10px">
+      <input type="checkbox" class="brwPick" data-name="${(s.value||s.label)||''}">
+      <div style="flex:1;cursor:pointer">${(s.label||s.value)}</div>
+    </div>`).join('');
+
+  document.getElementById('browseStatus').textContent =
+    `${list.length} results · page ${_browsePage+1}`;
+
+  // κλικ στο κείμενο = toggle checkbox, διπλό-κλικ = μονή επιλογή & close
+  Array.from(el.children).forEach(div=>{
+    const cb = div.querySelector('.brwPick');
+    const i = +div.getAttribute('data-i');
+    const s = list[i];
+    div.addEventListener('click', (e)=>{
+      if (e.target !== cb) cb.checked = !cb.checked;
+    });
+    div.addEventListener('dblclick', ()=>{
+      const input = document.getElementById('ticInput');
+      applySuggestion(s, input);
+      closeBrowse();
+    });
+  });
+}
+
+function addSelectedFromBrowse(){
+  const picks = [...document.querySelectorAll('.brwPick:checked')];
+  const ids = picks.map(x => (x.dataset.name || '').trim()).filter(Boolean);
+  if (!ids.length) return;
+  queueDetect(ids);
+  closeBrowse();
+}
+
+function openBulk(){ const m=document.getElementById('bulkModal'); if(m) m.style.display='flex'; }
+function closeBulk(){ const m=document.getElementById('bulkModal'); if(m) m.style.display='none'; }
+
+function parseTargetsFromText(txt){
+  return (txt || '')
+    .split(/[\s,;]+/).map(s => s.trim()).filter(Boolean)
+    .map(s => /^\d+$/.test(s) ? `TIC ${s}` : s.toUpperCase())
+    .filter(s => /^(TIC|KIC|EPIC)\s+\d+$/.test(s));
+}
+function addFromBulkTextarea(){
+  const raw = document.getElementById('bulkTA').value;
+  const ids = Array.from(new Set(parseTargetsFromText(raw)));
+  if (!ids.length) return;
+  queueDetect(ids);
+  closeBulk();
+}
+
+async function addFromBulkFile(file){
+  const btn = document.getElementById('bulkImportBtn');
+  try{
+    if (btn) btn.disabled = true;
+    const text = await file.text();
+    const ids = Array.from(new Set(parseTargetsFromText(text)));
+    if (!ids.length){ alert('Δεν βρέθηκαν έγκυρα TIC/KIC/EPIC στο αρχείο.'); return; }
+    await queueDetect(ids);
+    closeBulk();
+  } catch(e){
+    console.error(e);
+    alert('Import failed: ' + (e?.message || e));
+  } finally{
+    if (btn) btn.disabled = false;
+  }
+}
+
+
+let _batchRunning = false;
+
+async function queueDetect(targets){
+  const unique = (targets||[]).map(s => s.trim()).filter(Boolean);
+  if (!unique.length) return;
+  await runBatchDetect(unique);
+}
+
+async function runBatchDetect(list){
+  if (_batchRunning) return;
+  _batchRunning = true;
+  showBatchStatus(`Queued ${list.length} targets…`);
+
+  for (let i=0; i<list.length; i++){
+    const t = list[i];
+    showBatchStatus(`(${i+1}/${list.length}) ${t} …`);
+
+    const ctrl = new AbortController();      // ← ΝΕΟ
+    const TIMEOUT_MS = 600000;                // π.χ. 10min
+    let to = null;
+
+    try{
+      to = setTimeout(()=>{ try{ ctrl.abort(); }catch{}; }, TIMEOUT_MS);
+      await runDetectForTarget(t, { signal: ctrl.signal });   // ← ΝΕΟ
+    }catch(e){
+      const reason = (e?.name === 'AbortError') ? `timeout ${TIMEOUT_MS/1000}s` : (e?.message || e);
+      showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${reason}`);
+      // συνεχίζουμε
+    }finally{
+      if (to) clearTimeout(to);
+    }
+
+    await new Promise(r=>setTimeout(r,180)); // μικρή ανάσα
+  }
+
+  showBatchStatus('Done.');
+  _batchRunning = false;
+}
+
+function showBatchStatus(msg){
+  const el = document.getElementById('batchStatus');
+  if (el) el.textContent = msg || '';
+}
+
+async function runDetectForTarget(target, opts = {}){
+  const inp = document.getElementById('ticInput');
+  if (inp) inp.value = target;
+  await runFetch(opts);                // ← περνάμε { signal } από το batch
+}
+
+  
+async function searchBrowse(){
+  const q = (document.getElementById('browseQuery')?.value || _browseLastQuery || '').trim() || 'TIC ';
+  _browseLastQuery = q;
+  const limit = 20, offset = _browsePage * limit;
+  const mission = document.getElementById('missionSel')?.value || 'auto';
+  const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
+  try{
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = new URLSearchParams({
+  q, limit: String(limit), offset: String(offset), contains: '1'
+}).toString() + (domParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' } })
+    if(!r.ok){ renderBrowse([],0); return; }
+    const list = normalizeSuggestData(await r.json());
+    renderBrowse(list, 0);
+  }catch{ renderBrowse([],0); }
+}
+function browseNext(){ _browsePage++; searchBrowse(); }
+function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse(); }
+
+
+</script>
+  <style>
+    :root{ --card:#fff; --border:#e5e7eb; --muted:#666; }
+    *{ box-sizing:border-box }
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin: 24px; background:#fafafa; color:#111;}
+    h1{ font-size:22px; margin-bottom:18px; }
+    h3{ margin: 0 0 10px 0; font-size:16px;}
+    .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,.04); }
+    .row { display:flex; gap:16px; flex-wrap: wrap; }
+    .col { flex:1; min-width: 360px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom:1px solid #eee; text-align:left; font-size:13px;}
+    th { background:#f7f7f7; font-weight:600;}
+    .prob { font-weight:700; }
+    input, select, button { padding:8px 10px; border:1px solid #ddd; border-radius:10px; font-size:13px; background:#fff;}
+    input[type=text]{ min-width:260px; }
+    button{ cursor:pointer; background:#111; color:#fff; border-color:#111;}
+    button:disabled{ opacity:.7; cursor:not-allowed; }
+    tr.clickable:hover{ background:#f7f7f7; cursor:pointer; }
+    .muted{ color:var(--muted); font-size:12.5px; }
+    .inline{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    summary{ cursor:pointer; }
+    tr.vetted{ background:#eaffea !important; }
+    .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid #ddd; background:#fff;}
+    .badge-ok{ background:#e6ffed; border-color:#b3ffcc; color:#006622; }
+    .badge-beb{ background:#ffe6e6; border-color:#ffb3b3; color:#b30000; }
+    .note{ font-size:12.5px; color:#333; }
+    .kv{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f7f7f7; border:1px solid #eee; border-radius:10px; padding:8px; }
+    /* custom suggest */
+    #suggMenu{ position:absolute; z-index:9999; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.12); max-height:240px; overflow:auto; display:none; }
+    #suggMenu .sugg-item{ padding:6px 10px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    #suggMenu .sugg-item:hover{ background:#f7f7f7 }
+  
+/* Busy bar */
+#busy{position:sticky;top:0;z-index:999;background:#fff7;border:1px solid #eee;border-radius:10px;padding:6px 10px;display:none;align-items:center;gap:8px;margin-bottom:8px;backdrop-filter:saturate(1.2) blur(2px)}
+#busy .bar{position:relative;flex:1;height:6px;background:#f0f0f0;border-radius:999px;overflow:hidden;min-width:140px}
+#busy .bar::before{content:'';position:absolute;left:0;top:0;bottom:0;width:30%;background:repeating-linear-gradient(45deg, #e0e0e0 0 8px,#cfcfcf 8px 16px);animation:ind 1.1s linear infinite;border-radius:999px}
+#busyTxt{font-size:12px;color:#444}
+#busyPct{font-size:12px;color:#666}
+@keyframes ind{to{transform:translateX(260px)}}
+.hidden{display:none}
+
+/* --- Browse modal --- */
+#browseModal{position:fixed;inset:0;display:none;background:rgba(0,0,0,.35);z-index:10000;align-items:center;justify-content:center}
+#browseCard{background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.2);width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+#browseHead{padding:10px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center}
+#browseBody{padding:8px 0;overflow:auto}
+#browseList .row{padding:8px 12px;border-bottom:1px solid #f2f2f2;cursor:pointer}
+#browseList .row:hover{background:#f7f7f7}
+#browseFoot{padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;justify-content:space-between}
+
+/* --- ORAMAX: centered navbar & footer (DARK, fixed dropdown) --- */
+.ox-nav {
+  position: relative;
+  z-index: 1000;
+  background: #0b0e1a;                 /* dark header */
+  border-bottom: 1px solid #151a2c;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35);
+}
+.ox-nav-inner{
+  max-width: 1100px; margin: 0 auto; padding: 10px 12px;
+  display:flex; align-items:center; justify-content:center; gap:18px;
+}
+
+/* links in header */
+.ox-nav a{
+  text-decoration:none; color:#e6ecff; font-weight:600;
+  padding:6px 10px; border-radius:10px; position:relative; transition:color .25s;
+}
+.ox-nav a:hover{ color:#ffffff; background:#141a2d; }
+
+/* dropdown */
+.ox-nav .ox-dropdown{ position:relative; padding-bottom:6px; } /* μικρό «γέφυρο» */
+.ox-nav .ox-dd-btn{ cursor:pointer; }
+
+/* κεντραρισμένο submenu + δεν κλείνει όταν πάω να κλικάρω */
+.ox-nav .ox-dd{
+  position:absolute; top:calc(100% + 6px); left:50%; transform:translateX(-50%);
+  background:#0b0e1a; color:#fff; border:1px solid #1a223b; border-radius:12px;
+  padding:6px 0; box-shadow:0 18px 38px rgba(0,0,0,.45); min-width:240px; display:none; z-index:50;
+}
+.ox-nav .ox-dd a{ color:#e6ecff; display:block; padding:10px 14px; border-radius:8px; margin:2px 4px; }
+.ox-nav .ox-dd a:hover{ background:#141a2d; color:#fff; }
+
+/* hover ΚΑΙ focus-within ώστε να μένει ανοιχτό όταν πας να κλικάρεις */
+.ox-nav .ox-dropdown:hover .ox-dd,
+.ox-nav .ox-dropdown:focus-within .ox-dd{ display:block; }
+
+/* footer (dark + centered) */
+.ox-footer{ margin:32px 0 0; border-top:1px solid #151a2c; background:#0b0e1a; box-shadow:0 -8px 24px rgba(0,0,0,.3); }
+.ox-footer-inner{ max-width:1100px; margin:0 auto; text-align:center; color:#a9b3d0; font-size:13px; line-height:1.6; padding:18px 0; }
+.ox-footer-inner a{ color:#a9b3d0; text-decoration:none; }
+.ox-footer-inner a:hover{ color:#fff; }
+
+/* responsive */
+@media (max-width:720px){
+  .ox-nav-inner{ flex-wrap:wrap; gap:10px; }
+}
+
+</style>
+
+      <!-- moved inline call below -->
+  <link rel="stylesheet" href="/ormax-ml-toggle.css" />
+<style>
+/* === Restore OramaX blue accent for all interactive controls === */
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+select,
+button {
+  accent-color: #2196f3;   /* βασικό μπλε */
+}
+
+/* Κουμπιά & dropdown borders */
+button,
+select {
+  border-color: #2196f3;
+}
+
+/* Hover / focus glow */
+button:hover,
+select:focus,
+input[type="range"]:focus {
+  box-shadow: 0 0 4px #2196f380;
+}
+
+/* Ασφάλεια σε dark mode — καθαρίζουμε όποιο filter τα σκοτώνει */
+body, #detector {
+  filter: none !important;
+}
+</style>
+
+<script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+
+</head>
+<body>
+
+<!-- === NAVBAR (same as main site) === -->
+<div id="ox-nav" aria-label="Main">
+  <div class="wrap">
+    <a href="/" class="brand" aria-label="Orama X home">
+      <img src="/logos/oramax-logo.png" alt="" />
+      <strong>ORAMA X</strong>
+    </a>
+
+    <nav class="menu">
+      <a href="/">Home</a>
+
+      <!-- Our Project dropdown -->
+      <div class="has-sub">
+        <a href="#" class="our-project" aria-haspopup="true" aria-expanded="false" onclick="event.preventDefault()">
+          Our Project <span class="caret">▾</span>
+        </a>
+        <div class="submenu" role="menu">
+          <a href="/our-project/exoplanet-detector" role="menuitem">Exoplanet Detector</a>
+          <a href="/our-project/our-challenge" role="menuitem">How it works?</a>
+        </div>
+      </div>
+
+      <a href="/our-team">Our Team</a>
+    </nav>
+  </div>
+</div>
+<!-- === /NAVBAR === -->
+
+
+
+  <h1>Orama X · Exoplanet Detector</h1>
+<div id="busy" class="hidden"><div class="bar" id="busyBar"></div><span id="busyTxt">Working…</span><span id="busyPct"></span></div>
+
+  <div class="card">
+    <h3>Live Fetch & Detect (select source)</h3>
+    <div class="inline" style="margin-bottom:8px;">
+      <label>Source</label>
+      <select id="sourceSel">
+        <option value="mast_spoc">MAST · SPOC (PDCSAP)</option>
+        <option value="mast_qlp">MAST · QLP</option>
+        <option value="url">External CSV/TXT URL</option>
+      </select>
+
+      <label>Mission</label>
+      <select id="missionSel">
+        <option value="auto">auto</option>
+        <option value="TESS">TESS</option>
+        <option value="Kepler">Kepler</option>
+        <option value="K2">K2</option>
+      </select>
+
+      <label>k-peaks</label>
+      <input type="number" id="kpeaks" value="3" min="1" max="5" style="width:70px"/>
+
+      <label>Detrend</label>
+      <select id="detrendSel">
+        <option value="flatten" selected>flatten</option>
+        <option value="none">none</option>
+      </select>
+
+      <label><input type="checkbox" id="qualityChk" checked/> quality mask</label>
+      <label><input type="checkbox" id="outlierChk" checked/> remove outliers</label>
+
+      <label>σ</label>
+      <input type="number" id="sigmaVal" value="5" step="0.5" style="width:70px"/>
+
+      <label><input type="checkbox" id="centroidChk"/> Centroid vetting (TESSCut)</label>
+      <label><input type="checkbox" id="gaiaChk"/> Gaia neighbors</label>
+    </div>
+
+    <!-- Probability + Centroid thresholds -->
+    <div class="inline" style="margin-bottom:8px;">
+      <span class="badge">Planet threshold</span>
+      <input type="range" id="thr" min="0.50" max="0.99" step="0.01" value="0.80" style="width:180px"/>
+      <span class="muted">p · <b id="thrLabel">0.80</b></span>
+      <span class="muted" id="vetCount"></span>
+
+      <span class="badge">Centroid σ-thr</span>
+      <input type="range" id="sigmaThr" min="1" max="10" step="0.5" value="3" style="width:160px"/>
+      <span class="muted"><b id="sigmaThrLabel">3.0</b></span>
+
+      <span class="badge">ρ-thr</span>
+      <input type="range" id="rhoThr" min="0.00" max="0.50" step="0.01" value="0.15" style="width:160px"/>
+      <span class="muted"><b id="rhoThrLabel">0.15</b></span>
+
+      <span class="badge">Gaia radius ["]</span>
+      <input type="range" id="neiRadius" min="20" max="120" step="5" value="60" style="width:160px"/>
+      <span class="muted"><b id="neiRadiusLabel">60</b></span>
+    </div>
+
+    <div class="inline">
+      <input type="text" id="ticInput" list="targetList" placeholder='TIC 307210830 (for MAST)' autocomplete="off" />
+      <input type="text" id="urlInput" placeholder="https://.../lightcurve.csv (time,flux)" style="display:none; min-width:400px;" />
+      <button id="runFetch">Fetch & Detect</button>
+      <button id="browseBtn" type="button" title="Open target browser">Browse</button>
+      <button id="bulkBtn" type="button" title="Paste a list of targets">Bulk</button>
+      <span class="muted" id="batchStatus"></span>
+      <button id="exportCsv">Export CSV</button>
+      <button id="exportVettedCsv" title="Export only candidates with P ≥ threshold">Export Vetted CSV</button>
+      <span class="muted" id="status"></span>
+    </div>
+
+    <div class="inline" style="margin-top:8px;">
+      <span class="badge" title="Controls the transit model used for curve fitting">Fit method</span>
+      <select id="fitMethod">
+        <option value="batman">batman</option>
+        <option value="trapezoid">trapezoid</option>
+      </select>
+      <span id="mlBadge" class="badge" style="display:none;margin-left:6px;">CNN mode</span>
+      <span class="badge">bootstrap N</span>
+      <input type="number" id="fitBoot" value="80" min="0" max="400" step="20" style="width:90px"/>
+      <button id="fitBtn">Fit transit (selected)</button>
+
+      <button id="pdfBtn" type="button" title="Create a PDF vetting report for the current target">
+  Download PDF report </button>
+      <span class="muted" id="fitStatus"></span>
+    </div>
+    <div id="fitBox" class="kv" style="margin-top:8px; display:none;"></div>
+    <!-- === AI / Machine Learning === -->
+<div class="card" id="mlCard">
+  <h3>AI / Machine Learning</h3>
+
+  <div class="inline" style="margin-bottom:8px;">
+    <button id="mlTrainBtn" type="button" title="Start/Resume training on server">Train new model</button>
+    <input id="mlDsFile" type="file" accept=".csv" style="display:none">
+    <button id="mlUploadBtn" type="button" title="Upload a labeled CSV dataset">Upload labeled dataset</button>
+    <button id="mlExplainBtn" type="button" title="Explain current prediction (selected candidate)">Explain prediction</button>
+    <button id="mlMetricsBtn" type="button" title="Fetch latest metrics">Refresh Model Stats</button>
+    <span id="mlStatus" class="muted"></span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="inline" role="tablist" style="gap:6px;">
+    <button id="tabDetect"    type="button" class="badge">Detection</button>
+    <button id="tabModelStat" type="button" class="badge">Model Stats</button>
+    <span class="muted">Tip: use “Explain prediction” while choose a candidate.</span>
+  </div>
+
+  <!-- Model Stats panel -->
+  <div id="mlStatsPanel" style="display:none; margin-top:10px;">
+    <div class="row">
+      <div class="col">
+        <h3>Metrics</h3>
+        <table>
+          <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+          <tbody id="mlMetricTbody">
+            <tr><td>Accuracy</td><td id="mAcc" class="kv"></td></tr>
+            <tr><td>Precision</td><td id="mPrec" class="kv"></td></tr>
+            <tr><td>Recall</td><td id="mRec" class="kv"></td></tr>
+            <tr><td>ROC-AUC</td><td id="mAuc" class="kv"></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="col">
+        <h3>Confusion Matrix</h3>
+        <div id="mlConfMat" style="height:320px;"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3>Feature importance / SHAP</h3>
+      <div id="mlShap" style="height:340px;"></div>
+      <div class="muted">If SHAP isn’t available from backend, θα δεις fallback feature importance.</div>
+    </div>
+  </div>
+
+  <!-- Data validation help -->
+  <details style="margin-top:10px;">
+    <summary><b>Dataset format (CSV)</b></summary>
+    <div class="note" style="margin-top:8px;">
+      Required: a header row with at least <code>label</code> and one numeric feature column.
+      Optional identifiers: <code>target</code>, <code>tic</code> κ.λπ.<br/>
+      <b>Example header:</b> <code>target,label,period,duration,depth,power,snr,delta_bic</code><br/>
+      Labels: 0 = non-planet, 1 = planet.
+    </div>
+  </details>
+</div>
+
+  </div>
+
+  <details>
+    <summary><b>Advanced: Upload custom light curve (TXT/CSV)</b></summary>
+    <div class="card" style="margin-top:10px;">
+      <h3>Upload TXT (2 columns: time, flux)</h3>
+      <input type="file" id="file" accept=".txt,.csv"/>
+      <button id="runUpload">Detect</button>
+      <span class="muted" id="statusUp"></span>
+    </div>
+  </details>
+
+  <div class="row">
+    <div class="col card">
+      <h3>Light Curve</h3>
+      <div id="lc" style="height:380px;"></div>
+    </div>
+    <div class="col card">
+      <h3>Phase-Folded (selected candidate)</h3>
+      <div id="pf" style="height:340px;"></div>
+      <div id="centroidBox" class="muted" style="margin-top:8px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Candidates <span class="muted">(green = vetted with P ≥ threshold; badge = centroid test)</span></h3>
+    <table id="cands"><thead>
+  <tr>
+    <th>#</th>
+    <th>TIC/Target</th> <!-- NEW -->
+    <th>Period (d)</th><th>Duration (d)</th><th>Depth</th><th>Power</th><th>P(planet)</th>
+    <th>SNR</th><th>ΔBIC</th><th>OddEven Δ (ppm)</th><th>Secondary?</th><th>Centroid</th>
+  </tr>
+</thead><tbody></tbody></table>
+  </div>
+
+  <div class="card">
+    <h3>Neighbors (Gaia DR3)</h3>
+    <div id="neighborsPlot" style="height:320px;"></div>
+    <div class="muted" id="neighborsInfo"></div>
+    <table id="neighborsTbl" style="margin-top:8px;">
+  <thead>
+    <tr>
+      <th>sep [″]</th>
+      <th>dx [″]</th>
+      <th>dy [″]</th>
+      <th>Gmag</th>
+      <th>BP−RP</th>
+      <th>parallax [mas]</th>
+      <th>pmRA [mas/yr]</th>
+      <th>pmDec [mas/yr]</th>
+      <th>RUWE</th>
+      <th>source_id</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+  </div>
+
+<script>
+
+
+/* ---------- Helpers ---------- */
+window.makeRegex = function(pattern, flags){
+  try { return new RegExp(pattern, flags); }
+  catch(e){
+    var esc = String(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(esc, flags);
+  }
+};
+
+function parseTxt(text){
+  const lines = text.trim().split(/\r?\n/);
+  const T=[], F=[];
+  for(const line of lines){
+    const [a,b] = line.trim().split(/[ ,\t]+/);
+    if(!a || !b) continue;
+    const t = parseFloat(a), f = parseFloat(b);
+    if(Number.isFinite(t) && Number.isFinite(f)){ T.push(t); F.push(f); }
+  }
+  return [T,F];
+}
+function phaseFold(time, flux, period, t0){
+  const folded = time.map((t,i)=>({x:(((t - t0 + 1e6*period)%period)/period), y:flux[i]}));
+  folded.sort((a,b)=>a.x-b.x);
+  return folded;
+}
+function shadedShapes(intervals){
+  if(!intervals) return [];
+  return intervals.map(iv => ({type:'rect', xref:'x', yref:'paper', x0:iv[0], x1:iv[1], y0:0, y1:1, fillcolor:'rgba(0,0,0,0.08)', line:{width:0}}));
+}
+
+function renderLC(time, flux, intervals = []) {
+  const traceLC = {
+    x: time,
+    y: flux,
+    type: 'scattergl',
+    mode: 'markers',
+    marker: { size: 3, opacity: 0.9 },
+    name: 'LC'
+  };
+
+  const shapes = (intervals || []).map(([t1, t2]) => ({
+    type: 'rect',
+    xref: 'x', yref: 'paper',
+    x0: t1, x1: t2,
+    y0: 0, y1: 1,
+    line: { width: 0 },
+    fillcolor: 'rgba(255,165,0,0.1)'
+  }));
+
+  Plotly.react('lc', [traceLC], {
+    margin: { l: 60, r: 20, t: 20, b: 50 },
+    autosize: true,
+    showlegend: false,
+    xaxis: { title: 'Time [BJD − 2457000]' },
+    yaxis: { title: 'Normalized Flux [unitless]' },
+    shapes
+  }, { responsive: true, displaylogo: false });
+}
+
+function centroidBadge(cent, sigmaThr, rhoThr){
+  if(!cent) return '';
+  if(!cent.available){
+    return '<span class="badge">n/a</span>';
+  }
+  const sig = cent.sigma, rho = cent.rho_flux_centroid;
+  const beb = (Number.isFinite(sig) && sig >= sigmaThr) && (!Number.isFinite(rho) || rho >= rhoThr);
+  return beb ? '<span class="badge badge-beb">BEB</span>' : '<span class="badge badge-ok">OK</span>';
+}
+
+function renderCentroidInfo(cent, sigmaThr, rhoThr){
+  const el = document.getElementById('centroidBox');
+  if(!cent){ el.textContent = ''; return; }
+  if(!cent.available){
+    el.textContent = `Centroid: ${cent.reason || 'n/a'}`;
+    return;
+  }
+  const parts = [];
+  if (Number.isFinite(cent.dr_pix))  parts.push(`Δr = ${cent.dr_pix.toFixed(3)} px`);
+  if (Number.isFinite(cent.sigma))   parts.push(`σ = ${cent.sigma.toFixed(2)} (thr ${sigmaThr.toFixed(2)})`);
+  if (Number.isFinite(cent.rho_flux_centroid)) parts.push(`ρ = ${cent.rho_flux_centroid.toFixed(2)} (thr ${rhoThr.toFixed(2)})`);
+  const txt = parts.join(', ');
+  const badge = centroidBadge(cent, sigmaThr, rhoThr);
+  el.innerHTML = `Centroid: ${txt} ${badge ? '  ' + badge : ''}`;
+}
+
+async function renderNeighbors(nei){
+  const info = document.getElementById('neighborsInfo');
+  const tbl  = document.querySelector('#neighborsTbl tbody');
+
+  // normalize object
+  if (Array.isArray(nei)) {
+    nei = { available: nei.length>0, radius_arcsec: Number(document.getElementById('neiRadius')?.value || 60), items: nei };
+  }
+
+  // αν δεν υπάρχουν καθόλου items
+  if(!nei || !nei.available){
+    info.textContent = nei?.reason ? ('Gaia: ' + nei.reason) : 'Gaia: n/a';
+    tbl.innerHTML=''; Plotly.purge('neighborsPlot'); return;
+  }
+
+  // map aliases
+  const mapItems = (arr) => (arr||[]).map(r=>{
+    const o = { ...r };
+    o.sep_arcsec = Number.isFinite(r.sep_arcsec) ? +r.sep_arcsec :
+                   Number.isFinite(r.sep)       ? +r.sep       : NaN;
+    o.dx_arcsec  = Number.isFinite(r.dx_arcsec)  ? +r.dx_arcsec  :
+                   Number.isFinite(r.dx)        ? +r.dx        : NaN;
+    o.dy_arcsec  = Number.isFinite(r.dy_arcsec)  ? +r.dy_arcsec  :
+                   Number.isFinite(r.dy)        ? +r.dy        : NaN;
+    o.Gmag = Number.isFinite(r.Gmag) ? +r.Gmag :
+             Number.isFinite(r.gmag) ? +r.gmag :
+             Number.isFinite(r.phot_g_mean_mag) ? +r.phot_g_mean_mag : NaN;
+    o.BP_RP   = Number.isFinite(r.BP_RP)   ? +r.BP_RP   : (Number.isFinite(r.bp_rp) ? +r.bp_rp : NaN);
+    o.parallax= Number.isFinite(r.parallax)? +r.parallax: (Number.isFinite(r.plx)   ? +r.plx   : NaN);
+    o.pmra    = Number.isFinite(r.pmra)    ? +r.pmra    : (Number.isFinite(r.pmRA)  ? +r.pmRA  : NaN);
+    o.pmdec   = Number.isFinite(r.pmdec)   ? +r.pmdec   : (Number.isFinite(r.pmDec) ? +r.pmDec : NaN);
+    o.ruwe    = Number.isFinite(r.ruwe)    ? +r.ruwe    : NaN;
+    o.source_id = r.source_id ?? r.id ?? '';
+    return o;
+  });
+
+  let items = mapItems(nei.items);
+
+  // αν ΔΕΝ έχουμε ΚΑΘΟΛΟΥ χωρική πληροφορία, ζήτα fallback από το fetch_detect
+  const noPos = !items.some(r => Number.isFinite(r.sep_arcsec) || (Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec)));
+  if (noPos) {
+    try {
+      const inputTarget = (document.getElementById('objectId')?.value || '').trim();
+      const body = {
+        engine: 'neighbors',
+        source: 'gaia',
+        target: inputTarget || null,
+        neighbors: true
+      };
+      const res = await apiFetch(`${API_BASE}/fetch_detect?__backend=api`, {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        const j = await res.json();
+        if (Array.isArray(j?.neighbors?.items)) {
+          items = mapItems(j.neighbors.items);
+        }
+      }
+    } catch(e) { /* σιωπηρή αποτυχία: θα μείνουμε χωρίς τελίτσες */ }
+  }
+
+  const rad = Number(nei.radius_arcsec || 60);
+  info.textContent = `radius ${rad}"  ${items.length} sources (circle = 21" TESS pixel)`;
+
+  // table
+  const fix = (v,n=2)=> Number.isFinite(v) ? v.toFixed(n) : '';
+  tbl.innerHTML='';
+  items.slice(0,200).forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fix(r.sep_arcsec,1)}</td>
+      <td>${fix(r.dx_arcsec,1)}</td>
+      <td>${fix(r.dy_arcsec,1)}</td>
+      <td>${fix(r.Gmag,2)}</td>
+      <td>${fix(r.BP_RP,2)}</td>
+      <td>${fix(r.parallax,2)}</td>
+      <td>${fix(r.pmra,2)}</td>
+      <td>${fix(r.pmdec,2)}</td>
+      <td>${fix(r.ruwe,2)}</td>
+      <td>${r.source_id}</td>`;
+    tbl.appendChild(tr);
+  });
+
+  // plot
+  const hasXY = items.some(r => Number.isFinite(r.dx_arcsec) && Number.isFinite(r.dy_arcsec));
+  const xx = hasXY ? items.map(r=>r.dx_arcsec)
+                   : items.map(r=> Number.isFinite(r.sep_arcsec) ? r.sep_arcsec : NaN);
+  const yy = hasXY ? items.map(r=>r.dy_arcsec)
+                   : items.map(r=> 0);
+  const size = items.map(r=>{
+    const m = Number.isFinite(r.Gmag) ? r.Gmag : 15;
+    return Math.max(6, 12 - 0.8*(m-10));
+  });
+
+  Plotly.newPlot('neighborsPlot',[
+    {x:[0], y:[0], mode:'markers+text', text:['target'], textposition:'top center', marker:{size:10, symbol:'x'}},
+    {x:xx, y:yy, mode:'markers', marker:{size:size}}
+  ],{
+    margin:{t:10},
+    xaxis:{title:'East ["]'},
+    yaxis:{title:'North ["]', scaleanchor:'x', scaleratio:1},
+    shapes:[
+      {type:'circle',xref:'x',yref:'y',x0:-21,y0:-21,x1:21,y1:21, line:{dash:'dot'}},
+      {type:'circle',xref:'x',yref:'y',x0:-rad,y0:-rad,x1:rad,y1:rad}
+    ]
+  });
+}
+
+
+// ---------- State ----------
+
+// Busy/progress helpers
+function busyStart(label){
+  const b=document.getElementById('busy'); const txt=document.getElementById('busyTxt'); const pct=document.getElementById('busyPct');
+  if(b){ b.classList.remove('hidden'); b.style.display='flex'; }
+  if(txt){ txt.textContent = label || 'Working…'; }
+  if(pct){ pct.textContent = ''; }
+}
+function busySet(percent,label){
+  const txt=document.getElementById('busyTxt'); const pct=document.getElementById('busyPct'); const bar=document.getElementById('busyBar');
+  if(label && txt) txt.textContent = label;
+  if(pct) pct.textContent = (typeof percent==='number') ? ` ${percent|0}%` : '';
+  if(bar){ if(typeof percent==='number'){ bar.style.background='linear-gradient(90deg,#e6e6e6 '+percent+'%, #f7f7f7 '+percent+'%)'; bar.style.setProperty('--p', percent+'%'); } }
+}
+function busyDone(){ const b=document.getElementById('busy'); if(b){ b.classList.add('hidden'); b.style.display='none'; } }
+
+// Busy/progress simulation loop
+let _busyTimer=null, _busyVal=0;
+function busyAdvance(max=90, label){
+  clearInterval(_busyTimer);
+  _busyVal=0;
+  const txt=document.getElementById('busyTxt');
+  const pct=document.getElementById('busyPct');
+  const bar=document.getElementById('busyBar');
+  _busyTimer=setInterval(()=>{
+    _busyVal=Math.min(max, _busyVal+1+Math.random()*2);
+    if(txt && label) txt.textContent=label;
+    if(pct) pct.textContent=` ${_busyVal|0}%`;
+    if(bar){ bar.style.background=`linear-gradient(90deg,#e6e6e6 ${_busyVal}%, #f7f7f7 ${_busyVal}%)`; }
+    if(_busyVal>=max) clearInterval(_busyTimer);
+  },120);
+}
+function busyStop(){
+  clearInterval(_busyTimer);
+  _busyTimer=null;
+  busyDone();
+}
+
+// ML badge — δείχνει μόνο όταν το Method = CNN
+function updateMlBadge(){
+  const b = document.getElementById('mlBadge');
+  if (!b) return;
+  const m = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+  b.style.display = (m === 'cnn') ? 'inline-block' : 'none';
+}
+
+// Συγχρονισμός badge όταν αλλάζει το Method από το engine-toggle
+window.addEventListener('oramax-engine-change', () => updateMlBadge());
+
+// και στην εκκίνηση
+document.addEventListener('DOMContentLoaded', () => { updateMlBadge(); });
+
+let lcTime=[], lcFlux=[], lastCands=[], currentTarget='(Uploaded TXT)';
+let selectedIdx = 0;
+let lastFit = null;
+let lastNeighbors = null;
+let lastPreproc = null;
+
+// --- NEW: pooled candidates across many targets ---
+let allCands = [];                 // όλοι οι candidates από ΟΛΑ τα TICs της συνεδρίας
+const perTargetStore = Object.create(null); // ανά target αποθηκεύουμε T,F,neighbors,preproc
+
+// ---------- Threshold helpers ----------
+function getThreshold(){ return Math.min(0.99, Math.max(0.5, Number(document.getElementById('thr').value || 0.8))); }
+function setThrLabel(){ document.getElementById('thrLabel').textContent = getThreshold().toFixed(2); }
+function getSigmaThr(){ return Number(document.getElementById('sigmaThr').value || 3.0); }
+function getRhoThr(){   return Number(document.getElementById('rhoThr').value   || 0.15); }
+function setCentroidThrLabels(){
+  document.getElementById('sigmaThrLabel').textContent = getSigmaThr().toFixed(2);
+  document.getElementById('rhoThrLabel').textContent = getRhoThr().toFixed(2);
+}
+function getNeighborsFlag(){ return document.getElementById('gaiaChk').checked; }
+function getNeighborsRadius(){ return Number(document.getElementById('neiRadius').value || 60); }
+function setNeighborsLabel(){ document.getElementById('neiRadiusLabel').textContent = getNeighborsRadius(); }
+function updateVetCount(){
+  const thr = getThreshold();
+  const k = (lastCands||[]).filter(c=> (c?.probability ?? 0) >= thr).length;
+  const n = (lastCands||[]).length;
+  document.getElementById('vetCount').textContent = n ? ` vetted: ${k}/${n}` : '';
+}
+
+// ---------- Phase plot (with optional model overlay) ----------
+function phaseFoldedTrace(T, F, cand){
+  const folded = phaseFold(T, F, cand.period, cand.t0);
+  return {x: folded.map(d=>d.x), y: folded.map(d=>d.y)};
+}
+
+function renderPF(time, flux, cand) {
+  const P  = cand?.period || cand?.P || null;
+  const t0 = cand?.t0 || cand?.epoch || time?.[0] || 0;
+
+  if (!P || !time?.length || !flux?.length) {
+    Plotly.react('pf', [], {
+      margin: { l: 60, r: 20, t: 20, b: 50 },
+      autosize: true,
+      xaxis: { title: 'Phase [0–1]' },
+      yaxis: { title: 'Relative Flux [unitless]' }
+    }, { responsive: true, displaylogo: false });
+    return;
+  }
+
+  const phase = time.map(t => {
+    let ph = ((t - t0) / P) % 1;
+    if (ph < 0) ph += 1;
+    return ph;
+  });
+
+  const tracePF = {
+    x: phase,
+    y: flux,
+    type: 'scattergl',
+    mode: 'markers',
+    marker: { size: 3, opacity: 0.9 },
+    name: 'PF'
+  };
+
+  Plotly.react('pf', [tracePF], {
+    margin: { l: 60, r: 20, t: 20, b: 50 },
+    autosize: true,
+    showlegend: false,
+    xaxis: { title: 'Phase [0–1]' },
+    yaxis: { title: 'Relative Flux [unitless]' }
+  }, { responsive: true, displaylogo: false });
+}
+
+
+// ---------- Table rendering ----------
+function renderTable(candidates){
+  const tbody = document.querySelector('#cands tbody'); 
+  tbody.innerHTML='';
+
+  const thr = getThreshold(), sThr = getSigmaThr(), rThr = getRhoThr();
+
+  // 1) Φίλτρο με βάση το Planet threshold (P ≥ thr)
+  const filtered = (candidates||[]).filter(c => (c?.probability ?? 0) >= thr);
+
+  // 2) Ταξινόμηση φθίνουσα κατά πιθανότητα (tie-breaker: power)
+  filtered.sort((a,b)=> (b.probability - a.probability) || (b.power - a.power));
+
+  // 3) Απόδοση γραμμών με νέα στήλη "TIC/Target"
+  filtered.forEach((c, i)=>{
+    const tr = document.createElement('tr'); 
+    tr.className = 'clickable'; 
+    // vetted highlighting παραμένει
+    tr.classList.add('vetted');
+
+    const snrV  = Number.isFinite(c?.fit?.snr) ? c.fit.snr : (Number.isFinite(c.snr) ? c.snr : null);
+    const dbicV = Number.isFinite(c?.fit?.delta_bic) ? c.fit.delta_bic :
+               (Number.isFinite(c.delta_bic) ? c.delta_bic : null);
+    const snr  = Number.isFinite(snrV)  ? snrV.toFixed(1)  : '';
+    const dbic = Number.isFinite(dbicV) ? dbicV.toFixed(1) : '';
+
+    const badge = centroidBadge(c.centroid, sThr, rThr);
+
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${c._target || ''}</td>
+      <td>${c.period.toFixed(6)}</td>
+      <td>${c.duration.toFixed(6)}</td>
+      <td>${(+c.depth).toExponential(2)}</td>
+      <td>${c.power.toFixed(3)}</td>
+      <td class='prob'>${(100*c.probability).toFixed(1)}%</td>
+      <td>${snr}</td>
+      <td>${dbic}</td>
+      <td>${Math.round(c.vetting.odd_even_diff_ppm)}</td>
+      <td>${c.vetting.has_secondary_like ? 'Yes' : 'No'}</td>
+      <td>${badge}</td>`;
+
+    tr.onclick = ()=> selectCandidateObj(c);
+    tbody.appendChild(tr);
+  });
+
+  // ενημέρωση counter με βάση ΟΣΟΥΣ υπολείπονται μετά το φίλτρο
+  document.getElementById('vetCount').textContent =
+    ` vetted: ${filtered.length}/${(candidates||[]).length}`;
+}
+
+function selectCandidateObj(cand){
+  if(!cand) return;
+  const store = perTargetStore[cand._target] || {};
+  const T = store.T || lcTime;
+  const F = store.F || lcFlux;
+
+  currentTarget = cand._target || currentTarget;           // <-- βεβαίωση target
+  lastCands = [cand];
+  selectedIdx = 0;
+
+  renderPF(T, F, cand);
+  renderLC(T, F, cand.windows ? cand.windows.intervals : []);
+  renderCentroidInfo(cand.centroid, getSigmaThr(), getRhoThr());
+
+  // ΝΕΟ: γέμισε Gaia table/plot με τα ΠΡΑΓΜΑΤΙΚΑ neighbors του συγκεκριμένου target
+  if (store.neighbors) renderNeighbors(store.neighbors);
+
+  document.getElementById('fitBox').style.display='none';
+  lastFit = null;
+}
+
+
+function selectCandidate(i){
+  selectedIdx = i;
+  const cand = lastCands[i];
+  renderPF(lcTime, lcFlux, cand);
+  renderLC(lcTime, lcFlux, cand.windows ? cand.windows.intervals : []);
+  renderCentroidInfo(cand.centroid, getSigmaThr(), getRhoThr());
+  document.getElementById('fitBox').style.display='none';
+  lastFit = null;
+}
+function renderAll(T, F, candidates, neighbors){
+  lcTime=T; lcFlux=F; lastCands=candidates||[]; selectedIdx=0;
+  lastNeighbors = neighbors || null;
+  busySet(70,'Rendering light curve…');
+  renderLC(T,F, lastCands[0]?.windows?.intervals || []);
+  busySet(82,'Rendering phase-folded…');
+  renderPF(T,F, lastCands[0]);
+  busySet(88,'Computing centroid info…');
+  renderCentroidInfo(lastCands[0]?.centroid, getSigmaThr(), getRhoThr());
+  busySet(92,'Populating candidates table…');
+  renderTable(lastCands);
+  busySet(96,'Rendering neighbors…');
+  renderNeighbors(neighbors);
+  busySet(100,'Done'); busyDone();}
+
+/* ---------- NEW: normalize backend candidates to UI shape ---------- */
+function normalizeCandidates(cands){
+  return (cands||[]).map(c=>{
+    // centroid object (backend-first, with fallbacks)
+    let centroid = null;
+    if (c && typeof c.centroid === 'object') {
+      centroid = {
+        available: !!c.centroid.available,
+        reason: c.centroid.reason || null,
+        dr_pix: Number.isFinite(c.centroid.dr_pix) ? Number(c.centroid.dr_pix) : undefined,
+        sigma: Number.isFinite(c.centroid.sigma) ? Number(c.centroid.sigma) : undefined,
+        rho_flux_centroid: Number.isFinite(c.centroid.rho_flux_centroid) ? Number(c.centroid.rho_flux_centroid) : undefined,
+        suspect_beb: !!c.centroid.suspect_beb
+      };
+    } else if (c && (c.centroid_sigma!=null || c.centroid_rho!=null || c.centroid_dr_pix!=null)) {
+      centroid = {
+        available: true,
+        dr_pix: Number(c.centroid_dr_pix),
+        sigma: Number(c.centroid_sigma),
+        rho_flux_centroid: Number(c.centroid_rho),
+        suspect_beb: !!c.centroid_suspect_beb
+      };
+    } else {
+      centroid =
+        (c.centroid_ok === true)  ? {available:true,  sigma:0,   rho_flux_centroid:0, suspect_beb:false} :
+        (c.centroid_ok === false) ? {available:true,  sigma:5.0, rho_flux_centroid:null, suspect_beb:true} :
+                                    {available:false, reason:'n/a'};
+    }
+
+    return {
+      period   : Number(c.period),
+      duration : Number(c.duration),
+      depth    : Number(c.depth),
+      power    : Number(c.power),
+      probability : Number(c.p_planet ?? c.probability ?? c.p ?? 0),
+      t0       : Number(c.t0 ?? 0),
+      windows  : (c.windows && typeof c.windows === 'object') ? c.windows : null,
+      fit      : {
+        snr      : (Number.isFinite(c?.fit?.snr) ? c.fit.snr : (Number.isFinite(c.snr) ? c.snr : null)),
+        delta_bic: (Number.isFinite(c?.fit?.delta_bic) ? c.fit.delta_bic :
+                    (Number.isFinite(c.delta_bic) ? c.delta_bic : null))
+      },
+      vetting  : {
+        odd_even_diff_ppm   : Number.isFinite(c.odd_even_delta_ppm) ? c.odd_even_delta_ppm :
+                              Number.isFinite(c.odd_even_diff_ppm) ? c.odd_even_diff_ppm : 0,
+        secondary_depth_ppm : null,
+        has_secondary_like  : !!c.secondary
+      },
+      centroid,
+      _target  : (c._target || c.target || null)
+    };
+  });
+}
+
+  /* ---------- Fallback probability fixer (when backend is uniform) ---------- */
+function fixProbabilities(cands){
+  if (!Array.isArray(cands) || !cands.length) return cands;
+
+  // Πάρε τις πιθανότητες που ήρθαν
+  const ps = cands.map(c => Number(c.probability)).filter(Number.isFinite);
+  // Uniform αν: (α) όλες ίδιες ή (β) ~1/k
+  const uniq = [...new Set(ps.map(p => p.toFixed(6)))];
+  const uniformLike = (uniq.length <= 1) ||
+                      ps.every(p => Math.abs(p - 1/cands.length) < 1e-6);
+
+  if (!uniformLike) return cands; // Backend φαίνεται εντάξει → μην πειράξεις τίποτα
+
+  // ----- Υπολόγισε score από Power + SNR (z-score + softmax) -----
+  const powers = cands.map(c => Number.isFinite(c.power) ? c.power : 0);
+  const snrs   = cands.map(c => Number.isFinite(c?.fit?.snr) ? c.fit.snr : 0);
+
+  const z = (arr) => {
+    const m  = arr.reduce((a,b)=>a+b,0) / arr.length;
+    const sd = Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0) / arr.length) || 1;
+    return arr.map(v => (v - m) / sd);
+  };
+
+  const pZ = z(powers);
+  const sZ = z(snrs);
+
+  // Συνδυασμός (ρύθμισε βάρη αν θέλεις)
+  const score = pZ.map((v,i) => 0.6*v + 0.4*sZ[i]);
+
+  // Softmax με ήπια «θερμοκρασία» ώστε να μη γίνονται ακραίες
+  const T = 1.5;
+  const max = Math.max(...score);
+  const exps = score.map(v => Math.exp((v - max)/T));
+  const sum  = exps.reduce((a,b)=>a+b,0) || 1;
+
+  cands.forEach((c,i) => { c.probability = exps[i] / sum; });
+  return cands;
+}
+
+
+// ---------- Source toggle ----------
+function toggleInputs(){
+  const src = document.getElementById('sourceSel').value;
+  document.getElementById('ticInput').style.display = (src==='url')?'none':'inline-block';
+  document.getElementById('urlInput').style.display = (src==='url')?'inline-block':'none';
+}
+
+// ΠΑΝΤΑ με απόλυτο path για το SW route
+function gaiaUrl(target, radius) {
+  const u = new URL('/detector/api/gaia_neighbors', location.origin);
+  u.search = new URLSearchParams({ target, radius: String(radius || 60) }).toString();
+  return u.toString();
+}
+
+// Gaia neighbors: ΧΩΡΙΣ fallback στο /fetch_detect
+async function fetchGaiaNeighbors(targetName, radiusArcsec) {
+  try {
+    const q = new URLSearchParams({
+      target: targetName,
+      radius: String(radiusArcsec)
+    }).toString();
+
+    const r1 = await apiFetch(`/detector/api/gaia_neighbors?${q}`);
+    if (r1.ok) {
+      const j1 = await r1.json();
+      // Υποστήριξη για array ή {items:[]}
+      if (Array.isArray(j1)) {
+        return { available: true, radius_arcsec: radiusArcsec, items: j1 };
+      }
+      if (Array.isArray(j1?.items)) {
+        return { available: true, radius_arcsec: radiusArcsec, items: j1.items };
+      }
+    }
+    return { available: false, reason: `Gaia query failed (${r1.status})` };
+  } catch (err) {
+    console.error('fetchGaiaNeighbors failed:', err);
+    return { available: false, reason: err?.message || 'network error' };
+  }
+}
+
+
+
+function extractSeries(data) {
+  // διάφορες πιθανές θέσεις/ονόματα
+  let T = data?.time || data?.T || data?.lc?.time || data?.lightcurve?.time || data?.series?.time || [];
+  let F = data?.flux || data?.F || data?.lc?.flux || data?.lightcurve?.flux || data?.series?.flux || [];
+
+  // αν ήρθαν ζεύγη [[t,f],...]
+  if ((!Array.isArray(T) || !Array.isArray(F)) && Array.isArray(data?.lightcurve)) {
+    const pairs = data.lightcurve.filter(r => Array.isArray(r) && r.length >= 2);
+    T = pairs.map(r => +r[0]); F = pairs.map(r => +r[1]);
+  }
+  // καθάρισμα
+  const outT=[], outF=[];
+  for (let i=0;i<Math.min(T.length,F.length);i++) {
+    const t=+T[i], f=+F[i];
+    if (Number.isFinite(t) && Number.isFinite(f)) { outT.push(t); outF.push(f); }
+  }
+  return [outT, outF];
+}
+
+ 
+// ---------- Fetch & Detect ----------
+
+async function runFetch(){
+  try{
+    busyStart('Fetching…');
+    busySet(20);
+
+    // 1) Διαβάζουμε τα controls
+    const targetRaw = document.getElementById('ticInput').value || currentTarget || '';
+let target = (targetRaw || '').trim();
+const m = target.match(/(\d{6,})/);           // πιάσε «γυμνά» digits
+if (m) target = `TIC ${m[1]}`;                // σιγουρέψου prefix
+    const sourceUI  = (document.getElementById('sourceSel')?.value || 'mast_spoc').trim(); // ΔΕΝ το αλλάζουμε
+  const missionSel= (document.getElementById('missionSel')?.value || 'auto').trim();
+  const neighbors = !!document.getElementById('gaiaChk')?.checked;
+  const engine    = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+ const quality  = !!document.getElementById('qualityChk')?.checked;
+ const sigma    = Number(document.getElementById('sigmaVal')?.value || 5);
+ const detrend  = (document.getElementById('detrendSel')?.value || 'flatten');
+ const kpeaks   = Number(document.getElementById('kpeaks')?.value || 3);
+ const centroid = !!document.getElementById('centroidChk')?.checked;
+ const neighbors_radius = Number(document.getElementById('neiRadius')?.value || 60);
+
+    if(!targetRaw && sourceUI !== 'url'){
+      alert('Δώσε Target (π.χ. “TIC 268125229”)');
+      busyStop(); return;
+    }
+
+    // 2) Κανονικοποιήσεις
+    //const target = targetRaw.replace(/\s+/g,' ').replace(/^tic\s*/i,'TIC ');
+    let mission = missionSel;
+if (mission === 'auto') {
+  // auto → κάνε απλή «μαντεψιά» για εμφάνιση,
+  // ΑΛΛΑ προς backend θα στείλουμε μόνο 'auto' ή 'TESS'
+  if (/^(?:TIC\s*)?\d+$/i.test(target)) mission = 'auto';
+  else mission = 'auto';
+}
+const missionApi = (mission === 'auto') ? 'auto' : 'TESS';   // ← ΜΟΝΟ αυτά τα 2 δέχεται ο backend
+
+    // 3) Ελάχιστο payload απολύτως συμβατό με API
+
+  // Διαβάζουμε αν είναι ενεργό το checkbox "Remove outliers"
+const outlierOn = !!document.getElementById('outlierChk')?.checked;
+
+const payload = {
+  source: sourceUI,
+  mission: missionApi,
+  target,
+  kpeaks,
+  detrend,
+  quality_mask: quality,
+  remove_outliers_sigma: outlierOn ? sigma : 0,  // ✅ αν είναι τσεκαρισμένο
+  neighbors,
+  neighbors_radius_arcsec: neighbors_radius,
+  centroid
+};
+
+    // 4) Κλήση στο backend (same-origin proxy)
+    busySet(35);
+    let res;
+    try{
+      res = await apiFetch(`${API_BASE}/fetch_detect?__backend=api`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+    }catch(e){
+      busyStop();
+      alert(`Network error: ${e?.message||e}`);
+      return;
+    }
+
+    if(!res.ok){
+      let detail = '';
+      try{ const j = await res.json(); detail = j?.detail || JSON.stringify(j); }catch{ detail = res.statusText; }
+      busyStop();
+      alert(`Server error: HTTP ${res.status} ${detail}`);
+      return;
+    }
+
+    // 5) Ανάγνωση και βασικός έλεγχος
+    busySet(65);
+    const data = await res.json();
+    if(!data?.time?.length || !data?.flux?.length){
+      busyStop();
+      alert('No light curve returned.');
+      return;
+    }
+
+    // 6) Άμεσο render στα plots
+    const [T0, F0] = extractSeries(data); // όπως ήδη το έχεις
+    renderLC(T0, F0, data.candidates?.[0]?.windows?.intervals || []);
+    if ((data.candidates||[]).length) {
+      renderPF(T0, F0, data.candidates[0]);
+    }
+
+    // 7) Κανονικοποίηση candidates & συνολικά renders (όπως πριν)
+    const candsNorm   = normalizeCandidates(data.candidates || []);
+    const candsFinal  = fixProbabilities(candsNorm);
+    const tName = target || '(Target)';
+    const candsWithTarget = candsFinal.map(c => ({...c, _target: tName}));
+
+    perTargetStore[tName] = { T: T0, F: F0 };
+    allCands = [...(allCands || []), ...candsWithTarget];
+    renderAll(T0, F0, candsWithTarget, data.neighbors || null);
+  
+// --- Fallback: αν ο server δεν έφερε neighbors αλλά ο χρήστης το έχει τσεκάρει, ζήτα Gaia μόνος σου
+if (!data.neighbors && neighbors) {
+  try {
+    const tName = target || '(Target)';
+    const nei = await fetchGaiaNeighbors(tName, neighbors_radius);
+    lastNeighbors = nei;
+    // απόθεσε τους στο perTargetStore για το συγκεκριμένο target
+    if (perTargetStore[tName]) perTargetStore[tName].neighbors = nei;
+    renderNeighbors(nei);
+  } catch {}
+}
+
+     busySet(100);
+  }catch(err){
+    console.error('fetch_detect failed:', err);
+    alert(err?.message || 'Fetch failed');
+  }finally{
+    busyStop();
+  }
+}
+
+
+// ---------- Upload TXT ----------
+async function runUpload(){
+  const status = document.getElementById('statusUp');
+  try{
+    status.textContent = 'Running...';
+
+    const file = document.getElementById('file')?.files?.[0];
+    if(!file){
+      alert('Choose a .txt or .csv (2 columns: time, flux)');
+      status.textContent='';
+      return;
+    }
+
+    // διάβασε αρχείο
+    const txt = await file.text();
+
+    // ρυθμίσεις από UI
+    const engine  = (localStorage.getItem('oramax_engine') || 'bls').toLowerCase();
+    const kpeaks  = Number(document.getElementById('kpeaks')?.value || 3);
+
+    // μην ζητήσεις neighbors σε upload (δεν έχουμε πραγματικό TIC)
+    window._skipNeighborsOnce = true;
+
+    // ελάχιστο payload συμβατό με backend
+    const payload = {
+      source: 'upload',
+      mission: 'auto',
+      target: 'TIC 00000000',
+      engine,
+      kpeaks,
+      text: txt,                 // περιεχόμενο αρχείου
+      neighbors: false,
+      centroid: false
+    };
+
+    const res = await apiFetch(`${API_BASE}/fetch_detect?__backend=api`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    if(!res.ok){
+      const t = await res.text().catch(()=> '');
+      status.textContent = 'Error';
+      throw new Error(`HTTP ${res.status} ${t}`);
+    }
+
+    // απόκριση server
+    const data = await res.json();
+    const [T, F] = extractSeries(data);      // προτιμά τα series από το backend
+
+    const candNorm  = normalizeCandidates(data.candidates || []);
+    const candFinal = fixProbabilities(candNorm);
+
+    currentTarget = '(Uploaded TXT)';
+    lastPreproc   = { source:'upload' };
+    lastNeighbors = null;
+
+    renderAll(T, F, candFinal, null);
+    status.textContent = 'Done';
+  } catch(e){
+    console.error(e);
+    status.textContent = 'Error';
+    alert(e.message || e);
+  }
+}
+
+// bind μετά το DOM
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('runUpload')?.addEventListener('click', runUpload);
+});
+  
+
+
+// ---------- Export CSV ----------
+function buildCsvRows(cands){
+  const rows = [];
+  const thr = getThreshold();
+  const vetted = (cands || []).filter(c => (c.probability ?? 0) >= thr);
+
+  for (let i=0; i<vetted.length; i++){
+    const c = vetted[i];
+    const tgt = c._target || currentTarget;  // ✅ νέο
+    rows.push([
+      tgt,
+      i+1,
+      c.period,
+      c.duration,
+      c.depth,
+      c.power,
+      c.probability,
+      c.fit?.snr,
+      c.fit?.delta_bic,
+      c.vetting?.odd_even_diff_ppm,
+      c.vetting?.has_secondary_like ? 'Yes' : 'No',
+      c.centroid?.sigma,
+      c.centroid?.rho_flux_centroid
+    ]);
+  }
+  return rows;   // ✅ καλό είναι να επιστρέφει ρητά
+}                // ✅ ΕΔΩ έλειπε το κλείσιμο!
+
+function exportCsv(rows, name){
+  const csv = rows.map(r=>r.join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = name; a.click();
+}
+
+
+// --- SUGGEST helpers (robust) ---
+function normalizeSuggestData(data){
+  const raw = Array.isArray(data) ? data : (data?.items ?? data?.results ?? data?.suggestions ?? data?.data ?? []);
+  return (raw || []).map(it => {
+    if (typeof it === 'string') return { value: it, label: it };
+    const value = it.value ?? it.id ?? it.tic ?? it.name ?? it.target ?? '';
+    const label = it.label ?? it.display ?? (it.tic ? `TIC ${it.tic}` : (it.name ?? value));
+    return { value, label };
+  });
+}
+function ensureSuggestMenu(){
+  let m = document.getElementById('suggMenu');
+  if(!m){ m = document.createElement('div'); m.id='suggMenu'; document.body.appendChild(m); }
+  return m;
+}
+function placeSuggestMenu(input){
+  const r=input.getBoundingClientRect();
+  const m=ensureSuggestMenu();
+  m.style.left=(window.scrollX + r.left)+ 'px';
+  m.style.top =(window.scrollY + r.bottom + 4)+ 'px';
+  m.style.width = r.width+'px';
+}
+function showSuggest(list, input){
+  const m=ensureSuggestMenu();
+  placeSuggestMenu(input);
+  m.innerHTML = list.map((s,i)=>`<div class="sugg-item" data-i="${i}">${(s.label||s.value||'').toString()}</div>`).join('');
+  Array.from(m.children).forEach(el=>{
+    el.addEventListener('mousedown', (e)=>{
+      const i = +e.currentTarget.getAttribute('data-i');
+      applySuggestion(list[i], input);
+      hideSuggest();
+      e.preventDefault();
+    });
+  });
+  m.style.display='block';
+}
+function hideSuggest(){ const m=document.getElementById('suggMenu'); if(m) m.style.display='none'; }
+function applySuggestion(s, input){ if(!s) return; input.value = s.value || s.label || ''; input.dispatchEvent(new Event('change', {bubbles:true})); }
+
+// ---------- Autocomplete ----------
+function debounce(fn, ms){ let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), ms); }; }
+const updateSuggest = debounce(async ()=>{
+  const input = document.getElementById('tic') || document.getElementById('ticInput');
+  if (!input) return;
+
+  const raw = (input.value || '').trim();
+  if (!raw) { hideSuggest(); return; }
+
+  // Αν είναι μόνο ψηφία ή "TIC <digits>" => contains mode
+  const onlyDigits = /^\d{2,}$/.test(raw);
+  const ticDigits  = /^TIC\s*\d{2,}$/i.test(raw);
+  let q = raw;
+  if (onlyDigits) q = `TIC ${raw}`;
+
+  const mission = document.getElementById('missionSel')?.value || 'auto';
+  const domParam = (mission === 'TESS') ? '&domain=TESS' : (mission === 'Kepler' ? '&domain=Kepler' : '');
+  const containsParam = (onlyDigits || ticDigits) ? '&contains=1' : '';
+
+  try{
+    const u = new URL(`${API_BASE}/suggest`, location.origin);
+u.search = new URLSearchParams({
+  q, limit: '10'
+}).toString() + (domParam || '') + (containsParam || '');
+const r = await apiFetch(u.toString(), { headers:{ 'Accept':'application/json' }});
+    let list = [];
+    if (r.ok) list = normalizeSuggestData(await r.json());
+    if (list.length) showSuggest(list, input); else hideSuggest();
+  }catch {
+    hideSuggest();
+  }
+}, 220);
+
+
+// ---------- Transit Fit ----------
+
+async function runFit(){
+// Normalize target & mission την ώρα του fitting
+let targetNorm = (document.getElementById('ticInput').value || currentTarget || '').trim();
+const m = targetNorm.match(/(\d{6,})/);
+if (m) targetNorm = `TIC ${m[1]}`;
+
+const missionSel = (document.getElementById('missionSel').value || 'auto').trim();
+const missionApi = (missionSel === 'auto') ? 'auto' : 'TESS';
+const sourceUI = (document.getElementById('sourceSel').value || 'mast_spoc').trim();
+
+  const fitStatus = document.getElementById('fitStatus');
+  const fitBox = document.getElementById('fitBox');
+  try{
+    if(!lastCands.length){ alert('Run detect first'); return; }
+    const cand = lastCands[selectedIdx];
+    if(!cand){ alert('Select a candidate'); return; }
+    fitStatus.textContent = 'Fitting...';
+
+    // Καλούμε το /predict του backend με period/duration/t0 (όχι /fit_transit)
+    const source   = document.getElementById('sourceSel').value || 'mast_spoc';
+    const mission  = document.getElementById('missionSel').value || 'TESS';
+    const target   = document.getElementById('ticInput').value || currentTarget;
+
+    const body = JSON.stringify({
+  source: sourceUI,
+  mission: missionApi,
+  target: targetNorm,
+  period: Number(cand.period),
+  duration: Number(cand.duration),
+  t0: Number(cand.t0 ?? 0)
+});
+
+    const res = await apiFetch(`${API_BASE}/fit_transit?__backend=api`, {
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body
+});
+    if(!res.ok){ fitStatus.textContent='Error'; return; }
+    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+
+    // Μετατρέπουμε phase→“ψευδο-time” για να εμφανιστεί σωστά το overlay στο phase plot
+    const P = data?.params?.period ?? cand.period;
+    const T0 = data?.params?.t0 ?? cand.t0;
+    const timesFromPhase = (data.phase||[]).map(ph => T0 + (ph + 0.5) * P);
+
+    lastFit = { params: data.params || {period:P, t0:T0}, model_curve: { time: timesFromPhase, flux: data.model || [] } };
+
+    renderPF(lcTime, lcFlux, cand);
+
+    const p = data.params || {}; const u = data.uncertainties || {};
+    function fmt(v, s){ if(v==null || !isFinite(v)) return ''; return (s!=null && isFinite(s)) ? `${v.toFixed(4)}  ${s.toFixed(4)}` : v.toFixed(4); }
+    fitBox.innerHTML = `
+      <div><b>Method:</b> model</div>
+      <div><b>Rp/R:</b> ${fmt(p.rp_rs, u.rp_rs)}  <b>b:</b> ${fmt(p.b, u.b)}  <b>a/R:</b> ${fmt(p.a_rs, u.a_rs)}</div>
+      <div class="muted">P=${p.period?.toFixed? p.period.toFixed(6):p.period} d, t0=${p.t0?.toFixed? p.t0.toFixed(6):p.t0}</div>
+    `;
+    fitBox.style.display='block';
+    fitStatus.textContent = 'Done';
+  }catch(e){ console.error(e); fitStatus.textContent = 'Error'; }
+}
+
+// ---------- PDF report ----------
+async function runPdf(){
+  try{
+    if(!lastCands.length){ alert('Run detect first'); return; }
+    const cand = lastCands[selectedIdx];
+    const meta = { target: currentTarget, source: document.getElementById('sourceSel').value, mission: document.getElementById('missionSel').value };
+    const payload = {
+      meta,
+      preprocess: lastPreproc || {},
+      time: lcTime, flux: lcFlux,
+      candidate: cand,
+      neighbors: lastNeighbors || {},
+      fit_method: document.getElementById('fitMethod').value
+    };
+    const res = await apiFetch(`${API_BASE}/report_pdf?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if(!res.ok){
+      const j = await res.json().catch(()=>({error:"unknown"}));
+      alert(j.error || "report failed"); return;
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Oramax_Vetting_${(currentTarget||'target').toString().replace(/\s+/g,'_')}.pdf`;
+    a.click();
+  }catch(e){ console.error(e); alert("report failed"); }
+}
+
+// ---------- Wire-up ----------
+document.addEventListener('DOMContentLoaded', ()=>{
+  setThrLabel(); setCentroidThrLabels(); setNeighborsLabel();
+  toggleInputs();
+
+  document.getElementById('sourceSel').addEventListener('change', toggleInputs);
+  const ticInp = document.getElementById('ticInput');
+  ticInp.removeAttribute('list');         // απενεργοποιεί native datalist
+  ticInp.addEventListener('input', updateSuggest);
+  ticInp.addEventListener('focus', ()=>{ showTopSuggestOnFocus(); });
+  ticInp.addEventListener('change', ()=>{ hideSuggest(); });
+
+  document.getElementById('runFetch').addEventListener('click', runFetch);
+  document.getElementById('runUpload').addEventListener('click', runUpload);
+
+  document.getElementById('exportCsv').addEventListener('click', ()=>{
+    if(!lastCands.length){ alert("Run Detect first."); return; }
+    exportCsv(buildCsvRows(lastCands), `oramax_candidates_${(currentTarget||'target').toString().replace(/\s+/g,'_')}.csv`);
+  });
+  document.getElementById('exportVettedCsv').addEventListener('click', ()=>{
+    if(!lastCands.length){ alert("Run Detect first."); return; }
+    const thr = getThreshold();
+    const vetted = (allCands||[]).filter(c => (c?.probability ?? 0) >= thr);
+    if(!vetted.length){ alert(`No candidates with P ≥ ${thr.toFixed(2)}`); return; }
+    const rows = buildCsvRows(vetted);
+    rows.unshift(["threshold", thr]);
+    exportCsv(rows, `oramax_vetted_${(currentTarget||'target').toString().replace(/\s+/g,'_')}_p${thr.toFixed(2)}.csv`);
+  });
+
+  document.getElementById('thr').addEventListener('input', ()=>{
+  setThrLabel();
+  renderTable(allCands || []);
+});
+
+document.getElementById('sigmaThr').addEventListener('input', ()=>{
+  setCentroidThrLabels();
+  renderTable(allCands || []);
+  renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
+});
+
+document.getElementById('rhoThr').addEventListener('input', ()=>{
+  setCentroidThrLabels();
+  renderTable(allCands || []);
+  renderCentroidInfo(lastCands[selectedIdx]?.centroid, getSigmaThr(), getRhoThr());
+});
+  document.getElementById('neiRadius').addEventListener('input', ()=>{ setNeighborsLabel(); });
+
+  document.getElementById('fitBtn').addEventListener('click', runFit);
+  document.getElementById('pdfBtn').addEventListener('click', runPdf);
+  // Browse modal bindings
+  document.getElementById('browseBtn')?.addEventListener('click', openBrowse);
+  document.getElementById('browseCloseBtn')?.addEventListener('click', closeBrowse);
+  document.getElementById('browseSearchBtn')?.addEventListener('click', ()=>{ _browsePage=0; searchBrowse(); });
+  document.getElementById('browseNextBtn')?.addEventListener('click', browseNext);
+  document.getElementById('browsePrevBtn')?.addEventListener('click', browsePrev);
+  document.getElementById('browseQuery')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ _browsePage=0; searchBrowse(); }});
+  document.getElementById('browseAddBtn')?.addEventListener('click', addSelectedFromBrowse);
+  document.getElementById('bulkBtn')?.addEventListener('click', openBulk);
+  document.getElementById('bulkAddBtn')?.addEventListener('click', addFromBulkTextarea);
+  document.getElementById('bulkCloseBtn')?.addEventListener('click', closeBulk);
+  // ---> εδώ πρόσθεσε:
+document.getElementById('bulkImportBtn')?.addEventListener('click', () => {
+  document.getElementById('bulkFile')?.click();
+});
+document.getElementById('bulkFile')?.addEventListener('change', async (e) => {
+  const inp = e.target;
+  const f = inp?.files?.[0];
+  if (f) await addFromBulkFile(f);
+  if (inp) inp.value = ''; // reset για να ξαναπυροδοτεί change με ίδιο αρχείο
+});
+});
+</script>
+
+<script>
+/* ===== Pro PDF + Vetted summary line ===== */
+(function(){
+  const enc = new TextEncoder();
+  const esc = s => (s||'').toString()
+    .replace(/[•·]/g,'-').replace(/[–—−]/g,'-')
+    .replace(/[“”]/g,'"').replace(/[’‘]/g,"'")
+    .replace(/Δ/g,'Delta')    // keep ASCII
+    .replace(/[^\x20-\x7E]/g,'')
+    .replace(/([()\\])/g,'\\$1');
+
+  const padL = (s,w)=> (s+'').padStart(w,' ');
+
+  const fmt = {
+    candHeader: ' #    Period(d)   Dur(d)     Depth      Power    Pp    SNR   ΔBIC',
+    candRow: (i,c) => {
+      const P  = Number.isFinite(c.period)    ? c.period.toFixed(6)        : '';
+      const Du = Number.isFinite(c.duration)  ? c.duration.toFixed(6)      : '';
+      const D  = Number.isFinite(c.depth)     ? (+c.depth).toExponential(2): '';
+      const Pw = Number.isFinite(c.power)     ? c.power.toFixed(3)         : '';
+      const Pp = Number.isFinite(c.p_planet ?? c.probability) ? (c.p_planet ?? c.probability).toFixed(3) : '';
+      const S  = Number.isFinite(c.snr ?? c?.fit?.snr) ? (c.snr ?? c.fit.snr).toFixed(1) : '';
+      const B  = Number.isFinite(c.delta_bic ?? c?.fit?.delta_bic) ? (c.delta_bic ?? c.fit.delta_bic).toFixed(1) : '';
+      return [
+        padL(i,2), padL(P,11), padL(Du,10), padL(D,10),
+        padL(Pw,7), padL(Pp,6), padL(S,5), padL(B,6),
+      ].join('  ');
+    },
+    neiHeader:  ' #    sep(")    Gmag    BP-RP',
+    neiRow: (i,r) => {
+      const sep = Number.isFinite(r.sep_arcsec)
+        ? r.sep_arcsec
+        : (Number.isFinite(r.dx_arcsec)&&Number.isFinite(r.dy_arcsec) ? Math.hypot(r.dx_arcsec,r.dy_arcsec) : NaN);
+      const s = Number.isFinite(sep) ? sep.toFixed(1) : '';
+      const g = Number.isFinite(r.Gmag) ? r.Gmag.toFixed(2) : (Number.isFinite(r.gmag) ? r.gmag.toFixed(2) : '');
+      const c = Number.isFinite(r.BP_RP) ? r.BP_RP.toFixed(2) : (Number.isFinite(r.bp_rp) ? r.bp_rp.toFixed(2) : '');
+      return [ padL(i,2), padL(s,6), padL(g,6), padL(c,5) ].join('  ');
+    }
+  };
+
+  function makeProPdf({ target, mission, author, pThr, sigmaThr, rhoThr, vetted, candidates, neighbors }) {
+    const left = 72, right = 540; // ~1" και ~7.5"
+    let y = 770;
+    let stream = '';
+    const line = yy => `0 g 0.5 w ${left} ${yy} m ${right} ${yy} l S\n`;
+
+    // Τίτλος
+    stream += `BT\n/F2 18 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc('OramaX - Vetting Report')}) Tj\nET\n`;
+    y -= 10; stream += line(y); y -= 16;
+
+    // Target / Mission / Author / P-threshold
+    stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(`Target: ${target}`)}) Tj\nET\n`; y -= 16;
+    stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(`Mission: ${mission}   Author: ${author}   P-thr: ${pThr.toFixed(2)}`)}) Tj\nET\n`; y -= 20;
+
+    // Candidates
+    stream += `BT\n/F2 14 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc('Candidates')}) Tj\nET\n`; y -= 6;
+    stream += line(y); y -= 14;
+    stream += `BT\n/F3 11 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(fmt.candHeader)}) Tj\nET\n`; y -= 14;
+
+    if (!Array.isArray(candidates) || !candidates.length) {
+      stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc('No candidates provided.')}) Tj\nET\n`; y -= 18;
+    } else {
+      candidates.slice(0, 18).forEach((c, idx) => {
+        stream += `BT\n/F3 11 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(fmt.candRow(idx+1, c))}) Tj\nET\n`; 
+        y -= 13;
+      });
+    }
+
+    // --- Vetted summary line (πάντα τυπώνεται) ---
+    const vetTxt = `Vetted summary: ${vetted.pass}/${vetted.total} pass (p>=${pThr.toFixed(2)}, sigma<=${sigmaThr.toFixed(2)}, rho<=${rhoThr.toFixed(2)})`;
+    y -= 10;
+    stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(vetTxt)}) Tj\nET\n`; 
+    y -= 16;
+
+    // Neighbors
+    y -= 4;
+    stream += `BT\n/F2 14 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc('Neighbors (Gaia DR3)')}) Tj\nET\n`; y -= 6;
+    stream += line(y); y -= 14;
+
+    const nb = neighbors || {};
+    if (!nb.available) {
+      const reason = nb.reason ? ` - ${nb.reason}` : '';
+      stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc('Neighbors: n/a'+reason)}) Tj\nET\n`; 
+      y -= 18;
+    } else {
+      const rad = Number(nb.radius_arcsec || 60);
+      const items = Array.isArray(nb.items) ? nb.items.slice() : [];
+      const header = `radius ${rad}" - ${items.length} sources`;
+      stream += `BT\n/F1 12 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(header)}) Tj\nET\n`; 
+      y -= 16;
+      stream += `BT\n/F3 11 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(' #    sep(")    Gmag    BP-RP')}) Tj\nET\n`; 
+      y -= 14;
+      items.slice(0, 28).forEach((r, idx) => {
+        stream += `BT\n/F3 11 Tf\n1 0 0 1 ${left} ${y} Tm\n(${esc(fmt.neiRow(idx+1, r))}) Tj\nET\n`; 
+        y -= 12;
+      });
+    }
+
+    // Footer
+    const ts = new Date().toISOString().replace('T',' ').replace('Z',' UTC');
+    stream += `BT\n/F1 10 Tf\n1 0 0 1 ${left} 50 Tm\n(${esc('Generated: '+ts)}) Tj\nET\n`;
+
+    // PDF objects (Helvetica, Helvetica-Bold, Courier)
+    const streamBytes = enc.encode(stream);
+    const header  = '%PDF-1.4\n';
+    const obj1    = '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n';
+    const obj2    = '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n';
+    const obj3    = '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R /F3 7 0 R >> >> >> endobj\n';
+    const obj4    = `4 0 obj << /Length ${streamBytes.length} >>\nstream\n${stream}\nendstream\nendobj\n`;
+    const obj5    = '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n';
+    const obj6    = '6 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> endobj\n';
+    const obj7    = '7 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Courier >> endobj\n';
+
+    let pdf=''; const offs=[0]; const add=p=>{ offs.push(pdf.length); pdf+=p; };
+    pdf += header; add(obj1); add(obj2); add(obj3); add(obj4); add(obj5); add(obj6); add(obj7);
+
+    const xrefStart = pdf.length;
+    pdf += 'xref\n0 8\n0000000000 65535 f \n';
+    for (let i=1;i<=7;i++){ const off = offs[i].toString().padStart(10,'0'); pdf += `${off} 00000 n \n`; }
+    pdf += 'trailer << /Size 8 /Root 1 0 R >>\nstartxref\n' + xrefStart + '\n%%EOF';
+    return enc.encode(pdf);
+  }
+
+  // Fallback αναγνώσεων από DOM
+  function readCandsFromDOM(){
+    const rows = Array.from(document.querySelectorAll('#cands tbody tr'));
+    const out = [];
+    for (const tr of rows){
+      const tds = tr.querySelectorAll('td'); if (tds.length < 8) continue;
+      const period   = parseFloat(tds[1].textContent.trim());
+      const duration = parseFloat(tds[2].textContent.trim());
+      const depth    = parseFloat(tds[3].textContent.trim());
+      const power    = parseFloat(tds[4].textContent.trim());
+      const ptxt     = tds[5].textContent.replace('%','').trim();
+      const snr      = parseFloat(tds[6].textContent.trim());
+      const dbic     = parseFloat(tds[7].textContent.trim());
+      const p_planet = isFinite(+ptxt) ? (+ptxt)/100 : NaN;
+      if (isFinite(period) && isFinite(duration)) out.push({ period, duration, depth, power, probability:p_planet, snr, delta_bic: dbic });
+    }
+    return out;
+  }
+  function readNeighborsFromDOM(){
+    const rows = Array.from(document.querySelectorAll('#neighborsTbl tbody tr'));
+    if (!rows.length) return { available:false };
+    const items = rows.map(tr => {
+      const tds = tr.querySelectorAll('td');
+      const sep = parseFloat(tds[0]?.textContent || '');
+      const g   = parseFloat(tds[1]?.textContent || '');
+      const c   = parseFloat(tds[2]?.textContent || '');
+      return { sep_arcsec: sep, Gmag: g, BP_RP: c };
+    }).filter(r => isFinite(r.sep_arcsec));
+    const rad = Number(document.getElementById('neiRadius')?.value || 60);
+    return { available: items.length>0, radius_arcsec: rad, items };
+  }
+
+  // ---- ΝΕΑ runPdf: υπολογίζει vetted summary και το περνά στο PDF ----
+  window.runPdf = async function(){
+    try{
+      const target  = (window.currentTarget || document.getElementById('ticInput')?.value || 'target').toString();
+      const mission = (window.lastPreproc?.mission) ?? (document.getElementById('missionSel')?.value || '—');
+      const author  = (window.lastPreproc?.source)  ?? (document.getElementById('sourceSel')?.value  || '—');
+
+      // thresholds: προτίμηση σε functions αν υπάρχουν, αλλιώς από πιθανά inputs, αλλιώς default
+      const pThr      = (typeof getThreshold === 'function') ? +getThreshold()
+                        : parseFloat(document.getElementById('pThr')?.value) || 0.50;
+      const sigmaThr  = (typeof getSigmaThr === 'function') ? +getSigmaThr()
+                        : parseFloat(document.getElementById('sigmaThr')?.value || document.getElementById('centroidSigmaThr')?.value) || 3.00;
+      const rhoThr    = (typeof getRhoThr === 'function') ? +getRhoThr()
+                        : parseFloat(document.getElementById('rhoThr')?.value || document.getElementById('centroidRhoThr')?.value) || 0.15;
+
+      const cands = (Array.isArray(window.lastCands) && window.lastCands.length) ? window.lastCands : readCandsFromDOM();
+      const nei   = (window.lastNeighbors && window.lastNeighbors.available) ? window.lastNeighbors : readNeighborsFromDOM();
+
+      // compute vetted pass count (unknown centroid metrics δεν «κόβουν»)
+      let pass = 0;
+      for (const c of cands){
+        const pplan = (c.p_planet ?? c.probability);
+        const sig   = (c.centroid_sigma ?? c?.centroid?.sigma);
+        const rho   = (c.centroid_rho   ?? c?.centroid?.rho);
+        const passP = Number.isFinite(pplan) ? (pplan >= pThr) : false;
+        const passS = !Number.isFinite(sig) || (sig <= sigmaThr);
+        const passR = !Number.isFinite(rho) || (rho <= rhoThr);
+        if (passP && passS && passR) pass++;
+      }
+
+      const bytes = makeProPdf({
+        target, mission, author,
+        pThr, sigmaThr, rhoThr,
+        vetted: { pass, total: cands.length },
+        candidates: cands, neighbors: nei
+      });
+
+      const blob  = new Blob([bytes], {type:'application/pdf'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      a.download = `Oramax_Vetting_${target.replace(/\s+/g,'_')}_${ts}.pdf`;
+      window.open(a.href, '_blank'); a.click();
+    }catch(e){
+      console.error(e);
+      alert('PDF generation failed: ' + (e?.message || e));
+    }
+  };
+})();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const findPdfButton = () =>
+    document.getElementById('pdfBtn') ||
+    Array.from(document.querySelectorAll('button'))
+      .find(b => /pdf/i.test((b.textContent || b.innerText || '').trim()));
+
+  const btn = findPdfButton();
+  if (!btn) { console.warn('PDF button not found. Add id="pdfBtn" to your button.'); return; }
+
+  // μην ξαναδένεται αν το script φορτωθεί ξανά
+  if (btn.dataset.pdfBound === '1') return;
+  btn.dataset.pdfBound = '1';
+
+  btn.addEventListener('click', () => {
+    const fn = window.runPdf || window.runPdfLocal || window._runPdfFallback;
+    if (typeof fn === 'function') fn();
+    else alert('PDF generator function not found.');
+  });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  try{
+    const r = await apiFetch(`${API_BASE}/health`, { headers: { 'Accept':'application/json' }});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json().catch(()=> ({}));
+    if (j?.ok !== true) console.warn('Backend health non-ok:', j);
+  }catch(e){
+    const bar = document.getElementById('busy');
+    if (bar){
+      bar.classList.remove('hidden'); bar.style.display='flex';
+      document.getElementById('busyTxt').textContent = 'Backend proxy error';
+      document.getElementById('busyPct').textContent = (e?.message || '502/Network');
+    }
+    console.error('Health check failed:', e);
+  }
+});
+</script>
+
+
+<script src="/detector/engine-toggle.js?v=7"></script>
+
+<!-- Browse Modal -->
+<div id="browseModal">
+  <div id="browseCard">
+    <div id="browseHead">
+      <input id="browseQuery" type="text" placeholder="Search TIC / name ..." style="flex:1;min-width:260px"/>
+      <button id="browseSearchBtn" type="button">Search</button>
+      <button id="browseCloseBtn" type="button">Close</button>
+    </div>
+    <div id="browseBody">
+      <div id="browseList"></div>
+    </div>
+    <div id="browseFoot">
+      <div class="muted" id="browseStatus">0 results</div>
+      <div>
+        <button id="browsePrevBtn" type="button">Prev</button>
+        <button id="browseNextBtn" type="button">Next</button>
+        
+        <!-- Bulk Modal -->
+<div id="bulkModal" style="position:fixed;inset:0;display:none;background:rgba(0,0,0,.35);z-index:10000;align-items:center;justify-content:center">
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.2);width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center">
+      <b>Bulk targets</b>
+      <span class="muted">One per line (e.g., “TIC 268125229”)</span>
+    </div>
+    <div style="padding:10px 12px">
+      <textarea id="bulkTA" rows="10" style="width:100%;font-family:ui-monospace,monospace"></textarea>
+    </div>
+    <div style="padding:10px 12px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
+  <input id="bulkFile" type="file" accept=".txt,.csv" style="display:none">
+  <button id="bulkImportBtn" type="button" title="Import TIC/KIC/EPIC list from .txt or .csv">Import file</button>
+  <button id="bulkAddBtn"   type="button">Add</button>
+  <button id="bulkCloseBtn" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+        <!-- ΕΔΩ τοποθέτησέ το -->
+       <button id="browseAddBtn" type="button" title="Queue selected results">Add Selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
+<!-- ORAMAX centered footer -->
+<footer class="ox-footer">
+  <div class="ox-footer-inner">
+    <div>Copyright © 2025 | Powered by Orama X Team | All rights reserved.</div>
+    <div>NASA Space Apps Challenge 2025</div>
+  </div>
+</footer>
+
+<script>
+/* ===== ML UI + API glue ===== */
+(function(){
+  const $ = (id) => document.getElementById(id);
+  const api = (p) => `${API_BASE}${p.startsWith('/') ? p : '/'+p}`;
+
+  function setMlStatus(msg){ const el=$('mlStatus'); if(el) el.textContent = msg || ''; }
+  function fmt(v, d=4){ return (Number.isFinite(+v) ? (+v).toFixed(d) : '—'); }
+
+  // --- Tiny CSV parser (no deps)
+  function parseCsv(text){
+    const rows = text.replace(/\r/g,'').split('\n').filter(s=>s.trim().length);
+    const head = rows[0].split(',').map(s=>s.trim());
+    const data = rows.slice(1).map(line => {
+      const cols = line.split(',');
+      const obj = {};
+      head.forEach((h,i)=> obj[h] = (cols[i] ?? '').trim());
+      return obj;
+    });
+    return { head, data };
+  }
+
+  // --- Validation for labeled dataset
+  function validateLabeledCsv(text){
+    const errs = [];
+    let parsed;
+    try { parsed = parseCsv(text); } catch(e){ errs.push('Cannot parse CSV.'); }
+    if (!parsed) return { ok:false, errors:errs };
+
+    const head = parsed.head.map(h=>h.toLowerCase());
+    if (!head.includes('label')) errs.push('Missing required "label" column.');
+
+    // At least one numeric feature beyond label/ids
+    const idCols = new Set(['label','target','tic','kic','epic','id','name']);
+    const featureCols = parsed.head.filter(h => !idCols.has(h.toLowerCase()));
+    if (featureCols.length === 0) errs.push('No feature columns found.');
+
+    // Check values
+    const sample = parsed.data.slice(0, Math.min(parsed.data.length, 200));
+    const badLabel = sample.some(r => !/^(0|1)$/.test(String(r.label||'').trim()));
+    if (badLabel) errs.push('Labels must be 0/1.');
+
+    // If any feature present, ensure parsable numbers (ignore blanks)
+    const anyNonNumeric = sample.some(r => {
+      return featureCols.some(c => {
+        const v = r[c];
+        if (v==='' || v==null) return false;
+        return !Number.isFinite(+v);
+      });
+    });
+    if (anyNonNumeric) errs.push('Non-numeric values found in feature columns.');
+
+    return { ok: errs.length===0, errors: errs, head: parsed.head, rows: parsed.data };
+  }
+
+  // --- Rendering
+  function renderMetrics(m){
+    $('mAcc').textContent  = fmt(m?.accuracy, 4);
+    $('mPrec').textContent = fmt(m?.precision,4);
+    $('mRec').textContent  = fmt(m?.recall,   4);
+    $('mAuc').textContent  = fmt(m?.roc_auc,  4);
+  }
+
+  function renderConfusion(cm){
+    // cm expected: [[TN, FP],[FN, TP]] or [[a,b],[c,d]]
+    const Z = Array.isArray(cm) && cm.length===2 ? cm : [[0,0],[0,0]];
+    const data = [{
+      z: Z, type: 'heatmap', x: ['Pred 0','Pred 1'], y: ['True 0','True 1'],
+      hovertemplate: '%{y} vs %{x}: %{z}<extra></extra>'
+    }];
+    Plotly.newPlot('mlConfMat', data, {
+      margin:{t:10}, xaxis:{side:'top'}, yaxis:{autorange:'reversed'}
+    });
+  }
+
+  function renderShapOrImportance(items){
+  // items: [{name,value}] sorted desc
+  const list = Array.isArray(items) ? items.slice(0,20) : [];
+  const x = list.map(it=>it.value);
+  const y = list.map(it=>it.name);
+  Plotly.newPlot('mlShap', [{
+    x, y, type:'bar', orientation:'h',
+    hovertemplate: '%{y}: %{x:.4f}<extra></extra>'
+  }],{
+    margin:{t:10},
+    xaxis:{title:'Importance / |SHAP|'},
+    yaxis:{
+      title:'Feature name',          // ✅ ΠΡΟΣΘΗΚΗ τίτλου για τον άξονα y
+      automargin:true
+    }
+  });
+}
+
+
+  // --- Tabs
+  function showStatsTab(flag){
+    const p = $('mlStatsPanel');
+    if (!p) return;
+    p.style.display = flag ? 'block' : 'none';
+  }
+
+  // --- API calls (with graceful fallbacks)
+  async function uploadDataset(text){
+    // Try text/csv post
+    const res = await fetch(api('/ml/upload_dataset'), {
+      method:'POST',
+      headers:{ 'Content-Type':'text/csv' },
+      body: text
+    });
+    if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
+    return res.json().catch(()=> ({}));
+  }
+
+  async function trainModel(){
+    const res = await fetch(api('/ml/train'), { method:'POST' });
+    if (!res.ok) throw new Error(`Train start failed (HTTP ${res.status})`);
+    return res.json().catch(()=> ({}));
+  }
+
+  async function fetchMetrics(){
+    const res = await fetch(api('/ml/metrics'));
+    if (!res.ok) throw new Error(`Metrics not available (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  async function explainPrediction(payload){
+    const res = await fetch(api('/ml/explain_prediction'), {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`Explain not available (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  // --- Fallback importance if backend lacks SHAP
+  function fallbackImportanceFromCand(c){
+    // simple normalized abs values of common features; tweak as you wish
+    const feats = [
+      ['power',        c?.power],
+      ['snr',          c?.fit?.snr],
+      ['delta_bic',    c?.fit?.delta_bic],
+      ['depth',        c?.depth],
+      ['duration',     c?.duration],
+      ['period',       c?.period],
+    ];
+    const rows = feats.filter(([_,v])=> Number.isFinite(+v)).map(([n,v])=>({name:n, value:Math.abs(+v)}));
+    const max = Math.max(1e-12, ...rows.map(r=>r.value));
+    rows.forEach(r => r.value = r.value/max);
+    rows.sort((a,b)=>b.value-a.value);
+    return rows;
+  }
+
+  // --- Wire-up
+  document.addEventListener('DOMContentLoaded', () => {
+    // Tab buttons
+    $('tabDetect')?.addEventListener('click', ()=> showStatsTab(false));
+    $('tabModelStat')?.addEventListener('click', ()=> showStatsTab(true));
+
+    // Upload dataset
+    $('mlUploadBtn')?.addEventListener('click', ()=> $('mlDsFile')?.click());
+    $('mlDsFile')?.addEventListener('change', async (e)=>{
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      try{
+        setMlStatus('Validating dataset…');
+        const text = await file.text();
+        const val = validateLabeledCsv(text);
+        if (!val.ok){
+          alert('Dataset errors:\n- ' + val.errors.join('\n- '));
+          setMlStatus('Validation failed.');
+          e.target.value='';
+          return;
+        }
+        setMlStatus('Uploading dataset…');
+        await uploadDataset(text);
+        setMlStatus('Dataset uploaded. You can now train.');
+      }catch(err){
+        console.error(err);
+        alert(err?.message || err);
+        setMlStatus('Upload failed.');
+      }finally{
+        e.target.value='';
+      }
+    });
+
+    // Train
+    $('mlTrainBtn')?.addEventListener('click', async ()=>{
+      try{
+        setMlStatus('Starting training…');
+        await trainModel();
+        setMlStatus('Training started on server.');
+      }catch(err){
+        console.error(err);
+        alert(err?.message || err);
+        setMlStatus('Training failed to start.');
+      }
+    });
+
+    // Metrics
+    $('mlMetricsBtn')?.addEventListener('click', async ()=>{
+      try{
+        setMlStatus('Fetching metrics…');
+        const m = await fetchMetrics();
+        renderMetrics(m);
+        if (m?.confusion_matrix) renderConfusion(m.confusion_matrix);
+        if (Array.isArray(m?.feature_importance) && m.feature_importance.length){
+          renderShapOrImportance(m.feature_importance);
+        }else if (Array.isArray(m?.shap_importance) && m.shap_importance.length){
+          renderShapOrImportance(m.shap_importance);
+        }
+        showStatsTab(true);
+        setMlStatus('Metrics updated.');
+      }catch(err){
+        console.warn(err);
+        setMlStatus('Metrics not available; showing empty panel.');
+        renderMetrics({});
+        renderConfusion([[0,0],[0,0]]);
+        renderShapOrImportance([]);
+        showStatsTab(true);
+      }
+    });
+
+    // Explain current candidate prediction (robust)
+$('mlExplainBtn')?.addEventListener('click', async ()=>{
+  try{
+    let cand = null;
+
+    // 1) Κανονική ροή: από lastCands / selectedIdx
+    if (Array.isArray(window.lastCands) && window.lastCands.length){
+      cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+    }
+
+    // 2) Fallback A: από pooled αποτελέσματα (π.χ. μετά από Bulk)
+    if (!cand && Array.isArray(window.allCands) && window.allCands.length){
+      cand = window.allCands[0];
+      // κάν’ τον “selected” ώστε τα plots να έχουν context
+      window.lastCands = [cand];
+      window.selectedIdx = 0;
+
+      // αν έχουμε αποθηκευμένα T/F για το συγκεκριμένο target, φόρτωσέ τα στα plots
+      const store = (window.perTargetStore && cand._target) ? window.perTargetStore[cand._target] : null;
+      if (store && Array.isArray(store.T) && Array.isArray(store.F)) {
+        window.lcTime = store.T; window.lcFlux = store.F;
+        renderPF(store.T, store.F, cand);
+        renderLC(store.T, store.F, cand.windows ? cand.windows.intervals : []);
+      }
+    }
+
+    // 3) Fallback B: διάβασε τον πρώτο candidate από τον πίνακα DOM (τελευταία λύση)
+    if (!cand) {
+      const rows = document.querySelectorAll('#cands tbody tr');
+      if (rows.length) rows[0].click();  // θα καλέσει selectCandidateObj
+    }
+    if (!Array.isArray(window.lastCands) || !window.lastCands.length){
+      alert('Run detect and select a candidate first.');
+      return;
+    }
+    cand = window.lastCands[window.selectedIdx|0] || window.lastCands[0];
+
+    const payload = {
+      target: window.currentTarget || cand._target,
+      features: {
+        period:   cand?.period,
+        duration: cand?.duration,
+        depth:    cand?.depth,
+        power:    cand?.power,
+        snr:      cand?.fit?.snr,
+        delta_bic:cand?.fit?.delta_bic
+      }
+    };
+
+    setMlStatus('Explaining prediction…');
+    try{
+      const j = await explainPrediction(payload);
+      const items = Array.isArray(j?.shap) ? j.shap
+                    : Array.isArray(j?.importance) ? j.importance
+                    : [];
+      renderShapOrImportance(items.length ? items : fallbackImportanceFromCand(cand));
+    }catch{
+      renderShapOrImportance(fallbackImportanceFromCand(cand)); // backend-less fallback
+    }
+    showStatsTab(true);
+    setMlStatus('Explanation ready.');
+  }catch(err){
+    console.error(err);
+    alert(err?.message || err);
+    setMlStatus('Explain failed.');
+  }
+});
+
+// ⬇️ ΑΥΤΑ ΤΑ ΔΥΟ ΠΡΕΠΕΙ ΝΑ ΥΠΑΡΧΟΥΝ     
+})();   
+</script>
+
+<script>
+  // --- API bases (διασφάλιση) ---
+  // Έχουν ήδη οριστεί πιο πάνω. Αν όχι, ορίζονται εδώ.
+  window.API_BASE = window.API_BASE || API_BASE;
+  window.APP_BASE = window.APP_BASE || APP_BASE;
+
+  // --- Service Worker registration ---
+  // --- Service Worker registration (version-aware) ---
+  if ('serviceWorker' in navigator) {
+    const SW_URL = '/detector/sw-oramax.js?v=60'; // bump αριθμό όποτε κάνεις release
+    const SCOPE  = '/detector/';
+    const KEY    = 'sw-refreshed';
+
+    navigator.serviceWorker.getRegistration(SCOPE).then(async reg => {
+      try {
+        if (!reg) {
+          await navigator.serviceWorker.register(SW_URL, { scope: SCOPE });
+        } else {
+          // Αν άλλαξε το script URL (v=), βγάλε force update
+          const cur = (reg.active && reg.active.scriptURL) || '';
+          if (!cur.includes(SW_URL)) await reg.update();
+          else reg.update().catch(()=>{});
+        }
+      } catch (err) {
+        console.error('SW registration failed:', err);
+      }
+    });
+
+    if (!navigator.serviceWorker.controller) {
+      const onCtrl = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+        if (!sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, '1');
+          location.reload();
+        }
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+    } else {
+      sessionStorage.removeItem(KEY);
+    }
+  }
+
+</script>
+
+</body>
+</html>
