@@ -1,37 +1,18 @@
-// components/BgHero.tsx
-import React from "react";
+// app/contact-us/page.tsx
+import BgHero from "@/components/BgHero";
 
-type Props = {
-  image?: string;      // π.χ. "/images/contact.jpg"
-  title?: string;      // π.χ. "Contact"
-  subtitle?: string;   // π.χ. "Get in touch"
-  children?: React.ReactNode;
-};
+export const metadata = { title: "Contact us" };
 
-export default function BgHero({ image, title, subtitle, children }: Props) {
+export default function ContactUsPage() {
   return (
-    <section className="relative w-full min-h-[280px] flex items-center justify-center text-white overflow-hidden rounded-2xl">
-      {/* background image */}
-      <div
-        className="absolute inset-0 bg-center bg-cover"
-        style={{
-          backgroundImage: image ? `url(${image})` : undefined,
-        }}
-      />
-      {/* gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/60" />
-      {/* content */}
-      <div className="relative z-10 px-6 py-14 text-center">
-        {subtitle && (
-          <p className="text-sm md:text-base opacity-90 tracking-wide uppercase">
-            {subtitle}
-          </p>
-        )}
-        {title && (
-          <h1 className="mt-2 text-3xl md:text-5xl font-semibold">{title}</h1>
-        )}
-        {children && <div className="mt-5">{children}</div>}
-      </div>
-    </section>
+    <main className="container mx-auto px-6 py-10">
+      <BgHero image="/images/contact.jpg" title="Contact" subtitle="Get in touch" />
+      <section className="mt-8 space-y-3">
+        <p>
+          Email: <a className="underline" href="mailto:hello@oramax.space">hello@oramax.space</a>
+        </p>
+        <p>We’ll get back to you as soon as possible.</p>
+      </section>
+    </main>
   );
 }
