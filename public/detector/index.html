@@ -1271,7 +1271,7 @@ async function fetchGaiaNeighbors(target, radius) {
       neighbors: true, neighbors_radius: rad, centroid: false
     });
 
-    const r2 = await fetch(`${API_BASE}/fetch_detect`, {
+    const r2 = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body
@@ -1375,7 +1375,7 @@ async function runFetch(opts = {}) {
           neighbors: true, neighbors_radius: rad, centroid: false
         });
 
-        const r2 = await fetch(`${API_BASE}/fetch_detect`, {
+        const r2 = await fetch(`${API_BASE}/fetch_detect?__backend=api`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: body2,
