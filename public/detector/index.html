@@ -2211,28 +2211,50 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- API calls (with graceful fallbacks)
-  async function uploadDataset(text){
+    async function uploadDataset(text){
     // Try text/csv post
     const res = await fetch(api('/ml/upload_dataset'), {
       method:'POST',
       headers:{ 'Content-Type':'text/csv' },
       body: text
     });
+
+    if (res.status === 404) {
+      console.warn('ML upload endpoint not available on this server');
+      setMlStatus('ML upload is not available on this deployment.');
+      return {};
+    }
+
     if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status})`);
     return res.json().catch(()=> ({}));
   }
 
-  async function trainModel(){
+    async function trainModel(){
     const res = await fetch(api('/ml/train'), { method:'POST' });
+
+    if (res.status === 404) {
+      console.warn('ML train endpoint not available');
+      setMlStatus('ML training is not available on this deployment.');
+      return {};
+    }
+
     if (!res.ok) throw new Error(`Train start failed (HTTP ${res.status})`);
     return res.json().catch(()=> ({}));
   }
 
   async function fetchMetrics(){
     const res = await fetch(api('/ml/metrics'));
+
+    if (res.status === 404) {
+      console.warn('ML metrics endpoint not available');
+      setMlStatus('ML metrics are not available on this deployment.');
+      return {};
+    }
+
     if (!res.ok) throw new Error(`Metrics not available (HTTP ${res.status})`);
     return res.json();
   }
+
 
   async function explainPrediction(payload){
     const res = await fetch(api('/ml/explain_prediction'), {
