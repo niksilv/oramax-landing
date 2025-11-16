@@ -180,6 +180,8 @@ async function runBatchDetect(list){
     try{
       to = setTimeout(()=>{ try{ ctrl.abort(); }catch{}; }, TIMEOUT_MS);
       await runDetectForTarget(t, { signal: ctrl.signal });   // ← ΝΕΟ
+      // --- SKIP & avoid poisoning next targets ---
+      try { await caches.delete('detector-cache'); } catch {}
     }catch(e){
       const reason = (e?.name === 'AbortError') ? `timeout ${TIMEOUT_MS/1000}s` : (e?.message || e);
       showBatchStatus(`(${i+1}/${list.length}) ${t} ✗ ${reason}`);
@@ -1589,50 +1591,110 @@ const updateSuggest = debounce(async ()=>{
 }, 220);
 
 
-// ---------- Transit Fit ----------
+// ---------- Transit Fit (local, χωρίς backend) ----------
 async function runFit(){
   const fitStatus = document.getElementById('fitStatus');
-  const fitBox = document.getElementById('fitBox');
+  const fitBox    = document.getElementById('fitBox');
+
   try{
-    if(!lastCands.length){ alert('Run detect first'); return; }
+    if (!lastCands.length){
+      alert('Run detect first'); 
+      return;
+    }
     const cand = lastCands[selectedIdx];
-    if(!cand){ alert('Select a candidate'); return; }
-    fitStatus.textContent = 'Fitting...';
+    if (!cand){
+      alert('Select a candidate');
+      return;
+    }
+    if (!Array.isArray(lcTime) || !lcTime.length){
+      alert('Light curve not loaded yet');
+      return;
+    }
 
-    // Καλούμε το /predict του backend με period/duration/t0 (όχι /fit_transit)
-    const source   = document.getElementById('sourceSel').value || 'mast_spoc';
-    const mission  = document.getElementById('missionSel').value || 'TESS';
-    const target   = document.getElementById('ticInput').value || currentTarget;
+    fitStatus.textContent = 'Fitting (local)…';
 
-    const body = JSON.stringify({
-      source, mission, target,
-      period: cand.period, duration: cand.duration, t0: cand.t0
-    });
+    // Παίρνουμε παραμέτρους από τον candidate
+    const P      = Number(cand.period);
+    const T0     = Number(cand.t0 || lcTime[0]);
+    const depth  = Math.abs(Number(cand.depth) || 0);
+    const dur    = Number(cand.duration);
+    const method = document.getElementById('fitMethod')?.value || 'trapezoid';
 
-    const res = await fetch(`${API_BASE}/predict?__backend=api`, { method:'POST', headers:{'Content-Type':'application/json'}, body });
-    if(!res.ok){ fitStatus.textContent='Error'; return; }
-    const data = await res.json(); busySet(55,'Processing & BLS…'); busyAdvance(90,'Processing & BLS…');
+    // Απλό box/trapezoid μοντέλο σε ένα grid 0–1 φάσης
+    const N = 800;
+    const modelTime = [];
+    const modelFlux = [];
 
-    // Μετατρέπουμε phase→“ψευδο-time” για να εμφανιστεί σωστά το overlay στο phase plot
-    const P = data?.params?.period ?? cand.period;
-    const T0 = data?.params?.t0 ?? cand.t0;
-    const timesFromPhase = (data.phase||[]).map(ph => T0 + (ph + 0.5) * P);
+    // duration σε μονάδες φάσης (dur / P)
+    const phaseWidth = (P > 0 ? dur / P : 0);
+    const halfWidth  = phaseWidth / 2;
 
-    lastFit = { params: data.params || {period:P, t0:T0}, model_curve: { time: timesFromPhase, flux: data.model || [] } };
+    for (let i = 0; i < N; i++){
+      const phase = i/(N-1);           // 0 .. 1
+      const t     = T0 + phase * P;    // “ψευδο-time” για να ξανα-foldάρει η renderPF
+      const dphi  = Math.abs(phase - 0.5); // transit στο phase ~0.5
 
+      let f = 1.0;
+
+      // Πολύ απλό trapezoid: flat έξω, επίπεδο μέσα
+      if (dphi < halfWidth){
+        if (method === 'trapezoid'){
+          // κάνουμε mini “ramp” στις άκρες
+          const edge = Math.max(halfWidth*0.2, 1e-4);
+          const core = Math.max(halfWidth - edge, 0);
+          if (dphi <= core){
+            f = 1.0 - depth;
+          }else{
+            const x = (dphi - core)/edge;         // 0..1
+            f = 1.0 - depth*(1 - x);              // γραμμική μετάβαση
+          }
+        }else{
+          // box μοντέλο
+          f = 1.0 - depth;
+        }
+      }
+
+      modelTime.push(t);
+      modelFlux.push(f);
+    }
+
+    // Αποθηκεύουμε το τελευταίο fit για να το δει η renderPF
+    lastFit = {
+      params: {
+        period:   P,
+        t0:       T0,
+        duration: dur,
+        depth:    depth
+      },
+      model_curve: {
+        time: modelTime,
+        flux: modelFlux
+      }
+    };
+
+    // Ξανασχεδιάζουμε την phase-folded με overlay του μοντέλου
     renderPF(lcTime, lcFlux, cand);
 
-    const p = data.params || {}; const u = data.uncertainties || {};
-    function fmt(v, s){ if(v==null || !isFinite(v)) return ''; return (s!=null && isFinite(s)) ? `${v.toFixed(4)}  ${s.toFixed(4)}` : v.toFixed(4); }
+    // Περίληψη στο box
+    const dTxt = Number.isFinite(depth) ? (+depth).toExponential(2) : '';
     fitBox.innerHTML = `
-      <div><b>Method:</b> model</div>
-      <div><b>Rp/R:</b> ${fmt(p.rp_rs, u.rp_rs)}  <b>b:</b> ${fmt(p.b, u.b)}  <b>a/R:</b> ${fmt(p.a_rs, u.a_rs)}</div>
-      <div class="muted">P=${p.period?.toFixed? p.period.toFixed(6):p.period} d, t0=${p.t0?.toFixed? p.t0.toFixed(6):p.t0}</div>
+      <div><b>Method:</b> ${method} (local)</div>
+      <div><b>Period:</b> ${P.toFixed(6)} d &nbsp;
+           <b>Duration:</b> ${dur.toFixed(6)} d &nbsp;
+           <b>Depth:</b> ${dTxt}</div>
+      <div class="muted">
+        Local analytic fit for visualization (no backend /predict call).
+      </div>
     `;
-    fitBox.style.display='block';
+    fitBox.style.display = 'block';
     fitStatus.textContent = 'Done';
-  }catch(e){ console.error(e); fitStatus.textContent = 'Error'; }
+  }catch(e){
+    console.error(e);
+    fitStatus.textContent = 'Error';
+    alert('Local fit failed: ' + (e?.message || e));
+  }
 }
+
 
 // ---------- PDF report ----------
 async function runPdf(){
@@ -2011,8 +2073,15 @@ document.addEventListener('DOMContentLoaded', () => {
       <div>
         <button id="browsePrevBtn" type="button">Prev</button>
         <button id="browseNextBtn" type="button">Next</button>
-        
-        <!-- Bulk Modal -->
+                
+        <!-- ΕΔΩ τοποθέτησέ το -->
+       <button id="browseAddBtn" type="button" title="Queue selected results">Add Selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Modal -->
 <div id="bulkModal" style="position:fixed;inset:0;display:none;background:rgba(0,0,0,.35);z-index:10000;align-items:center;justify-content:center">
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 20px 48px rgba(0,0,0,.2);width:min(720px,90vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:10px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;align-items:center">
@@ -2027,13 +2096,6 @@ document.addEventListener('DOMContentLoaded', () => {
   <button id="bulkImportBtn" type="button" title="Import TIC/KIC/EPIC list from .txt or .csv">Import file</button>
   <button id="bulkAddBtn"   type="button">Add</button>
   <button id="bulkCloseBtn" type="button">Close</button>
-    </div>
-  </div>
-</div>
-
-        <!-- ΕΔΩ τοποθέτησέ το -->
-       <button id="browseAddBtn" type="button" title="Queue selected results">Add Selected</button>
-      </div>
     </div>
   </div>
 </div>
