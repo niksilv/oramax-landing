@@ -5,6 +5,55 @@
   <title>Orama X · Exoplanet Detector</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
+<style>
+/* ===== NAV look-and-feel (match main site) ===== */
+#ox-nav{
+  position:sticky; top:0; z-index:1000;
+  background:#0b0e1a; border-bottom:1px solid #151a2c; box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+/* wrap: κρατά το brand αριστερά, αλλά μας δίνει reference για να κεντράρουμε το menu */
+#ox-nav .wrap{
+  position:relative;                      /* νέο */
+  max-width:1200px; margin:0 auto; padding:12px 16px;
+  display:flex; align-items:center; gap:22px; justify-content:flex-start;
+}
+#ox-nav .brand{display:inline-flex;align-items:center;gap:10px;color:#e6ecff;text-decoration:none;font-weight:700}
+#ox-nav .brand img{height:22px;width:auto;display:block;filter:brightness(1.1)}
+
+/* menu: κεντραρισμένο οπτικά στη μπάρα */
+#ox-nav .menu{
+  display:flex; align-items:center; gap:18px;
+  position:absolute; left:50%; transform:translateX(-50%);   /* κέντρο */
+}
+#ox-nav .menu>a{color:#e6ecff;text-decoration:none;font-weight:600;padding:8px 12px;border-radius:10px;position:relative;transition:color .25s}
+#ox-nav .menu>a:hover{color:#fff}
+#ox-nav .menu>a::after{content:"";position:absolute;left:10%;bottom:4px;width:0;height:2px;background:#3956d7;border-radius:1px;transition:width .3s}
+#ox-nav .menu>a:hover::after{width:80%}
+
+/* pill look for "Our Project" */
+#ox-nav .our-project{display:inline-flex;align-items:center;gap:6px;color:#e6ecff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);padding:8px 12px;border-radius:12px}
+#ox-nav .caret{margin-left:2px;opacity:.9}
+
+/* dropdown: ΔΕΝ κλείνει στο κλικ και είναι κεντραρισμένο κάτω από το κουμπί */
+#ox-nav .has-sub{ position:relative; }                         /* χωρίς extra padding-bottom */
+#ox-nav .has-sub:hover .submenu,
+#ox-nav .has-sub:focus-within .submenu{ display:block; }       /* hover + focus */
+
+#ox-nav .has-sub::after{                                       /* μικρό buffer για να μη χάνεται το hover */
+  content:""; position:absolute; left:0; right:0; top:100%; height:8px;
+}
+
+#ox-nav .submenu{
+  position:absolute; top:100%;                                  /* κολλητά στο κουμπί */
+  left:50%; transform:translateX(-50%);                         /* κέντρο κάτω από το κουμπί */
+  min-width:260px; margin-top:0;
+  background:#0b0e1a; border:1px solid #1a223b; border-radius:12px;
+  box-shadow:0 18px 38px rgba(0,0,0,.45); padding:6px 0; display:none; z-index:50;
+}
+#ox-nav .submenu a{display:block;color:#e6ecff;padding:10px 14px;text-decoration:none;border-radius:8px;margin:2px 4px}
+#ox-nav .submenu a:hover{background:#141a2d;color:#fff}
+</style>
+
   <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 <!-- moved inline JS below -->
 <script>
@@ -250,6 +299,165 @@ function browsePrev(){ _browsePage = Math.max(0, _browsePage-1); searchBrowse();
 @media (max-width:720px){
   .ox-nav-inner{ flex-wrap:wrap; gap:10px; }
 }
+``` :contentReference[oaicite:3]{index=3}  
+
+**Σβήστο ΟΛΟ** αυτό και στη θέση του βάλε αυτό:
+
+```css
+/* --- ORAMAX: detector navbar & footer (DARK, όπως το 28) --- */
+#ox-nav{
+  position:sticky;
+  top:0;
+  z-index:1000;
+  background:#0b0e1a;
+  border-bottom:1px solid #151a2c;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+}
+#ox-nav .wrap{
+  position:relative;
+  max-width:1200px;
+  margin:0 auto;
+  padding:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:22px;
+  justify-content:flex-start;
+}
+#ox-nav .brand{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  color:#e6ecff;
+  text-decoration:none;
+  font-weight:700;
+}
+#ox-nav .brand img{
+  height:22px;
+  width:auto;
+  display:block;
+  filter:brightness(1.1);
+}
+#ox-nav .menu{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+}
+#ox-nav .menu>a{
+  color:#e6ecff;
+  text-decoration:none;
+  font-weight:600;
+  padding:8px 12px;
+  border-radius:10px;
+  position:relative;
+  transition:color .25s;
+}
+#ox-nav .menu>a:hover{
+  color:#fff;
+}
+#ox-nav .menu>a::after{
+  content:"";
+  position:absolute;
+  left:10%;
+  bottom:4px;
+  width:0;
+  height:2px;
+  background:#3956d7;
+  border-radius:1px;
+  transition:width .3s;
+}
+#ox-nav .menu>a:hover::after{
+  width:80%;
+}
+#ox-nav .our-project{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#e6ecff;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  padding:8px 12px;
+  border-radius:12px;
+}
+#ox-nav .caret{
+  margin-left:2px;
+  opacity:.9;
+}
+#ox-nav .has-sub{
+  position:relative;
+}
+#ox-nav .has-sub:hover .submenu,
+#ox-nav .has-sub:focus-within .submenu{
+  display:block;
+}
+#ox-nav .has-sub::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  top:100%;
+  height:8px;
+}
+#ox-nav .submenu{
+  position:absolute;
+  top:100%;
+  left:50%;
+  transform:translateX(-50%);
+  min-width:260px;
+  margin-top:0;
+  background:#0b0e1a;
+  border:1px solid #1a223b;
+  border-radius:12px;
+  box-shadow:0 18px 38px rgba(0,0,0,.45);
+  padding:6px 0;
+  display:none;
+  z-index:50;
+}
+#ox-nav .submenu a{
+  display:block;
+  color:#e6ecff;
+  padding:10px 14px;
+  text-decoration:none;
+  border-radius:8px;
+  margin:2px 4px;
+}
+#ox-nav .submenu a:hover{
+  background:#141a2d;
+  color:#fff;
+}
+
+/* footer (dark + centered) */
+.ox-footer{
+  margin:32px 0 0;
+  border-top:1px solid #151a2c;
+  background:#0b0e1a;
+  box-shadow:0 -8px 24px rgba(0,0,0,.3);
+}
+.ox-footer-inner{
+  max-width:1100px;
+  margin:0 auto;
+  text-align:center;
+  color:#a9b3d0;
+  font-size:13px;
+  line-height:1.6;
+  padding:18px 0;
+}
+.ox-footer-inner a{
+  color:#a9b3d0;
+  text-decoration:none;
+}
+.ox-footer-inner a:hover{
+  color:#fff;
+}
+
+@media (max-width:720px){
+  #ox-nav .wrap{
+    flex-wrap:wrap;
+    gap:10px;
+  }
+}
 
 </style>
 
@@ -288,24 +496,33 @@ body, #detector {
 </head>
 <body>
 
-<!-- ORAMAX centered navbar -->
-<nav class="ox-nav" aria-label="Main">
-  <div class="ox-nav-inner">
-    <a href="/">ORAMA X</a>
-    <a href="/">Home</a>
+<!-- === NAVBAR (same as main site) === -->
+<div id="ox-nav" aria-label="Main">
+  <div class="wrap">
+    <a href="/" class="brand" aria-label="Orama X home">
+      <img src="/logos/oramax-logo.png" alt="" />
+      <strong>ORAMA X</strong>
+    </a>
 
-    <div class="ox-dropdown">
-      <a class="ox-dd-btn">Our Project ▾</a>
-      <div class="ox-dd" role="menu">
-        <a href="/detector" role="menuitem">Exoplanet Detector</a>
-        <a href="/our-project/our-challenge" role="menuitem">Our Challenge</a>
-        <a href="/our-project/our-resources" role="menuitem">Our Resources</a>
+    <nav class="menu">
+      <a href="/">Home</a>
+
+      <!-- Our Project dropdown -->
+      <div class="has-sub">
+        <a href="#" class="our-project" aria-haspopup="true" aria-expanded="false" onclick="event.preventDefault()">
+          Our Project <span class="caret">▾</span>
+        </a>
+        <div class="submenu" role="menu">
+          <a href="/our-project/exoplanet-detector" role="menuitem">Exoplanet Detector</a>
+          <a href="/our-project/our-challenge" role="menuitem">How it works?</a>
+        </div>
       </div>
-    </div>
 
-    <a href="/our-team">Our Team</a>
-    </div>
-</nav>
+      <a href="/our-team">Our Team</a>
+    </nav>
+  </div>
+</div>
+<!-- === /NAVBAR === -->
 
   <h1>Orama X · Exoplanet Detector</h1>
 <div id="busy" class="hidden"><div class="bar" id="busyBar"></div><span id="busyTxt">Working…</span><span id="busyPct"></span></div>
@@ -561,26 +778,47 @@ function shadedShapes(intervals){
   if(!intervals) return [];
   return intervals.map(iv => ({type:'rect', xref:'x', yref:'paper', x0:iv[0], x1:iv[1], y0:0, y1:1, fillcolor:'rgba(0,0,0,0.08)', line:{width:0}}));
 }
-function renderLC(T, F, intervals){
-  Plotly.newPlot('lc', [
-  {
-    x: T,
-    y: F,
-    mode: 'markers',
-    marker: { size: 3 },
-    hovertemplate:
-      'Time (BJD–2457000): %{x:.6f} d' +
-      '<br>Flux: %{y:.6f} [unitless]' +
-      '<extra></extra>'
+function decimateXY(x, y, maxPoints = 6000) {
+  if (!Array.isArray(x) || !Array.isArray(y)) return { x, y };
+  const n = Math.min(x.length, y.length);
+  if (n <= maxPoints) {
+    return { x: x.slice(0, n), y: y.slice(0, n) };
   }
-], {
-  margin: { t: 10 },
-  shapes: shadedShapes(intervals),
-  hovermode: 'closest',
-  xaxis: { title: 'Time [BJD – 2457000]' },
-  yaxis: { title: 'Normalized Flux [unitless]' }
-});
+  const step = Math.ceil(n / maxPoints);
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i < n; i += step) {
+    xs.push(x[i]);
+    ys.push(y[i]);
+  }
+  return { x: xs, y: ys };
 }
+
+function renderLC(T, F, intervals){
+  // downsample για να μην παγώνει ο Plotly
+  const dec = decimateXY(T, F, 6000);
+
+  Plotly.newPlot('lc', [
+    {
+      type: 'scattergl',          // WebGL για μεγάλη ταχύτητα
+      x: dec.x,
+      y: dec.y,
+      mode: 'markers',
+      marker: { size: 3 },
+      hovertemplate:
+        'Time (BJD–2457000): %{x:.6f} d' +
+        '<br>Flux: %{y:.6f} [unitless]' +
+        '<extra></extra>'
+    }
+  ], {
+    margin: { t: 10 },
+    shapes: shadedShapes(intervals),
+    hovermode: 'closest',
+    xaxis: { title: 'Time [BJD – 2457000]' },
+    yaxis: { title: 'Normalized Flux [unitless]' }
+  });
+}
+
 function centroidBadge(cent, sigmaThr, rhoThr){
   if(!cent) return '';
   if(!cent.available){
@@ -1435,7 +1673,38 @@ document.addEventListener('DOMContentLoaded', ()=>{
   ticInp.addEventListener('focus', ()=>{ showTopSuggestOnFocus(); });
   ticInp.addEventListener('change', ()=>{ hideSuggest(); });
 
-  document.getElementById('runFetch').addEventListener('click', runFetch);
+  let detectBusy = false;
+
+async function handleRunFetchClick() {
+  if (detectBusy) {
+    console.log("Detector is already running, ignoring extra click");
+    return;
+  }
+  detectBusy = true;
+
+  const btn = document.getElementById('runFetch');
+  const oldLabel = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+  }
+
+  try {
+    await runFetch();   // δεν περνάμε opts, όπως πριν
+  } catch (e) {
+    console.error(e);
+    alert('Error during detection: ' + (e?.message || e));
+  } finally {
+    detectBusy = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldLabel || 'Detect';
+    }
+  }
+}
+
+
+  document.getElementById('runFetch').addEventListener('click', handleRunFetchClick);
   document.getElementById('runUpload').addEventListener('click', runUpload);
 
   document.getElementById('exportCsv').addEventListener('click', ()=>{
@@ -1770,10 +2039,11 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
   
-<!-- ORAMAX centered footer -->
+<!-- ORAMAX footer (dark, like main site) -->
 <footer class="ox-footer">
   <div class="ox-footer-inner">
-    Copyright © 2025 | Powered by Oramax Team | For NASA Challenge 2025
+    <div>Copyright © 2025 | Powered by Orama X Team | All rights reserved.</div>
+    <div>NASA Space Apps Challenge 2025</div>
   </div>
 </footer>
 
