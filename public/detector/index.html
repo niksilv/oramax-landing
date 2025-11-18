@@ -1331,8 +1331,17 @@ async function runFetch(opts = {}) {
       body: JSON.stringify(body),
       signal
     });
-    if (!res.ok) { status.textContent = 'Error'; return; }
-    const data = await res.json();
+    if (!res.ok) {
+  status.textContent = 'Error';
+  alert(`Fetch HTTP error ${res.status}`);
+  return;
+}
+const data = await res.json();
+if (data.ok === false) {
+  alert(`Fetch failed: ${data.detail || 'no data / bad target'}`);
+  status.textContent = 'Error';
+  return;
+}
 
     busySet(55, 'Processing & BLS…');
     busyAdvance(90, 'Processing & BLS…');
